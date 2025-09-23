@@ -1,0 +1,9 @@
+/* Remove default browser margin */
+body {
+  margin: 0;
+}
+
+/* Make the canvas a block element to fill the screen */
+canvas {
+  display: block;
+}

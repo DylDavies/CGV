@@ -1,15 +1,21 @@
 import { GLTFLoader } from 'https://unpkg.com/three@0.127.0/examples/jsm/loaders/GLTFLoader.js';
+import { DRACOLoader } from 'https://unpkg.com/three@0.127.0/examples/jsm/loaders/DRACOLoader.js';
 
 async function loadMap(filePaths) {
-  const loader = new GLTFLoader();
+  const gltfLoader = new GLTFLoader();
+  const dracoLoader = new DRACOLoader();
+
+  // The path needed to use /js/ instead of /jsm/ for this version.
+  dracoLoader.setDecoderPath('https://unpkg.com/three@0.127.0/examples/js/libs/draco/gltf/');
+
+  gltfLoader.setDRACOLoader(dracoLoader);
+  
   const promises = [];
 
-  // Create a loading promise for each file
   for (const path of filePaths) {
-    promises.push(loader.loadAsync(path));
+    promises.push(gltfLoader.loadAsync(path));
   }
 
-  // Wait for all promises to resolve
   const models = await Promise.all(promises);
   return models;
 }
