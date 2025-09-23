@@ -7,7 +7,20 @@
     <link rel="stylesheet" href="./styles/main.css">
 </head>
 <body>
-    <canvas id="game-canvas"></canvas>
-    <script type="module" src="./src/main.js"></script>
+  <div id="welcome-screen">
+    <div class="title-container">
+      <h1 class="glitch" data-text="PROJECT HER">PROJECT HER</h1>
+    </div>
+    <div class="menu-container">
+      <button id="play-btn" class="menu-btn">Play</button>
+      <button id="tutorial-btn" class="menu-btn">Tutorial</button>
+      <button id="settings-btn" class="menu-btn">Settings</button>
+      <button id="credits-btn" class="menu-btn">Credits</button>
+    </div>
+  </div>
+
+  <div id="loading-screen" style="display: none;">Loading...</div>
+  <canvas id="game-canvas"></canvas>
+  <script type="module" src="/src/main.js"></script>
 </body>
 </html>
