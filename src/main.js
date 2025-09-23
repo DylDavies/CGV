@@ -1,29 +1,52 @@
-// Import Three.js from a CDN or a local file
 import * as THREE from 'https://unpkg.com/three@0.127.0/build/three.module.js';
 
-// Import our own modules
+// Import our new loader
+import { loadMap } from './utils/AssetLoader.js';
+
+// World Components
 import { createScene } from './components/World/scene.js';
 import { createLights } from './components/World/lights.js';
+
+// Game Object Components
 import { createPlayer } from './components/Player/Player.js';
+
+// Core Systems
+import { createRenderer } from './systems/Renderer.js';
+import { Resizer } from './systems/Resizer.js';
 import { Loop } from './systems/Loop.js';
 
-// Get a reference to the canvas element
-const canvas = document.querySelector('#game-canvas');
+// Main function to run the game
+async function main() {
+  const canvas = document.querySelector('#game-canvas');
 
-// 1. Create the scene and camera
-const scene = createScene();
-const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
-camera.position.z = 5;
+  // 1. Core setup
+  const scene = createScene();
+  const camera = new THREE.PerspectiveCamera(75, 1, 0.1, 1000);
+  camera.position.set(0, 5, 20); // Adjust camera position to see the map
+  const renderer = createRenderer(canvas);
+  const loop = new Loop(camera, scene, renderer);
+  
+  // 2. Load the map assets
+  const mapFiles = ['/models/map_part1.glb', '/models/map_part2.glb']; // 👈 ADD YOUR FILE NAMES HERE
+  const models = await loadMap(mapFiles);
+  for (const model of models) {
+    scene.add(model.scene); // Add each loaded map part to the scene
+  }
 
-// 2. Create a renderer
-const renderer = new THREE.WebGLRenderer({ canvas });
-renderer.setSize(window.innerWidth, window.innerHeight);
+  // 3. Add other objects and lights
+  const player = createPlayer();
+  const { ambientLight, mainLight } = createLights();
+  loop.updatables.push(player);
+  scene.add(player, ambientLight, mainLight);
+  
+  // 4. Set up window resizing
+  const resizer = new Resizer(camera, renderer);
 
-// 3. Add objects to the scene
-const player = createPlayer();
-const { ambientLight, mainLight } = createLights();
-scene.add(player, ambientLight, mainLight);
+  // 5. Start the game
+  loop.start();
+}
 
-// 4. Start the game loop
-const loop = new Loop(camera, scene, renderer);
-loop.start();
+// Run the main function
+main().catch((err) => {
+  console.error(err);
+});
