@@ -1,5 +1,3 @@
-// src/systems/LoadingManager.js (Updated)
-
 class LoadingManager {
     constructor() {
         this.container = document.getElementById('loading-container');

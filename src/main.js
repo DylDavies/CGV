@@ -1,5 +1,3 @@
-// src/main.js (Updated)
-
 import * as THREE from 'https://unpkg.com/three@0.127.0/build/three.module.js';
 
 // Import all your components and systems
@@ -13,11 +11,11 @@ import { Resizer } from './systems/Resizer.js';
 import { Loop } from './systems/Loop.js';
 import { createStats } from './systems/Stats.js';
 import { AssetManager } from './systems/AssetManager.js';
-import { LoadingManager } from './systems/LoadingManager.js'; // <-- 1. IMPORT
+import { LoadingManager } from './systems/LoadingManager.js';
 
 const welcomeScreen = document.getElementById('welcome-screen');
 const playButton = document.getElementById('play-btn');
-const loadingScreen = document.getElementById('loading-screen');
+const loadingScreen = document.getElementById('loading-container'); 
 
 playButton.addEventListener('click', () => {
   welcomeScreen.style.display = 'none';
@@ -35,15 +33,19 @@ async function main() {
     const stats = createStats();
     const loop = new Loop(camera, scene, renderer, stats);
     
-    const loadingManager = new LoadingManager(); // <-- 2. CREATE LOADING MANAGER
-    const assetManager = new AssetManager(scene, camera, loadingManager); // <-- 3. PASS IT TO ASSET MANAGER
+    // 1. Create and initialize the managers
+    const loadingManager = new LoadingManager();
+    const assetManager = new AssetManager(scene, camera, loadingManager);
     assetManager.init();
-    await assetManager.loadInitialAsset('entry'); 
+    
+    // 2. Load only the initial starting room
+    await assetManager.loadInitialAsset('entry');
 
     loadingScreen.style.display = 'none';
     
+    // 3. Set up controls and add the assetManager to the update loop
     const controls = new FirstPersonControls(camera, renderer.domElement);
-    loop.updatables.push(controls, assetManager); // <-- 4. ADD ASSET MANAGER TO THE LOOP
+    loop.updatables.push(controls, assetManager); // <-- CRITICAL STEP
 
     const { flashlight } = createFlashlight();
     camera.add(flashlight);

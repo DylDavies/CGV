@@ -1,4 +1,4 @@
-// src/systems/AssetManager.js (Updated)
+// src/systems/AssetManager.js
 
 import * as THREE from 'https://unpkg.com/three@0.127.0/build/three.module.js';
 import { GLTFLoader } from 'https://unpkg.com/three@0.127.0/examples/jsm/loaders/GLTFLoader.js';
@@ -14,12 +14,14 @@ class AssetManager {
         const dracoLoader = new DRACOLoader();
         dracoLoader.setDecoderPath('https://unpkg.com/three@0.127.0/examples/js/libs/draco/gltf/');
         this.gltfLoader.setDRACOLoader(dracoLoader);
-        this.loadRadius = 75;
-        this.unloadRadius = 100; // Larger to prevent rapid load/unload cycles
+        
+        this.loadRadius = 20;   
+        this.unloadRadius = 30; 
+
         this.assetCache = new Map();
         this.loadQueue = [];
         this.isLoading = false;
-        this.checkInterval = 1000; // Check every second
+        this.checkInterval = 1000; 
         this.timeSinceLastCheck = 0;
     }
 
@@ -45,7 +47,7 @@ class AssetManager {
             this.updateLoadQueue();
             this.timeSinceLastCheck = 0;
         }
-        
+
         this.assetCache.forEach(asset => {
             if (asset.loaded) {
                 const distance = this.camera.position.distanceTo(asset.position);
@@ -82,6 +84,7 @@ class AssetManager {
         if (assetId) {
             const asset = this.assetCache.get(assetId);
             await this._loadAsset(asset);
+            // After loading, check if player is still nearby to show it
             const distance = this.camera.position.distanceTo(asset.position);
             if (distance < this.loadRadius) {
                 this.showAsset(asset);
@@ -98,7 +101,6 @@ class AssetManager {
         try {
             const gltf = await this.gltfLoader.loadAsync(asset.path);
             asset.sceneObject = gltf.scene;
-            // REMOVED position.copy() - model positions are already correct
             asset.sceneObject.visible = false;
             this.scene.add(asset.sceneObject);
             asset.loaded = true;
@@ -130,10 +132,12 @@ class AssetManager {
 
     _disposeMaterial(mat) {
         mat.dispose();
-        if (mat.map) mat.map.dispose();
-        if (mat.normalMap) mat.normalMap.dispose();
-        if (mat.roughnessMap) mat.roughnessMap.dispose();
-        // Add any other texture maps your materials use
+        // Dispose of all textures to free up GPU memory
+        for (const key of Object.keys(mat)) {
+            if (mat[key] && mat[key].isTexture) {
+                mat[key].dispose();
+            }
+        }
     }
 
     showAsset(asset) {

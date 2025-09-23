@@ -63,7 +63,8 @@ body::after {
   left: -50%;
   width: 200%;
   height: 200%;
-  background-image: url('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAADIAAAAyCAMAAAAp4XiDAAAAUVBMVEWFhYWDg4N3d3dtbW17e3t1dXVvoJGasLGpoKC6qqpyr6mpsLGxwMDw7+/u7u7w8PCzjo6WlpaJo6OWl5e7ubularoAb8v39/d1dHTw8PDLz8+6urqBilmrAAAAAXRSTlMAQObYZgAAAAlwSFlzAAAOxAAADsQBlSsOGwAAAKRJREFUOI2l0+sNwzAMxVEOpBwS+z+0tLSk3p81t/3rGFp8Z5lYx51l2g9Xb2S22wZ/x/kPA59vQ4+bT/fzP87+P8T/P4//+2+PPD8//+s/PP+j/P//3/P+X/P/P+f/P+X/P/P+b/P//3/f+X/P/f+b/P/f+b/P//3/f+X/P/f+b/P//3/f+X/P/f+b/P//3/f+X/P/f+b/P//3/f+X/P/f+b/P//3/f+b/P//3/f+b/P//3/f+b/P//3/f+b/P//3/f+b/P//3/f+b/P//3/f+X/P/f+b/P//3/f+b/P//3/f+X/P/f+b/P//3/f+b/P//3/f+X/P/f+b/P//3/f+X/P/f+b/P//3/f+X/P/f+b/P//3/f+b/P//3/f+b/P//3/f+X/P/f+b/P//3/f+b/P/f+b/P//3/f+X/P/f+b/P//3/f+b/P//3/f+b/P//3/f+b/P//3/f+b/P//3/f+b/P//3/f+b/P//3/f+b/P//3/f+b/P//3/f+b/P//3/f+b/P//3/f+b/P//3/f+b/P//3/f+X/P/f+b/P//3/f+X/P/f+b/P//3/f+X/P/f+b/P//3/f+b/P//3/f+b/P//3/f+b/P//3/f+b/P//3/f+b/P//3/f+b/P//3/f+b/P//3/f+b/P//3/f+b/P//3/f+b/P//3/f+b/P//3/f+b/P//3/f+b/P//3/f+b/P//3/f+b/P//3/f+b/P//3/f+b/P//3/f+b/P//3/f+b/P//3');
+  /*background-image: url('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAADIAAAAyCAMAAAAp4XiDAAAAUVBMVEWFhYWDg4N3d3dtbW17e3t1dXVvoJGasLGpoKC6qqpyr6mpsLGxwMDw7+/u7u7w8PCzjo6WlpaJo6OWl5e7ubularoAb8v39/d1dHTw8PDLz8+6urqBilmrAAAAAXRSTlMAQObYZgAAAAlwSFlzAAAOxAAADsQBlSsOGwAAAKRJREFUOI2l0+sNwzAMxVEOpBwS+z+0tLSk3p81t/3rGFp8Z5lYx51l2g9Xb2S22wZ/x/kPA59vQ4+bT/fzP87+P8T/P4//+2+PPD8//+s/PP+j/P//3/P+X/P/P+f/P+X/P/P+b/P//3/f+X/P/f+b/P/f+b/P//3/f+X/P/f+b/P//3/f+X/P/f+b/P//3/f+X/P/f+b/P//3/f+X/P/f+b/P//3/f+b/P//3/f+b/P//3/f+b/P//3/f+b/P//3/f+b/P//3/f+b/P//3/f+X/P/f+b/P//3/f+b/P//3/f+X/P/f+b/P//3/f+b/P//3/f+X/P/f+b/P//3/f+X/P/f+b/P//3/f+X/P/f+b/P//3/f+b/P//3/f+b/P//3/f+X/P/f+b/P//3/f+b/P/f+b/P//3/f+X/P/f+b/P//3/f+b/P//3/f+b/P//3/f+b/P//3/f+b/P//3/f+b/P//3/f+b/P//3/f+b/P//3/f+b/P//3/f+b/P//3/f+b/P//3/f+b/P//3/f+b/P//3/f+X/P/f+b/P//3/f+X/P/f+b/P//3/f+X/P/f+b/P//3/f+b/P//3/f+b/P//3/f+b/P//3/f+b/P//3/f+b/P//3/f+b/P//3/f+b/P//3/f+b/P//3/f+b/P//3/f+b/P//3/f+b/P//3/f+b/P//3/f+b/P//3/f+b/P//3/f+b/P//3/f+b/P//3/f+b/P//3/f+b/P//3/f+b/P//3');
+  */
   background-repeat: repeat;
   opacity: 0.15;
   animation: noiseMove 0.25s steps(4) infinite, noiseFlicker 3s infinite;
@@ -215,4 +216,45 @@ body::after {
   align-items: center;
   font-size: 2em;
   z-index: 100;
+}
+
+/* Add this to your existing #loading-container rule */
+#loading-container {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 80%;
+    max-width: 500px;
+    height: 20px;
+    background-color: #333;
+    border: 2px solid #fff;
+    border-radius: 10px;
+    overflow: hidden;
+    display: none; /* Hidden by default */
+    z-index: 200;
+    
+    /* Add this for text positioning */
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+#loading-bar {
+    position: absolute; /* Position it behind the text */
+    top: 0;
+    left: 0;
+    width: 0%;
+    height: 100%;
+    background-color: #f00;
+    transition: width 0.3s ease-in-out;
+}
+
+/* New rule for the text */
+#loading-text {
+    position: relative; /* Position it on top of the bar */
+    z-index: 1;
+    color: #fff;
+    font-size: 14px;
+    text-shadow: 1px 1px 2px #000; /* Makes text more readable */
 }
