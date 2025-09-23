@@ -12,7 +12,7 @@ class LoadingManager {
         this.totalAssets = totalAssets;
         this.loadedAssets = 0;
         this.updateProgress();
-        this.container.style.display = 'block';
+        //this.container.style.display = 'block';
     }
 
     assetLoaded() {
@@ -22,12 +22,12 @@ class LoadingManager {
 
     updateProgress() {
         const progress = this.totalAssets > 0 ? (this.loadedAssets / this.totalAssets) * 100 : 100;
-        this.progressBar.style.width = `${progress}%`;
+        //this.progressBar.style.width = `${progress}%`;
 
         if (progress >= 100) {
             // Hide the bar after the initial load is complete
             setTimeout(() => {
-                this.container.style.display = 'none';
+                //this.container.style.display = 'none';
             }, 1000);
         }
     }
