@@ -23,6 +23,34 @@
       <div id="loading-bar"></div>
       <span id="loading-text">Loading...</span>
   </div>
+
+  <!---Color match puzzle-->
+<div id="puzzle-container" style="display: none;">
+  
+    <div id="puzzle-box">
+      <div id="puzzle-board"></div>
+      <div id="puzzle-controls">
+        <h3 id="puzzle-objective">Turn all blocks into Red</h3>
+        <p>Moves Remaining: <span id="moves-remaining">5</span></p>
+        <div id="puzzle-timer">
+          TIME: <span id="timer-value">60.00</span>
+        </div>
+        <div id="color-palette"></div>
+        <div class="puzzle-buttons">
+          <button id="reset-puzzle-btn">Reset</button>
+          <button id="close-puzzle-btn">Close</button>
+        </div>
+      </div>
+    </div>
+
+    <div id="puzzle-result-overlay" class="hidden">
+      <div id="result-message">
+        <h1 id="result-title"></h1>
+        <p id="result-subtitle"></p>
+      </div>
+    </div>
+
+  </div>
   <canvas id="game-canvas"></canvas>
   <script type="module" src="/src/main.js"></script>
 </body>

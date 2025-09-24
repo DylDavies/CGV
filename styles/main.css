@@ -291,3 +291,318 @@ body.game-active::after {
     0%, 100% { opacity: 0.8; }
     50% { opacity: 1.0; }
 }
+
+
+/* --- Color Match Puzzle CSS (Horror CRT/Flexbox Theme) --- */
+
+#puzzle-container {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background-color: rgba(0, 0, 0, 0.7);
+  backdrop-filter: blur(8px) grayscale(0.5);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 1000;
+  font-family: 'Creepster', cursive;
+}
+
+#puzzle-box {
+  display: flex;
+  gap: 50px;
+  padding: 30px;
+  background: #0d0d0d;
+  border: 1px solid #333;
+  box-shadow: 0 0 30px rgba(0,0,0,0.8);
+  position: relative;
+  overflow: hidden;
+}
+
+#puzzle-box::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(0,0,0,0.5) 3px);
+  pointer-events: none;
+  z-index: 1;
+}
+
+#puzzle-board {
+  display: flex;
+  flex-wrap: wrap;
+  /* width: 550px; 
+  height: 550px; */
+  gap: 2px;
+  align-content: flex-start; 
+  border: 2px solid #ff0000;
+  padding: 10px;
+  background: #1a1a1a;
+  box-shadow: 0 0 15px rgba(255, 0, 0, 0.5);
+}
+
+.puzzle-tile {
+  /* Calculate the size of each tile based on the container width and number of columns.
+    The 'calc' function lets us do math right in the CSS.
+    var(--grid-cols) is the variable we set in JavaScript.
+  */
+  flex-basis: calc((100% / var(--grid-cols, 8)) - 2px); /* Subtract the gap size */
+  aspect-ratio: 1 / 1;
+  cursor: pointer;
+  transition: all 0.1s;
+  position: relative;
+  overflow: hidden;
+  transition: all 0.1s, transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.tile-pop {
+  transform: scale(1.2);
+}
+
+.puzzle-tile::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: repeating-linear-gradient(0deg, rgba(0,0,0,0.2), rgba(0,0,0,0.2) 1px, transparent 1px, transparent 3px);
+  pointer-events: none;
+}
+
+.puzzle-tile:hover {
+  transform: scale(1.05);
+  box-shadow: 0 0 15px rgba(255, 255, 255, 0.8);
+  z-index: 2;
+}
+
+#puzzle-controls {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  color: #fff;
+  text-align: center;
+  width: 280px;
+}
+
+/* Styling of the objective text and effect*/
+#puzzle-objective {
+  font-size: 2.2em;
+  color: #5a0404;
+  text-shadow: 2px 2px #000000, -2px -2px #ffffff;
+}
+
+#puzzle-controls p {
+  font-family: 'Courier New', Courier, monospace;
+  font-size: 1.1em;
+  color: #aaa;
+  letter-spacing: 1px;
+}
+
+#puzzle-timer {
+  font-family: 'Courier New', Courier, monospace;
+  font-size: 1.5em;
+  color: #ff0000;
+  margin-top: 20px;
+  text-shadow: 0 0 8px #ff0000;
+}
+
+#color-palette {
+  display: flex;
+  justify-content: center;
+  flex-wrap: wrap; 
+  gap: 15px;
+  margin: 30px 0;
+}
+
+.color-option {
+  width: 50px;
+  height: 50px;
+  border-radius: 50%;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  border: 3px solid #444;
+  box-shadow: inset 0 0 10px #000;
+}
+
+.color-option:hover {
+  border-color: #fff;
+  transform: scale(1.1);
+}
+
+.color-option.selected {
+  transform: scale(1.1);
+  border-color: #00ffff;
+  box-shadow: 0 0 20px #00ffff, inset 0 0 10px #000;
+  animation: pulse 1.5s infinite;
+}
+
+.puzzle-buttons {
+  margin-top: auto;
+  display: flex;
+  gap: 15px;
+}
+
+#reset-puzzle-btn,
+#close-puzzle-btn {
+  font-family: 'Courier New', Courier, monospace;
+  font-size: 1em;
+  text-transform: uppercase;
+  color: #aaa;
+  background: transparent;
+  border: 2px solid #555;
+  padding: 8px 15px;
+  cursor: pointer;
+  transition: all 0.3s;
+}
+
+#reset-puzzle-btn:hover,
+#close-puzzle-btn:hover {
+  color: #fff;
+  background: #300;
+  border-color: #f00;
+  text-shadow: 0 0 5px #f00;
+}
+
+@keyframes pulse {
+  0% {
+    box-shadow: 0 0 10px #00ffff, inset 0 0 10px #000;
+  }
+  50% {
+    box-shadow: 0 0 25px #00ffff, inset 0 0 10px #000;
+  }
+  100% {
+    box-shadow: 0 0 10px #00ffff, inset 0 0 10px #000;
+  }
+}
+
+
+
+/*====THE FAILURE OR SUCCESS MESSAGE===*/
+/*====THE FAILURE OR SUCCESS MESSAGE===*/
+#puzzle-result-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  background-color: rgba(0, 0, 0, 0.7);
+  z-index: 2000;
+  opacity: 1;
+  transition: opacity 0.5s ease-out;
+}
+
+#puzzle-result-overlay.hidden {
+  opacity: 0;
+  pointer-events: none;
+}
+
+#result-message {
+  text-align: center;
+  color: #fff;
+  text-transform: uppercase;
+}
+
+/* --- Base Title Style (made more neutral) --- */
+#result-title {
+  /* Removed the specific font-family from the base rule */
+  font-size: 8em;
+  letter-spacing: 5px;
+  /* Set a default animation to none */
+  animation: none;
+}
+
+#result-subtitle {
+  font-family: 'Courier New', Courier, monospace;
+  font-size: 1.5em;
+  color: #ccc;
+  margin-top: 10px;
+}
+
+/* --- Success Style --- */
+#puzzle-result-overlay.success #result-title {
+  font-family: 'Creepster', cursive; /* Font is now specific to success */
+  font-size: 8em;
+  color: #00ff00;
+  text-shadow: 0 0 15px #00ff00, 1px 1px 0 #fff, -1px -1px 0 #fff;
+  animation: success-flicker 2s ease-in-out;
+}
+
+/* --- Failure Style --- */
+#puzzle-result-overlay.failure {
+  background-color: rgba(0, 0, 0, 0.95);
+}
+
+#puzzle-result-overlay.failure #result-message {
+  animation: souls-death-fade-in 3s ease-out forwards;
+}
+
+#puzzle-result-overlay.failure #result-title {
+  font-family: 'Cinzel', serif; /* Font is now specific to failure */
+  font-size: 9em;
+  font-weight: 700;
+  color: #6d0000;
+  text-shadow: 0 0 25px #ff0000;
+}
+
+#puzzle-result-overlay.failure #result-subtitle {
+  font-family: 'Courier New', Courier, monospace;
+  font-size: 1.5em;
+  color: #a1a1a1;
+  text-shadow: none;
+  margin-top: 15px;
+  opacity: 0.8;
+}
+
+/* Keyframes for animations */
+@keyframes success-flicker {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.8; transform: scale(1.02); }
+}
+
+@keyframes souls-death-fade-in {
+  0% {
+    opacity: 0;
+    transform: scale(1.1);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+/* Procedural Mansion UI Enhancements */
+.mansion-ui {
+    font-family: 'Courier New', monospace;
+    text-shadow: 2px 2px 4px rgba(0,0,0,0.8);
+}
+
+.inventory-item {
+    transition: color 0.3s ease;
+}
+
+.inventory-item:hover {
+    color: #ff6666;
+}
+
+.objective-completed {
+    color: #00ff00 !important;
+    text-shadow: 0 0 5px #00ff00;
+}
+
+.hint-text {
+    animation: pulse 2s infinite;
+}
+
+@keyframes pulse {
+    0%, 100% { opacity: 0.8; }
+    50% { opacity: 1.0; }
+}

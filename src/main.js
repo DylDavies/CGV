@@ -17,6 +17,7 @@ import { CannonPhysicsManager } from './systems/CannonPhysicsManager.js';
 import { InteractionSystem } from './systems/InteractionSystem.js';
 import { GameManager } from './systems/GameManager.js';
 import { PuzzleSystem } from './systems/PuzzleSystem.js';
+import { ColorPuzzle } from './puzzles/ColorPuzzle.js';
 
 const welcomeScreen = document.getElementById('welcome-screen');
 const playButton = document.getElementById('play-btn');
@@ -50,6 +51,24 @@ async function main() {
         
         const stats = createStats();
         const loop = new Loop(camera, scene, renderer, stats);
+
+        // Puzzle colourPalette
+        const colorPuzzle = new ColorPuzzle();
+        await colorPuzzle.loadLevels(); 
+        colorPuzzle.onClose(() => {
+            controls.controls.lock(); // re-enable first person controls
+        });
+    
+        // Add a keydown listener to trigger a puzzle with a specific difficulty
+        window.addEventListener('keydown', (event) => {
+            if (event.key === 'p' && controls.controls.isLocked) {
+                console.log("Loading a pre-made 4-move puzzle...");
+                controls.controls.unlock();
+                
+                // Select a puzzle that can be solved in 4 moves
+                colorPuzzle.show(5); // make this interactive so the value passsed in will determine the amount of time given to the set 
+            }
+        });
 
         // Add minimal ambient light for horror atmosphere
         loadingText.textContent = "Setting up lighting...";
