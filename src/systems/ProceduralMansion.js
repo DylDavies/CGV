@@ -3,19 +3,35 @@
 import * as THREE from 'https://unpkg.com/three@0.127.0/build/three.module.js';
 
 class ProceduralMansion {
-    constructor(scene, collisionSystem = null) {
+    constructor(scene, physicsManager = null) {
         this.scene = scene;
-        this.collisionSystem = collisionSystem;
+        this.physicsManager = physicsManager;
         this.rooms = [];
         this.hallways = [];
         this.doors = [];
         this.puzzleRooms = [];
         this.materials = this.createMaterials();
-        this.roomTypes = ['bedroom', 'kitchen', 'library', 'study', 'bathroom', 'storage', 'attic'];
-        this.gridSize = 10; // Size of each room unit
-        this.mansionWidth = 8; // Grid units
-        this.mansionHeight = 6; // Grid units
+        // More realistic room types and sizes
+        this.roomTypes = [
+            { type: 'living_room', minSize: [4, 4], maxSize: [6, 5], probability: 0.8 },
+            { type: 'kitchen', minSize: [3, 3], maxSize: [4, 4], probability: 0.9 },
+            { type: 'bedroom', minSize: [3, 3], maxSize: [4, 4], probability: 0.7 },
+            { type: 'bathroom', minSize: [2, 2], maxSize: [3, 2], probability: 0.6 },
+            { type: 'dining_room', minSize: [3, 3], maxSize: [4, 4], probability: 0.5 },
+            { type: 'study', minSize: [2, 3], maxSize: [3, 3], probability: 0.4 },
+            { type: 'storage', minSize: [2, 2], maxSize: [3, 2], probability: 0.3 },
+            { type: 'hallway', minSize: [1, 3], maxSize: [2, 8], probability: 1.0 }
+        ];
+
+        this.gridSize = 6; // Smaller grid units for more detail
+        this.mansionWidth = 12; // Manageable size for now
+        this.mansionHeight = 10; // Manageable size for now
         this.grid = this.createGrid();
+
+        // Multi-level support
+        this.levels = [];
+        this.currentLevel = 0;
+        this.maxLevels = 2;
 
         // Collision mesh storage
         this.collisionMeshes = [];
@@ -24,22 +40,57 @@ class ProceduralMansion {
 
     createMaterials() {
         const textureLoader = new THREE.TextureLoader();
-        
+
         return {
-            wall: new THREE.MeshLambertMaterial({ color: 0x8B4513 }), // Dark brown
-            floor: new THREE.MeshLambertMaterial({ color: 0x654321 }), // Darker brown
-            ceiling: new THREE.MeshLambertMaterial({ color: 0x2F2F2F }), // Dark gray
-            door: new THREE.MeshLambertMaterial({ color: 0x4A4A4A }), // Gray
-            window: new THREE.MeshLambertMaterial({ 
-                color: 0x1E90FF, 
-                transparent: true, 
-                opacity: 0.3 
+            // Use MeshStandardMaterial for better lighting response
+            wall: new THREE.MeshStandardMaterial({
+                color: 0x8B4513,
+                roughness: 0.8,
+                metalness: 0.1
             }),
-            furniture: new THREE.MeshLambertMaterial({ color: 0x8B4513 }),
+            floor: new THREE.MeshStandardMaterial({
+                color: 0x654321,
+                roughness: 0.9,
+                metalness: 0.0
+            }),
+            ceiling: new THREE.MeshStandardMaterial({
+                color: 0x2F2F2F,
+                roughness: 0.8,
+                metalness: 0.1
+            }),
+            door: new THREE.MeshStandardMaterial({
+                color: 0x4A4A4A,
+                roughness: 0.7,
+                metalness: 0.2
+            }),
+            window: new THREE.MeshStandardMaterial({
+                color: 0x1E90FF,
+                transparent: true,
+                opacity: 0.3,
+                roughness: 0.1,
+                metalness: 0.9
+            }),
+            furniture: new THREE.MeshStandardMaterial({
+                color: 0x8B4513,
+                roughness: 0.8,
+                metalness: 0.1
+            }),
             // Horror-themed materials
-            bloodStain: new THREE.MeshLambertMaterial({ color: 0x8B0000 }), // Dark red
-            mold: new THREE.MeshLambertMaterial({ color: 0x2F4F2F }), // Dark green
-            rust: new THREE.MeshLambertMaterial({ color: 0xB87333 }) // Rusty brown
+            bloodStain: new THREE.MeshStandardMaterial({
+                color: 0x8B0000,
+                roughness: 0.9,
+                metalness: 0.0
+            }),
+            mold: new THREE.MeshStandardMaterial({
+                color: 0x2F4F2F,
+                roughness: 1.0,
+                metalness: 0.0
+            }),
+            rust: new THREE.MeshStandardMaterial({
+                color: 0xB87333,
+                roughness: 0.9,
+                metalness: 0.3
+            })
         };
     }
 
@@ -85,58 +136,142 @@ class ProceduralMansion {
     }
 
     generateRoomLayout() {
-        const minRooms = 8;
-        const maxRooms = 15;
-        const targetRooms = Math.floor(Math.random() * (maxRooms - minRooms + 1)) + minRooms;
-        
-        // Always start with an entrance hall
+        console.log("🏠 Generating realistic multi-level house layout...");
+
+        // Generate multiple levels
+        for (let level = 0; level < this.maxLevels; level++) {
+            this.currentLevel = level;
+            this.generateLevelLayout(level);
+        }
+
+        // Connect levels with stairs
+        if (this.maxLevels > 1) {
+            this.generateStairs();
+        }
+
+        console.log(`🏠 Generated ${this.rooms.length} rooms across ${this.maxLevels} levels`);
+    }
+
+
+    generateLevelLayout(level) {
+        console.log(`🏗️ Generating level ${level}...`);
+
+        // Create a level-specific grid
+        const levelGrid = this.createGrid();
+        const levelRooms = [];
+
+        if (level === 0) {
+            // Ground floor - main living areas
+            this.generateGroundFloor(levelGrid, levelRooms, level);
+        } else {
+            // Upper floors - bedrooms and private areas
+            this.generateUpperFloor(levelGrid, levelRooms, level);
+        }
+
+        // Store level data
+        this.levels[level] = {
+            grid: levelGrid,
+            rooms: levelRooms,
+            height: level * 4 // 4 units height per level
+        };
+
+        console.log(`📍 Level ${level}: Generated ${levelRooms.length} rooms`);
+    }
+
+    generateGroundFloor(grid, rooms, level) {
+        console.log("🏠 Generating ground floor - public areas...");
+
+        // Always start with an entrance
         const entranceX = Math.floor(this.mansionWidth / 2) - 1;
-        const entranceZ = this.mansionHeight - 2;
-        const entranceRoom = this.createRoom(
-            entranceX,
-            entranceZ,
-            'entrance',
-            2, 2
-        );
-        
+        const entranceZ = this.mansionHeight - 3;
+        const entranceRoom = this.createLevelRoom(entranceX, entranceZ, 'entrance', 3, 2, level, grid);
+        if (entranceRoom) rooms.push(entranceRoom);
+
+        // Ground floor room types - public/social areas
+        const groundFloorTypes = [
+            { type: 'living_room', count: 1, priority: 0.95 },
+            { type: 'kitchen', count: 1, priority: 0.9 },
+            { type: 'dining_room', count: 1, priority: 0.7 },
+            { type: 'bathroom', count: 1, priority: 0.6 }, // Half bath on ground floor
+            { type: 'study', count: 1, priority: 0.4 }
+        ];
+
+        this.generateRoomsForLevel(grid, rooms, level, groundFloorTypes, 4, 8);
+    }
+
+    generateUpperFloor(grid, rooms, level) {
+        console.log(`🛏️ Generating upper floor ${level} - private areas...`);
+
+        // Upper floor room types - private/personal areas
+        const upperFloorTypes = [
+            { type: 'bedroom', count: 2 + level, priority: 0.9 }, // More bedrooms on higher floors
+            { type: 'bathroom', count: 1, priority: 0.8 },
+            { type: 'study', count: 1, priority: 0.5 },
+            { type: 'storage', count: 1, priority: 0.3 }
+        ];
+
+        this.generateRoomsForLevel(grid, rooms, level, upperFloorTypes, 3, 6);
+    }
+
+    // Helper method to generate rooms for a specific level
+    generateRoomsForLevel(grid, rooms, level, roomTypes, minRooms, maxRooms) {
+        const targetRooms = Math.floor(Math.random() * (maxRooms - minRooms + 1)) + minRooms;
+        let placedRooms = 0;
         let attempts = 0;
-        while (this.rooms.length < targetRooms && attempts < 100) {
-            const x = Math.floor(Math.random() * (this.mansionWidth - 2));
-            const z = Math.floor(Math.random() * (this.mansionHeight - 2));
-            const width = Math.random() > 0.7 ? 2 : 1;
-            const height = Math.random() > 0.7 ? 2 : 1;
-            const roomType = this.roomTypes[Math.floor(Math.random() * this.roomTypes.length)];
-            
-            if (this.canPlaceRoom(x, z, width, height)) {
-                this.createRoom(x, z, roomType, width, height);
-            }
-            attempts++;
-        }
-    }
 
-    canPlaceRoom(x, z, width, height) {
-        if (x < 0 || z < 0 || x + width > this.mansionWidth || z + height > this.mansionHeight) {
-            return false;
-        }
+        // Try to place each required room type
+        for (const roomType of roomTypes) {
+            if (Math.random() > roomType.priority) continue;
 
-        for (let i = x; i < x + width; i++) {
-            for (let j = z; j < z + height; j++) {
-                if (this.grid[i][j].occupied) {
-                    return false;
+            const roomsToPlace = roomType.count || 1;
+            let placed = 0;
+
+            while (placed < roomsToPlace && placedRooms < targetRooms && attempts < 100) {
+                const room = this.tryPlaceRoomOnLevel(grid, roomType.type, level);
+                if (room) {
+                    rooms.push(room);
+                    placedRooms++;
+                    placed++;
                 }
+                attempts++;
             }
         }
-        return true;
+
+        console.log(`📍 Level ${level}: Placed ${placedRooms} rooms (target: ${targetRooms})`);
     }
 
-    createRoom(x, z, type, width, height) {
-        // Validate bounds before creating room
-        if (!this.canPlaceRoom(x, z, width, height)) {
-            console.warn(`Cannot place room at (${x}, ${z}) with size ${width}x${height} - out of bounds or occupied`);
+    // Try to place a room of a specific type on a level
+    tryPlaceRoomOnLevel(grid, roomTypeName, level) {
+        const roomType = this.roomTypes.find(r => r.type === roomTypeName);
+        if (!roomType) return null;
+
+        const maxAttempts = 50;
+        for (let attempt = 0; attempt < maxAttempts; attempt++) {
+            // Generate varied dimensions
+            const width = Math.floor(Math.random() * (roomType.maxSize[0] - roomType.minSize[0] + 1)) + roomType.minSize[0];
+            const height = Math.floor(Math.random() * (roomType.maxSize[1] - roomType.minSize[1] + 1)) + roomType.minSize[1];
+
+            // Random position
+            const x = Math.floor(Math.random() * (this.mansionWidth - width));
+            const z = Math.floor(Math.random() * (this.mansionHeight - height));
+
+            const room = this.createLevelRoom(x, z, roomTypeName, width, height, level, grid);
+            if (room) {
+                return room;
+            }
+        }
+        return null;
+    }
+
+    // Create a room on a specific level
+    createLevelRoom(x, z, type, width, height, level, grid) {
+        if (!this.canPlaceRoomOnLevel(grid, x, z, width, height)) {
             return null;
         }
 
         const roomId = this.rooms.length;
+        const baseHeight = level * 4; // 4 meters per level
+
         const room = {
             id: roomId,
             x: x,
@@ -144,26 +279,212 @@ class ProceduralMansion {
             width: width,
             height: height,
             type: type,
-            center: new THREE.Vector3(
-                (x + width / 2) * this.gridSize,
-                0,
-                (z + height / 2) * this.gridSize
-            ),
+            level: level,
+            baseHeight: baseHeight,
+            center: {
+                x: (x + width / 2) * this.gridSize,
+                y: baseHeight,
+                z: (z + height / 2) * this.gridSize
+            },
+            bounds: {
+                minX: x * this.gridSize,
+                maxX: (x + width) * this.gridSize,
+                minZ: z * this.gridSize,
+                maxZ: (z + height) * this.gridSize
+            },
+            connected: [],
             furniture: [],
             puzzles: [],
             atmosphere: []
         };
 
-        // Mark grid cells as occupied
+        // Mark grid as occupied
+        this.markGridArea(grid, x, z, width, height, roomId);
+
+        // Add to main rooms array
+        this.rooms.push(room);
+
+        console.log(`🏠 Created ${type} room (${width}x${height}) at level ${level}, position (${x},${z})`);
+        return room;
+    }
+
+    canPlaceRoomOnLevel(grid, x, z, width, height) {
+        // Check bounds
+        if (x < 0 || z < 0 || x + width > this.mansionWidth || z + height > this.mansionHeight) {
+            return false;
+        }
+
+        // Check if area is free in the level grid
         for (let i = x; i < x + width; i++) {
             for (let j = z; j < z + height; j++) {
-                this.grid[i][j].occupied = true;
-                this.grid[i][j].roomId = roomId;
-                this.grid[i][j].type = type;
+                if (!grid[i] || !grid[i][j] || grid[i][j].occupied) {
+                    return false;
+                }
+            }
+        }
+        return true;
+    }
+
+    markGridArea(grid, x, z, width, height, roomId) {
+        for (let i = x; i < x + width && i < this.mansionWidth; i++) {
+            for (let j = z; j < z + height && j < this.mansionHeight; j++) {
+                if (grid[i] && grid[i][j]) {
+                    grid[i][j].occupied = true;
+                    grid[i][j].roomId = roomId;
+                }
+            }
+        }
+    }
+
+    // Helper methods for new room generation
+    createRealisticRoom(x, z, type, width, height, level) {
+        const room = {
+            id: this.rooms.length + 1,
+            x: x,
+            z: z,
+            width: width,
+            height: height,
+            level: level,
+            type: type,
+            center: {
+                x: (x + width / 2) * this.gridSize,
+                z: (z + height / 2) * this.gridSize
+            },
+            bounds: {
+                minX: x * this.gridSize,
+                maxX: (x + width) * this.gridSize,
+                minZ: z * this.gridSize,
+                maxZ: (z + height) * this.gridSize
+            },
+            connected: [],
+            furniture: [],
+            puzzles: [],
+            atmosphere: []
+        };
+        return room;
+    }
+
+    markGridArea(grid, x, z, width, height, roomId) {
+        for (let i = x; i < x + width && i < this.mansionWidth; i++) {
+            for (let j = z; j < z + height && j < this.mansionHeight; j++) {
+                if (grid[i] && grid[i][j]) {
+                    grid[i][j].occupied = true;
+                    grid[i][j].roomId = roomId;
+                }
+            }
+        }
+    }
+
+    generateConnectedRooms(grid, rooms, startRoom, roomTypes) {
+        // Simplified room generation for now
+        let placed = 0;
+        const maxAttempts = 50;
+
+        for (const roomDef of roomTypes) {
+            if (Math.random() > roomDef.priority) continue;
+
+            let attempts = 0;
+            while (attempts < maxAttempts && placed < 5) {
+                const roomType = this.roomTypes.find(r => r.type === roomDef.type);
+                if (!roomType) continue;
+
+                const width = Math.floor(Math.random() * (roomType.maxSize[0] - roomType.minSize[0] + 1)) + roomType.minSize[0];
+                const height = Math.floor(Math.random() * (roomType.maxSize[1] - roomType.minSize[1] + 1)) + roomType.minSize[1];
+
+                const x = Math.floor(Math.random() * (this.mansionWidth - width));
+                const z = Math.floor(Math.random() * (this.mansionHeight - height));
+
+                if (this.canPlaceRoom(grid, x, z, width, height)) {
+                    const room = this.createRealisticRoom(x, z, roomDef.type, width, height, this.currentLevel);
+                    this.markGridArea(grid, x, z, width, height, room.id);
+                    rooms.push(room);
+                    placed++;
+                    break;
+                }
+                attempts++;
+            }
+        }
+    }
+
+    canPlaceRoom(grid, x, z, width, height) {
+        // Check if area is free
+        for (let i = x; i < x + width && i < this.mansionWidth; i++) {
+            for (let j = z; j < z + height && j < this.mansionHeight; j++) {
+                if (!grid[i] || !grid[i][j] || grid[i][j].occupied) {
+                    return false;
+                }
+            }
+        }
+        return true;
+    }
+
+    generateHallwaysForLevel(grid, rooms, level) {
+        // Simple hallway generation - connect rooms with basic corridors
+        console.log(`🚪 Generating hallways for level ${level}...`);
+    }
+
+    generateStairs() {
+        console.log("🪜 Generating stairs between levels...");
+
+        // Find a good location for stairs on each level
+        for (let level = 0; level < this.maxLevels - 1; level++) {
+            this.createStaircase(level);
+        }
+    }
+
+    createStaircase(fromLevel) {
+        const toLevel = fromLevel + 1;
+        console.log(`🪜 Creating staircase from level ${fromLevel} to ${toLevel}`);
+
+        // Find a suitable location for stairs (avoid existing rooms)
+        const stairWidth = 2;
+        const stairHeight = 3;
+        let stairX, stairZ;
+
+        // Try to find a central location
+        const attempts = 50;
+        for (let attempt = 0; attempt < attempts; attempt++) {
+            stairX = Math.floor(this.mansionWidth / 2) + Math.floor(Math.random() * 3) - 1;
+            stairZ = Math.floor(this.mansionHeight / 2) + Math.floor(Math.random() * 3) - 1;
+
+            // Check if this location works for both levels
+            const canPlaceOnFromLevel = this.canPlaceStairs(stairX, stairZ, stairWidth, stairHeight, fromLevel);
+            const canPlaceOnToLevel = this.canPlaceStairs(stairX, stairZ, stairWidth, stairHeight, toLevel);
+
+            if (canPlaceOnFromLevel && canPlaceOnToLevel) {
+                break;
             }
         }
 
-        this.rooms.push(room);
+        // Create stair rooms on both levels
+        const bottomStair = this.createStairRoom(stairX, stairZ, stairWidth, stairHeight, fromLevel, 'stairs_up');
+        const topStair = this.createStairRoom(stairX, stairZ, stairWidth, stairHeight, toLevel, 'stairs_down');
+
+        if (bottomStair && topStair) {
+            // Connect the stairs
+            bottomStair.connectedStairs = topStair.id;
+            topStair.connectedStairs = bottomStair.id;
+
+            console.log(`🪜 Successfully created staircase at (${stairX}, ${stairZ})`);
+        }
+    }
+
+    canPlaceStairs(x, z, width, height, level) {
+        const levelData = this.levels[level];
+        if (!levelData) return false;
+
+        return this.canPlaceRoomOnLevel(levelData.grid, x, z, width, height);
+    }
+
+    createStairRoom(x, z, width, height, level, type) {
+        const levelData = this.levels[level];
+        if (!levelData) return null;
+
+        const room = this.createLevelRoom(x, z, type, width, height, level, levelData.grid);
+        if (room) {
+            levelData.rooms.push(room);
+            console.log(`🪜 Created ${type} at level ${level}`);
+        }
         return room;
     }
 
@@ -252,43 +573,50 @@ class ProceduralMansion {
 
     buildRoom(room) {
         const roomGroup = new THREE.Group();
-        roomGroup.name = `room_${room.id}_${room.type}`;
-        
+        roomGroup.name = `room_${room.id}_${room.type}_level_${room.level || 0}`;
+
         const startX = room.x * this.gridSize;
         const startZ = room.z * this.gridSize;
         const width = room.width * this.gridSize;
         const height = room.height * this.gridSize;
         const wallHeight = 4;
+
+        // Get the floor height for this room's level
+        const floorY = room.baseHeight || 0;
         
-        // Floor
-        const floorGeometry = new THREE.PlaneGeometry(width, height);
+        // Floor - using BoxGeometry for better lighting
+        const floorGeometry = new THREE.BoxGeometry(width, 0.1, height);
         const floor = new THREE.Mesh(floorGeometry, this.materials.floor);
-        floor.rotation.x = -Math.PI / 2;
-        floor.position.set(startX + width/2, 0, startZ + height/2);
-        floor.name = `floor_room_${room.id}`;
+        floor.position.set(startX + width/2, floorY + 0.05, startZ + height/2);
+        floor.name = `floor_room_${room.id}_level_${room.level || 0}`;
+        floor.receiveShadow = true; // Floor receives shadows
         roomGroup.add(floor);
 
-        // Add floor to collision system
-        if (this.collisionSystem) {
-            this.collisionSystem.addCollisionObject(floor, 'floor');
+        // Add floor to physics system
+        if (this.physicsManager) {
+            const floorBody = this.physicsManager.createBoxBody(
+                new THREE.Vector3(startX + width/2, floorY - 0.5, startZ + height/2),
+                new THREE.Vector3(width, 1, height)
+            );
+            this.physicsManager.addBody(floorBody);
             this.floorMeshes.push(floor);
         }
 
-        // Ceiling
-        const ceiling = new THREE.Mesh(floorGeometry, this.materials.ceiling);
-        ceiling.rotation.x = Math.PI / 2;
-        ceiling.position.set(startX + width/2, wallHeight, startZ + height/2);
-        ceiling.name = `ceiling_room_${room.id}`;
+        // Ceiling - using BoxGeometry for better lighting
+        const ceilingGeometry = new THREE.BoxGeometry(width, 0.1, height);
+        const ceiling = new THREE.Mesh(ceilingGeometry, this.materials.ceiling);
+        ceiling.position.set(startX + width/2, floorY + wallHeight - 0.05, startZ + height/2);
+        ceiling.name = `ceiling_room_${room.id}_level_${room.level || 0}`;
         roomGroup.add(ceiling);
 
         // Walls
-        this.buildWalls(roomGroup, startX, startZ, width, height, wallHeight, room.id);
+        this.buildWalls(roomGroup, startX, startZ, width, height, wallHeight, room.id, floorY);
 
         this.scene.add(roomGroup);
         room.meshGroup = roomGroup;
     }
 
-    buildWalls(group, startX, startZ, width, height, wallHeight, roomId) {
+    buildWalls(group, startX, startZ, width, height, wallHeight, roomId, floorY = 0) {
         const wallThickness = 0.2;
 
         // North wall
@@ -296,13 +624,19 @@ class ProceduralMansion {
             new THREE.BoxGeometry(width, wallHeight, wallThickness),
             this.materials.wall
         );
-        northWall.position.set(startX + width/2, wallHeight/2, startZ);
+        northWall.position.set(startX + width/2, floorY + wallHeight/2, startZ);
         northWall.name = `wall_north_room_${roomId}`;
+        northWall.receiveShadow = true;
+        northWall.castShadow = true;
         group.add(northWall);
 
-        // Add to collision system
-        if (this.collisionSystem) {
-            this.collisionSystem.addCollisionObject(northWall, 'wall');
+        // Add to physics system
+        if (this.physicsManager) {
+            const wallBody = this.physicsManager.createBoxBody(
+                new THREE.Vector3(startX + width/2, floorY + wallHeight/2, startZ),
+                new THREE.Vector3(width, wallHeight, wallThickness)
+            );
+            this.physicsManager.addBody(wallBody);
             this.collisionMeshes.push(northWall);
         }
 
@@ -311,12 +645,18 @@ class ProceduralMansion {
             new THREE.BoxGeometry(width, wallHeight, wallThickness),
             this.materials.wall
         );
-        southWall.position.set(startX + width/2, wallHeight/2, startZ + height);
+        southWall.position.set(startX + width/2, floorY + wallHeight/2, startZ + height);
         southWall.name = `wall_south_room_${roomId}`;
+        southWall.receiveShadow = true;
+        southWall.castShadow = true;
         group.add(southWall);
 
-        if (this.collisionSystem) {
-            this.collisionSystem.addCollisionObject(southWall, 'wall');
+        if (this.physicsManager) {
+            const wallBody = this.physicsManager.createBoxBody(
+                new THREE.Vector3(startX + width/2, floorY + wallHeight/2, startZ + height),
+                new THREE.Vector3(width, wallHeight, wallThickness)
+            );
+            this.physicsManager.addBody(wallBody);
             this.collisionMeshes.push(southWall);
         }
 
@@ -325,12 +665,18 @@ class ProceduralMansion {
             new THREE.BoxGeometry(wallThickness, wallHeight, height),
             this.materials.wall
         );
-        eastWall.position.set(startX + width, wallHeight/2, startZ + height/2);
+        eastWall.position.set(startX + width, floorY + wallHeight/2, startZ + height/2);
         eastWall.name = `wall_east_room_${roomId}`;
+        eastWall.receiveShadow = true;
+        eastWall.castShadow = true;
         group.add(eastWall);
 
-        if (this.collisionSystem) {
-            this.collisionSystem.addCollisionObject(eastWall, 'wall');
+        if (this.physicsManager) {
+            const wallBody = this.physicsManager.createBoxBody(
+                new THREE.Vector3(startX + width, floorY + wallHeight/2, startZ + height/2),
+                new THREE.Vector3(wallThickness, wallHeight, height)
+            );
+            this.physicsManager.addBody(wallBody);
             this.collisionMeshes.push(eastWall);
         }
 
@@ -339,12 +685,18 @@ class ProceduralMansion {
             new THREE.BoxGeometry(wallThickness, wallHeight, height),
             this.materials.wall
         );
-        westWall.position.set(startX, wallHeight/2, startZ + height/2);
+        westWall.position.set(startX, floorY + wallHeight/2, startZ + height/2);
         westWall.name = `wall_west_room_${roomId}`;
+        westWall.receiveShadow = true;
+        westWall.castShadow = true;
         group.add(westWall);
 
-        if (this.collisionSystem) {
-            this.collisionSystem.addCollisionObject(westWall, 'wall');
+        if (this.physicsManager) {
+            const wallBody = this.physicsManager.createBoxBody(
+                new THREE.Vector3(startX, floorY + wallHeight/2, startZ + height/2),
+                new THREE.Vector3(wallThickness, wallHeight, height)
+            );
+            this.physicsManager.addBody(wallBody);
             this.collisionMeshes.push(westWall);
         }
     }
@@ -571,7 +923,14 @@ class ProceduralMansion {
             };
 
             room.meshGroup.add(collisionBox);
-            this.collisionSystem.addCollisionObject(collisionBox, 'wall');
+
+            if (this.physicsManager) {
+                const furnitureBody = this.physicsManager.createBoxBody(
+                    mesh.position.clone(),
+                    new THREE.Vector3(width, height, depth)
+                );
+                this.physicsManager.addBody(furnitureBody);
+            }
             this.collisionMeshes.push(collisionBox);
         }
 
@@ -740,21 +1099,48 @@ class ProceduralMansion {
     }
 
     addFlickeringLight(room) {
-        const light = new THREE.PointLight(0xffffff, 0.5, 10);
-        light.position.set(
+        // Create light fixture group
+        const lightFixture = new THREE.Group();
+
+        // Create rod/pole for the light
+        const rodGeometry = new THREE.CylinderGeometry(0.02, 0.02, 0.8, 8);
+        const rodMaterial = new THREE.MeshLambertMaterial({ color: 0x444444 });
+        const rod = new THREE.Mesh(rodGeometry, rodMaterial);
+        rod.position.set(0, -0.4, 0); // Hang down from ceiling
+        lightFixture.add(rod);
+
+        // Create small bulb at the end of rod
+        const bulbGeometry = new THREE.SphereGeometry(0.08, 8, 6);
+        const bulbMaterial = new THREE.MeshBasicMaterial({
+            color: 0xffffaa,
+            opacity: 0.8,
+            transparent: true
+        });
+        const bulb = new THREE.Mesh(bulbGeometry, bulbMaterial);
+        bulb.position.set(0, -0.8, 0);
+        lightFixture.add(bulb);
+
+        // Position the entire fixture
+        lightFixture.position.set(
             room.center.x,
-            3,
+            3.5, // Hang from ceiling
             room.center.z
         );
-        
+
+        // Create the actual light
+        const light = new THREE.PointLight(0xffffff, 0.8, 12);
+        light.position.set(0, -0.8, 0); // At bulb position
+
         // Add flickering animation
-        light.userData = { 
+        light.userData = {
             flicker: true,
-            intensity: 0.5,
-            flickerSpeed: Math.random() * 2 + 1
+            intensity: 0.8,
+            flickerSpeed: Math.random() * 2 + 1,
+            bulb: bulb // Reference to bulb for flickering effect
         };
-        
-        room.meshGroup.add(light);
+
+        lightFixture.add(light);
+        room.meshGroup.add(lightFixture);
         room.atmosphere.push(light);
     }
 
@@ -912,13 +1298,8 @@ class ProceduralMansion {
     setCollisionSystem(collisionSystem) {
         this.collisionSystem = collisionSystem;
 
-        // Add existing meshes to collision system
-        for (const mesh of this.collisionMeshes) {
-            this.collisionSystem.addCollisionObject(mesh, 'wall');
-        }
-        for (const mesh of this.floorMeshes) {
-            this.collisionSystem.addCollisionObject(mesh, 'floor');
-        }
+        // Physics bodies are already added when meshes are created
+        // No need to add existing meshes again
     }
 
     removeFromCollisionSystem() {
