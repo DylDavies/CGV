@@ -55,6 +55,7 @@ class CannonPhysicsManager {
         // Developer mode
         this.devMode = false;
         this.flyMode = false;
+        this.noclipMode = false;
 
         // Ground contact detection
         const groundMaterial = new CANNON.Material('ground');
@@ -155,7 +156,9 @@ class CannonPhysicsManager {
         // Step the physics world
         this.world.step(delta);
 
-        if (this.flyMode && this.devMode) {
+        if (this.noclipMode) {
+            this.handleNoclipMode(safeInputs, delta);
+        } else if (this.flyMode && this.devMode) {
             this.handleFlyMode(safeInputs, delta);
         } else {
             this.handleNormalMovement(safeInputs, delta);
@@ -259,6 +262,46 @@ class CannonPhysicsManager {
             this.playerBody.position.x += movement.x;
             this.playerBody.position.y += movement.y;
             this.playerBody.position.z += movement.z;
+        }
+    }
+
+    handleNoclipMode(inputs, delta) {
+        // Direct camera movement with no collision detection
+        const speed = this.maxSpeed.walk;
+
+        // Get camera's forward and right vectors
+        const forward = new THREE.Vector3();
+        const right = new THREE.Vector3();
+
+        this.camera.getWorldDirection(forward);
+        forward.normalize();
+
+        right.crossVectors(forward, new THREE.Vector3(0, 1, 0)).normalize();
+
+        // Calculate movement
+        const movement = new THREE.Vector3();
+
+        if (inputs.moveForward) movement.add(forward);
+        if (inputs.moveBackward) movement.sub(forward);
+        if (inputs.moveRight) movement.add(right);
+        if (inputs.moveLeft) movement.sub(right);
+
+        // Vertical movement
+        if (inputs.jump) movement.y += 1;
+        if (inputs.isCrouching) movement.y -= 1;
+
+        // Apply movement directly to camera (no physics)
+        if (movement.length() > 0) {
+            movement.normalize();
+            movement.multiplyScalar(speed * delta);
+
+            this.camera.position.add(movement);
+            // Sync physics body to camera position
+            this.playerBody.position.set(
+                this.camera.position.x,
+                this.camera.position.y - this.playerHeight/2,
+                this.camera.position.z
+            );
         }
     }
 
@@ -395,6 +438,11 @@ class CannonPhysicsManager {
         this.maxSpeed.crouch = crouch;
         this.maxSpeed.fly = fly;
         console.log(`🏃 Movement speeds updated`);
+    }
+
+    setNoclip(enabled) {
+        this.noclipMode = enabled;
+        console.log(`🚪 Noclip mode: ${enabled ? 'ON' : 'OFF'}`);
     }
 
     dispose() {

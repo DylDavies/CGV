@@ -293,7 +293,9 @@ class ProceduralMansion {
                 maxZ: (z + height) * this.gridSize
             },
             connected: [],
-            furniture: []
+            furniture: [],
+            puzzles: [],
+            atmosphere: []
         };
 
         // Mark grid as occupied
@@ -355,7 +357,9 @@ class ProceduralMansion {
                 maxZ: (z + height) * this.gridSize
             },
             connected: [],
-            furniture: []
+            furniture: [],
+            puzzles: [],
+            atmosphere: []
         };
         return room;
     }
@@ -1095,21 +1099,48 @@ class ProceduralMansion {
     }
 
     addFlickeringLight(room) {
-        const light = new THREE.PointLight(0xffffff, 0.5, 10);
-        light.position.set(
+        // Create light fixture group
+        const lightFixture = new THREE.Group();
+
+        // Create rod/pole for the light
+        const rodGeometry = new THREE.CylinderGeometry(0.02, 0.02, 0.8, 8);
+        const rodMaterial = new THREE.MeshLambertMaterial({ color: 0x444444 });
+        const rod = new THREE.Mesh(rodGeometry, rodMaterial);
+        rod.position.set(0, -0.4, 0); // Hang down from ceiling
+        lightFixture.add(rod);
+
+        // Create small bulb at the end of rod
+        const bulbGeometry = new THREE.SphereGeometry(0.08, 8, 6);
+        const bulbMaterial = new THREE.MeshBasicMaterial({
+            color: 0xffffaa,
+            opacity: 0.8,
+            transparent: true
+        });
+        const bulb = new THREE.Mesh(bulbGeometry, bulbMaterial);
+        bulb.position.set(0, -0.8, 0);
+        lightFixture.add(bulb);
+
+        // Position the entire fixture
+        lightFixture.position.set(
             room.center.x,
-            3,
+            3.5, // Hang from ceiling
             room.center.z
         );
-        
+
+        // Create the actual light
+        const light = new THREE.PointLight(0xffffff, 0.8, 12);
+        light.position.set(0, -0.8, 0); // At bulb position
+
         // Add flickering animation
-        light.userData = { 
+        light.userData = {
             flicker: true,
-            intensity: 0.5,
-            flickerSpeed: Math.random() * 2 + 1
+            intensity: 0.8,
+            flickerSpeed: Math.random() * 2 + 1,
+            bulb: bulb // Reference to bulb for flickering effect
         };
-        
-        room.meshGroup.add(light);
+
+        lightFixture.add(light);
+        room.meshGroup.add(lightFixture);
         room.atmosphere.push(light);
     }
 

@@ -14,6 +14,9 @@ import { Loop } from './systems/Loop.js';
 import { createStats } from './systems/Stats.js';
 import { ProceduralMansion } from './systems/ProceduralMansion.js';
 import { CannonPhysicsManager } from './systems/CannonPhysicsManager.js';
+import { InteractionSystem } from './systems/InteractionSystem.js';
+import { GameManager } from './systems/GameManager.js';
+import { PuzzleSystem } from './systems/PuzzleSystem.js';
 
 const welcomeScreen = document.getElementById('welcome-screen');
 const playButton = document.getElementById('play-btn');
@@ -51,8 +54,8 @@ async function main() {
         // Add minimal ambient light for horror atmosphere
         loadingText.textContent = "Setting up lighting...";
 
-        // Very dim ambient light - just enough to see walls
-        const ambientLight = new THREE.AmbientLight(0x404040, 0.1); // Much dimmer
+        // Increased ambient light for better visibility
+        const ambientLight = new THREE.AmbientLight(0x404040, 0.3); // Brighter for better visibility
         scene.add(ambientLight);
 
         // Dev mode lighting override
@@ -95,24 +98,35 @@ async function main() {
         scene.add(camera);
         console.log('📷 Camera added to scene');
 
-        // Create improved flashlight
+        // Create improved flashlight with higher intensity
         loadingText.textContent = "Creating flashlight...";
         console.log('🔦 Creating improved flashlight...');
         const flashlight = new ImprovedFlashlight(camera, scene);
+        // Increase flashlight brightness
+        if (flashlight.light) {
+            flashlight.light.intensity = 3; // Much brighter
+            flashlight.light.distance = 40; // Longer range
+        }
         console.log('🔦 Flashlight system ready');
 
         // Set up controls with physics manager
         const controls = new FirstPersonControls(camera, renderer.domElement);
         controls.setPhysicsManager(physicsManager);
-        
+
         // Configure physics
         physicsManager.setGravity(-15);
         physicsManager.setMovementSpeeds(4, 7, 2, 10); // walk, run, crouch, fly
-        
+
         const resizer = new Resizer(camera, renderer);
 
+        // Initialize game systems after mansion is created
+        loadingText.textContent = "Setting up game systems...";
+        const gameManager = new GameManager(mansion, camera, scene);
+        const puzzleSystem = new PuzzleSystem(scene, gameManager);
+        const interactionSystem = new InteractionSystem(camera, scene, gameManager);
+
         // Add updatables to loop
-        loop.updatables.push(controls, physicsManager, flashlight, mansion);
+        loop.updatables.push(controls, physicsManager, flashlight, mansion, interactionSystem, puzzleSystem);
 
         // Global debug controls
         window.gameControls = {
@@ -123,6 +137,10 @@ async function main() {
             flashlight,
             physicsManager,
             mansion,
+            gameManager,
+            interactionSystem,
+            puzzleSystem,
+            debugNoclip: false,
             
             // Helper functions
             addLight: () => {
@@ -157,6 +175,12 @@ async function main() {
             rechargeFlashlight: () => {
                 flashlight.rechargeBattery(100);
             },
+
+            toggleNoclip: () => {
+                window.gameControls.debugNoclip = !window.gameControls.debugNoclip;
+                physicsManager.setNoclip(window.gameControls.debugNoclip);
+                console.log('🚪 Noclip (walk through doors):', window.gameControls.debugNoclip ? 'ON' : 'OFF');
+            },
             
             getStatus: () => {
                 const physicsState = physicsManager.getDebugInfo();
@@ -183,6 +207,7 @@ async function main() {
         console.log('window.gameControls.darken() - Decrease ambient lighting');
         console.log('window.gameControls.addLight() - Add light at camera');
         console.log('window.gameControls.teleport(x, y, z) - Move camera');
+        console.log('window.gameControls.toggleNoclip() - Walk through doors/walls');
         console.log('window.gameControls.rechargeFlashlight() - Recharge battery');
         console.log('window.gameControls.getStatus() - Get current game state');
         console.log('');
