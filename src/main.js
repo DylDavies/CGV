@@ -1,20 +1,16 @@
-// Updated src/main.js - Integration with Procedural Mansion
+// src/main.js - Simplified error-free version
 
 import * as THREE from 'https://unpkg.com/three@0.127.0/build/three.module.js';
 
-// Import all your components and systems
+// Import components
 import { createScene } from './components/World/scene.js';
 import { createLights } from './components/World/lights.js';
-import { createPlayer } from './components/Player/Player.js';
 import { FirstPersonControls } from './components/Player/PlayerControls.js';
-import { SimpleFlashlight } from './components/Player/SimpleFlashlight.js';
 import { createRenderer } from './systems/Renderer.js';
 import { Resizer } from './systems/Resizer.js';
 import { Loop } from './systems/Loop.js';
 import { createStats } from './systems/Stats.js';
 import { ProceduralMansion } from './systems/ProceduralMansion.js';
-import { GameManager } from './systems/GameManager.js';
-import { InteractionSystem } from './systems/InteractionSystem.js';
 import { CollisionSystem } from './systems/CollisionSystem.js';
 import { PhysicsManager } from './systems/PhysicsManager.js';
 
@@ -24,134 +20,223 @@ const loadingScreen = document.getElementById('loading-container');
 const loadingText = document.getElementById('loading-text');
 
 playButton.addEventListener('click', () => {
-  welcomeScreen.style.display = 'none';
-  loadingScreen.style.display = 'flex';
-  main();
+    welcomeScreen.style.display = 'none';
+    loadingScreen.style.display = 'flex';
+    main();
 });
 
 async function main() {
-    const canvas = document.querySelector('#game-canvas');
+    try {
+        console.log('🚀 Starting PROJECT HER...');
+        
+        const canvas = document.querySelector('#game-canvas');
 
-    // Update loading text
-    loadingText.textContent = "Generating mansion layout...";
-    
-    const scene = createScene();
-    // Make the scene darker for horror atmosphere
-    scene.background = new THREE.Color(0x0a0a0a);
-    
-    const camera = new THREE.PerspectiveCamera(75, 1, 0.1, 1000);
-    const renderer = createRenderer(canvas);
-    const stats = createStats();
-    const loop = new Loop(camera, scene, renderer, stats);
+        // Create scene with better lighting
+        loadingText.textContent = "Creating world...";
+        const scene = createScene();
+        scene.background = new THREE.Color(0x222222); // Lighter gray background
+        scene.fog = new THREE.Fog(0x222222, 20, 60); // Less aggressive fog
+        
+        const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+        console.log('📷 Camera created');
+        
+        const renderer = createRenderer(canvas);
+        renderer.shadowMap.enabled = true;
+        renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+        
+        const stats = createStats();
+        const loop = new Loop(camera, scene, renderer, stats);
 
-    // Initialize collision system
-    loadingText.textContent = "Initializing physics systems...";
-    const collisionSystem = new CollisionSystem(scene, camera);
+        // Add good lighting FIRST
+        loadingText.textContent = "Setting up lighting...";
+        
+        // Strong ambient light so we can see
+        const ambientLight = new THREE.AmbientLight(0x404040, 0.6); // Bright enough to see
+        scene.add(ambientLight);
+        console.log('💡 Ambient light added');
+        
+        // Directional light for depth
+        const directionalLight = new THREE.DirectionalLight(0x404040, 0.4);
+        directionalLight.position.set(10, 10, 5);
+        directionalLight.castShadow = true;
+        scene.add(directionalLight);
+        console.log('☀️ Directional light added');
+        
+        // Add a test cube to see if anything is visible
+        const testGeometry = new THREE.BoxGeometry(2, 2, 2);
+        const testMaterial = new THREE.MeshLambertMaterial({ color: 0x00ff00 });
+        const testCube = new THREE.Mesh(testGeometry, testMaterial);
+        testCube.position.set(0, 1, -5);
+        scene.add(testCube);
+        console.log('🟢 Test cube added at (0, 1, -5)');
 
-    // Initialize physics manager
-    const physicsManager = new PhysicsManager(collisionSystem, camera);
+        // Initialize systems
+        loadingText.textContent = "Initializing collision system...";
+        const collisionSystem = new CollisionSystem(scene, camera);
+        
+        loadingText.textContent = "Setting up physics...";
+        const physicsManager = new PhysicsManager(collisionSystem, camera);
+        
+        // Create mansion
+        loadingText.textContent = "Generating mansion...";
+        const mansion = new ProceduralMansion(scene, collisionSystem);
+        mansion.generateMansion();
+        console.log(`🏠 Mansion created with ${mansion.rooms.length} rooms`);
 
-    // Create the procedural mansion with collision system
-    loadingText.textContent = "Building rooms and hallways...";
-    const mansion = new ProceduralMansion(scene, collisionSystem);
-    
-    // Generate the mansion
-    loadingText.textContent = "Placing furniture and puzzles...";
-    await new Promise(resolve => setTimeout(resolve, 500)); // Show loading text
-    mansion.generateMansion();
+        // Position camera
+        const entranceRoom = mansion.rooms.find(room => room.type === 'entrance');
+        if (entranceRoom) {
+            camera.position.set(entranceRoom.center.x, 3, entranceRoom.center.z + 3);
+            physicsManager.teleportTo(camera.position.clone());
+        } else {
+            camera.position.set(0, 3, 0);
+            physicsManager.teleportTo(new THREE.Vector3(0, 3, 0));
+        }
+        console.log('📍 Camera positioned at:', camera.position);
 
-    // Build spatial hash for performance optimization
-    loadingText.textContent = "Optimizing collision detection...";
-    mansion.buildCollisionSpatialHash();
+        // Add camera to scene (required for lights attached to camera)
+        scene.add(camera);
+        console.log('📷 Camera added to scene');
 
-    // Position camera at the entrance
-    const entranceRoom = mansion.rooms.find(room => room.type === 'entrance');
-    if (entranceRoom) {
-        const startPosition = new THREE.Vector3(
-            entranceRoom.center.x,
-            3, // Higher eye level (1.8m above ground)
-            entranceRoom.center.z + 5 // Slightly back from center
-        );
-        camera.position.copy(startPosition);
-        physicsManager.teleportTo(startPosition);
-    } else {
-        const fallbackPosition = new THREE.Vector3(0, 3, 20);
-        camera.position.copy(fallbackPosition);
-        physicsManager.teleportTo(fallbackPosition);
+        // Create flashlight AFTER camera is in scene
+        loadingText.textContent = "Creating flashlight...";
+        console.log('🔦 Creating flashlight...');
+        
+        class SimpleFlashlight {
+            constructor(camera) {
+                this.camera = camera;
+                this.isOn = true;
+                this.battery = 100;
+                
+                // Create bright spotlight
+                this.light = new THREE.SpotLight(0xffffff, 3, 25, Math.PI/4, 0.1, 1);
+                this.light.position.set(0.3, -0.1, 0);
+                this.light.castShadow = true;
+                
+                // Create target
+                this.target = new THREE.Object3D();
+                this.target.position.set(0, 0, -10);
+                this.light.target = this.target;
+                
+                // Add to camera
+                camera.add(this.light);
+                camera.add(this.target);
+                
+                // Controls
+                document.addEventListener('keydown', (e) => {
+                    if (e.code === 'KeyF') {
+                        this.toggle();
+                    }
+                });
+                
+                console.log('🔦 Flashlight created and attached to camera');
+            }
+            
+            toggle() {
+                this.isOn = !this.isOn;
+                this.light.visible = this.isOn;
+                console.log(`🔦 Flashlight ${this.isOn ? 'ON' : 'OFF'}`);
+            }
+            
+            tick(delta) {
+                if (this.isOn) {
+                    this.battery -= 0.2 * delta;
+                    if (this.battery <= 0) {
+                        this.battery = 0;
+                        this.isOn = false;
+                        this.light.visible = false;
+                    }
+                }
+            }
+        }
+        
+        const flashlight = new SimpleFlashlight(camera);
+
+        // Set up controls - FIXED: Pass proper physics manager
+        const controls = new FirstPersonControls(camera, renderer.domElement);
+        controls.setPhysicsManager(physicsManager); // This ensures proper integration
+        
+        // Configure physics
+        physicsManager.setGravity(-15);
+        physicsManager.setMovementSpeeds(4, 7, 2);
+        
+        const resizer = new Resizer(camera, renderer);
+
+        // Add updatables to loop
+        loop.updatables.push(controls, physicsManager, flashlight, mansion);
+
+        // Global debug controls
+        window.gameControls = {
+            camera,
+            scene,
+            ambientLight,
+            directionalLight,
+            flashlight,
+            physicsManager,
+            mansion,
+            testCube,
+            
+            // Helper functions
+            addLight: () => {
+                const light = new THREE.PointLight(0xffffff, 1, 20);
+                light.position.copy(camera.position);
+                scene.add(light);
+                console.log('💡 Added light at camera position');
+            },
+            
+            brighten: () => {
+                ambientLight.intensity = Math.min(2, ambientLight.intensity + 0.2);
+                console.log(`💡 Ambient light: ${ambientLight.intensity.toFixed(1)}`);
+            },
+            
+            darken: () => {
+                ambientLight.intensity = Math.max(0, ambientLight.intensity - 0.2);
+                console.log(`💡 Ambient light: ${ambientLight.intensity.toFixed(1)}`);
+            },
+            
+            teleport: (x, y, z) => {
+                camera.position.set(x, y, z);
+                physicsManager.teleportTo(new THREE.Vector3(x, y, z));
+                console.log(`📍 Teleported to: ${x}, ${y}, ${z}`);
+            }
+        };
+
+        console.log('🔧 DEBUG COMMANDS:');
+        console.log('window.gameControls.brighten() - Increase lighting');
+        console.log('window.gameControls.darken() - Decrease lighting');
+        console.log('window.gameControls.addLight() - Add light at camera');
+        console.log('window.gameControls.flashlight.toggle() - Toggle flashlight');
+        console.log('window.gameControls.teleport(0, 5, 0) - Move camera');
+
+        console.log('🔍 SCENE STATUS:');
+        console.log(`- Scene has ${scene.children.length} objects`);
+        console.log(`- Camera position: ${camera.position.x.toFixed(1)}, ${camera.position.y.toFixed(1)}, ${camera.position.z.toFixed(1)}`);
+        console.log(`- Ambient light intensity: ${ambientLight.intensity}`);
+        console.log(`- Flashlight visible: ${flashlight.light.visible}`);
+
+        // Start game
+        loadingText.textContent = "Ready to play!";
+        
+        setTimeout(() => {
+            loadingScreen.style.display = 'none';
+            document.body.classList.add('game-active');
+            
+            console.log('🎮 GAME STARTED!');
+            console.log('Click to lock cursor, then use WASD to move, F for flashlight');
+            
+            loop.start();
+        }, 1000);
+
+    } catch (error) {
+        console.error('🚨 STARTUP ERROR:', error);
+        loadingText.textContent = `Error: ${error.message}`;
+        loadingText.style.color = '#ff0000';
     }
-
-    loadingText.textContent = "Initializing game systems...";
-
-    // Create game systems
-    const gameManager = new GameManager(mansion, camera, scene);
-    const interactionSystem = new InteractionSystem(camera, scene, gameManager);
-
-    // Set up controls with physics manager
-    const controls = new FirstPersonControls(camera, renderer.domElement, physicsManager);
-    
-    // Create simple, reliable flashlight
-    loadingText.textContent = "Setting up lighting systems...";
-    const flashlight = new SimpleFlashlight(camera, scene);
-
-    // Add minimal ambient light for horror atmosphere
-    const { ambientLight } = createLights();
-    ambientLight.intensity = 0.1; // Very dim ambient light
-    scene.add(ambientLight);
-
-    // Add camera to scene (needed for flashlight)
-    scene.add(camera);
-
-    const resizer = new Resizer(camera, renderer);
-
-    // Add all updatable objects to the loop
-    loop.updatables.push(controls, mansion, gameManager, interactionSystem, physicsManager, flashlight);
-    
-    // Configure systems for horror game
-    loadingText.textContent = "Configuring horror atmosphere...";
-
-    // Set realistic physics properties
-    physicsManager.setGravity(-15.0); // Slightly lower gravity for smoother feel
-    physicsManager.setMovementSpeeds(2.5, 4.5, 1.2); // walk, run, crouch speeds
-    physicsManager.enableHeadBob(true);
-    physicsManager.setHeadBobProperties(0.04, 6.0); // More pronounced head bob
-
-    // Configure flashlight for horror atmosphere
-    flashlight.batteryDrainRate = 0.3; // Slower drain for gameplay
-
-    // Make controls globally accessible for debugging
-    window.gameControls = {
-        physicsManager,
-        collisionSystem,
-        flashlight,
-        mansion,
-        controls,
-        camera
-    };
-
-    // Debug commands (remove in production)
-    console.log("🎮 Game Controls Available:");
-    console.log("- window.gameControls.mansion.toggleCollisionDebug() - Show collision meshes");
-    console.log("- window.gameControls.physicsManager.increaseFear(50) - Add fear effect");
-    console.log("- window.gameControls.flashlight.rechargeBattery(50) - Recharge flashlight");
-    console.log("");
-    console.log("🔧 Fixed Issues:");
-    console.log("✅ Completely rewrote flashlight - now works like a real flashlight");
-    console.log("✅ Fixed player sliding when standing still");
-    console.log("✅ Fixed W/S movement inversion");
-    console.log("✅ Fixed camera-relative movement controls");
-    console.log("");
-    console.log("🎮 Controls:");
-    console.log("- WASD: Move (relative to camera)");
-    console.log("- Shift: Run");
-    console.log("- Ctrl: Crouch");
-    console.log("- Space: Jump");
-    console.log("- F: Toggle flashlight");
-    console.log("- Mouse: Look around (click to lock cursor)");
-
-    loadingText.textContent = "Ready to play!";
-    setTimeout(() => {
-        loadingScreen.style.display = 'none';
-        document.body.classList.add('game-active'); // Disable glitch effect
-        loop.start();
-    }, 1000);
 }
+
+// Error handling
+window.addEventListener('error', (event) => {
+    console.error('🚨 RUNTIME ERROR:', event.error);
+});
+
+window.main = main;
