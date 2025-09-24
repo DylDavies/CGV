@@ -54,6 +54,11 @@ body::after {
     animation: glitch-lines 1.5s infinite;
 }
 
+/* Disable glitch effect when game is active */
+body.game-active::after {
+    display: none;
+}
+
 
 /* Static Noise Animation Overlay */
 #welcome-screen::before {
@@ -257,4 +262,32 @@ body::after {
     color: #fff;
     font-size: 14px;
     text-shadow: 1px 1px 2px #000; /* Makes text more readable */
+}
+
+/* Procedural Mansion UI Enhancements */
+.mansion-ui {
+    font-family: 'Courier New', monospace;
+    text-shadow: 2px 2px 4px rgba(0,0,0,0.8);
+}
+
+.inventory-item {
+    transition: color 0.3s ease;
+}
+
+.inventory-item:hover {
+    color: #ff6666;
+}
+
+.objective-completed {
+    color: #00ff00 !important;
+    text-shadow: 0 0 5px #00ff00;
+}
+
+.hint-text {
+    animation: pulse 2s infinite;
+}
+
+@keyframes pulse {
+    0%, 100% { opacity: 0.8; }
+    50% { opacity: 1.0; }
 }
