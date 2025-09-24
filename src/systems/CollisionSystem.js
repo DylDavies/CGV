@@ -69,7 +69,7 @@ class CollisionSystem {
         if (intersections.length > 0) {
             const groundDistance = intersections[0].distance - 0.1;
             this.groundHeight = intersections[0].point.y;
-            this.isOnGround = groundDistance < 2.0; // Allow being up to 2m above ground
+            this.isOnGround = groundDistance < 4.0; // Allow being up to 4m above ground (generous for debugging)
 
             return {
                 isOnGround: this.isOnGround,
@@ -78,10 +78,13 @@ class CollisionSystem {
                 normal: intersections[0].face ? intersections[0].face.normal : new THREE.Vector3(0, 1, 0)
             };
         } else {
+            // DEBUG: Log when no ground is found
+            console.warn(`No ground found at position ${position.x.toFixed(1)}, ${position.y.toFixed(1)}, ${position.z.toFixed(1)}`);
+            console.log(`Floor objects count: ${this.floorObjects.length}`);
             this.isOnGround = false;
             return {
                 isOnGround: false,
-                groundHeight: this.groundHeight,
+                groundHeight: 0, // Default ground height
                 groundDistance: Infinity,
                 normal: new THREE.Vector3(0, 1, 0)
             };

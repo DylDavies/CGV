@@ -1,4 +1,4 @@
-// src/systems/PhysicsManager.js - Fixed version that handles undefined inputs
+// src/systems/PhysicsManager.js - Fixed jumping and ground detection
 
 import * as THREE from 'https://unpkg.com/three@0.127.0/build/three.module.js';
 
@@ -13,11 +13,12 @@ class PhysicsManager {
         this.maxSpeed = {
             walk: 5.0,
             run: 8.0,
-            crouch: 2.0
+            crouch: 2.0,
+            fly: 10.0  // Added for dev mode
         };
         
         // Physics constants
-        this.gravity = -9.81;
+        this.gravity = -15;  // Reduced from -9.81 for better feel
         this.jumpForce = 8.0;
         this.friction = 0.85;
         this.airResistance = 0.98;
@@ -26,6 +27,15 @@ class PhysicsManager {
         this.isOnGround = false;
         this.isMoving = false;
         this.movementSpeed = this.maxSpeed.walk;
+        
+        // FIXED: Ground detection buffer to prevent bouncing
+        this.groundBuffer = 0.1;
+        this.lastGroundY = 3;  // Default eye height
+        this.groundStickDistance = 0.5;  // How close to ground to "stick"
+        
+        // Developer mode
+        this.devMode = false;
+        this.flyMode = false;
         
         // Head bob system
         this.headBob = {
@@ -37,7 +47,7 @@ class PhysicsManager {
         };
         
         // Fear system (for horror effects)
-        this.fearLevel = 0; // 0-100
+        this.fearLevel = 0;
         this.fearEffects = {
             shakingIntensity: 0,
             breathingRate: 1.0,
@@ -45,7 +55,7 @@ class PhysicsManager {
             lastShake: null
         };
         
-        // Default input state (prevents undefined errors)
+        // Default input state
         this.defaultInputs = {
             moveForward: false,
             moveBackward: false,
@@ -53,10 +63,35 @@ class PhysicsManager {
             moveRight: false,
             jump: false,
             isRunning: false,
-            isCrouching: false
+            isCrouching: false,
+            flyUp: false,    // Added for dev mode
+            flyDown: false   // Added for dev mode
         };
         
-        console.log('🔧 PhysicsManager initialized');
+        this.setupDevControls();
+        console.log('🔧 PhysicsManager initialized (with fixes)');
+    }
+    
+    setupDevControls() {
+        document.addEventListener('keydown', (e) => {
+            // Toggle dev mode with F9
+            if (e.code === 'F9') {
+                this.devMode = !this.devMode;
+                console.log(`🔧 Developer mode: ${this.devMode ? 'ON' : 'OFF'}`);
+                if (this.devMode) {
+                    console.log('Press F10 to toggle fly mode, Q/E to fly up/down');
+                }
+            }
+            
+            // Toggle fly mode with F10 (only in dev mode)
+            if (e.code === 'F10' && this.devMode) {
+                this.flyMode = !this.flyMode;
+                console.log(`✈️ Fly mode: ${this.flyMode ? 'ON' : 'OFF'}`);
+                if (this.flyMode) {
+                    this.velocity.y = 0; // Stop falling when entering fly mode
+                }
+            }
+        });
     }
 
     setGravity(gravity) {
@@ -64,37 +99,27 @@ class PhysicsManager {
         console.log(`🌍 Gravity set to: ${gravity}`);
     }
 
-    setMovementSpeeds(walk, run, crouch) {
+    setMovementSpeeds(walk, run, crouch, fly = 10) {
         this.maxSpeed.walk = walk;
         this.maxSpeed.run = run;
         this.maxSpeed.crouch = crouch;
-        console.log(`🏃 Movement speeds: walk=${walk}, run=${run}, crouch=${crouch}`);
-    }
-
-    enableHeadBob(enabled) {
-        this.headBob.enabled = enabled;
-        console.log(`👀 Head bob: ${enabled ? 'enabled' : 'disabled'}`);
-    }
-
-    setHeadBobProperties(intensity, frequency) {
-        this.headBob.intensity = intensity;
-        this.headBob.frequency = frequency;
-        console.log(`👀 Head bob properties: intensity=${intensity}, frequency=${frequency}`);
+        this.maxSpeed.fly = fly;
+        console.log(`🏃 Movement speeds updated`);
     }
 
     tick(delta, inputs) {
-        // FIXED: Ensure inputs is defined and has all required properties
         const safeInputs = { ...this.defaultInputs, ...(inputs || {}) };
         
-        // Update ground collision
-        if (this.collisionSystem && this.collisionSystem.checkGroundCollision) {
-            const groundInfo = this.collisionSystem.checkGroundCollision(this.camera.position);
-            this.isOnGround = groundInfo.isOnGround;
-        } else {
-            // Fallback ground detection
-            this.isOnGround = this.camera.position.y <= 3; // Assume ground at y=1.8 + eye height
+        // Add dev mode fly controls
+        if (this.devMode && this.flyMode) {
+            // Handle fly mode separately
+            this.handleFlyMode(safeInputs, delta);
+            return;
         }
-
+        
+        // FIXED: Better ground detection with stabilization
+        this.updateGroundStatus();
+        
         // Calculate intended movement
         const intendedMovement = this.calculateMovement(safeInputs, delta);
         
@@ -108,18 +133,99 @@ class PhysicsManager {
         this.updateHeadBob(delta);
         this.updateFearEffects(delta);
         
-        // Keep player above ground
+        // FIXED: Stabilize on ground to prevent bouncing
+        this.stabilizeOnGround();
+    }
+    
+    updateGroundStatus() {
+        if (this.collisionSystem && this.collisionSystem.checkGroundCollision) {
+            const groundInfo = this.collisionSystem.checkGroundCollision(this.camera.position);
+            
+            // FIXED: Use a buffer zone to determine if on ground
+            const distanceToGround = this.camera.position.y - groundInfo.groundHeight;
+            
+            // Consider on ground if within reasonable distance
+            if (groundInfo.isOnGround && distanceToGround <= 3.2) {
+                this.isOnGround = true;
+                this.lastGroundY = groundInfo.groundHeight + 3; // Eye height above ground
+            } else if (distanceToGround > 4) {
+                this.isOnGround = false;
+            }
+        } else {
+            // Fallback
+            this.isOnGround = this.camera.position.y <= 3.1;
+            this.lastGroundY = 3;
+        }
+    }
+    
+    stabilizeOnGround() {
+        // FIXED: Prevent micro-bouncing by snapping to ground when very close
         if (this.isOnGround) {
-            const minY = 3; // Eye height
-            if (this.camera.position.y < minY) {
-                this.camera.position.y = minY;
+            const targetY = this.lastGroundY;
+            const currentY = this.camera.position.y;
+            const diff = Math.abs(currentY - targetY);
+            
+            // If very close to target height, snap to it
+            if (diff < 0.2) {
+                this.camera.position.y = targetY;
+                // Kill vertical velocity if moving slowly
+                if (Math.abs(this.velocity.y) < 1) {
+                    this.velocity.y = 0;
+                }
+            } else if (currentY < targetY) {
+                // If below ground level, push up
+                this.camera.position.y = targetY;
                 this.velocity.y = Math.max(0, this.velocity.y);
+            }
+        }
+    }
+    
+    handleFlyMode(inputs, delta) {
+        // No gravity in fly mode
+        this.movementSpeed = this.maxSpeed.fly;
+        
+        // Get camera's forward and right vectors
+        const forward = new THREE.Vector3();
+        const right = new THREE.Vector3();
+        
+        this.camera.getWorldDirection(forward);
+        forward.normalize();
+        
+        right.crossVectors(forward, new THREE.Vector3(0, 1, 0)).normalize();
+        
+        // Calculate movement
+        const movement = new THREE.Vector3();
+        
+        if (inputs.moveForward) movement.add(forward);
+        if (inputs.moveBackward) movement.sub(forward);
+        if (inputs.moveRight) movement.add(right);
+        if (inputs.moveLeft) movement.sub(right);
+        
+        // Vertical movement (Q/E keys)
+        if (inputs.flyUp || inputs.jump) movement.y += 1;
+        if (inputs.flyDown || inputs.isCrouching) movement.y -= 1;
+        
+        // Normalize and apply speed
+        if (movement.length() > 0) {
+            movement.normalize();
+            movement.multiplyScalar(this.movementSpeed);
+        }
+        
+        // Direct position update for fly mode
+        this.camera.position.add(movement.multiplyScalar(delta));
+        
+        // Still check collisions
+        if (this.collisionSystem) {
+            const currentPos = this.camera.position.clone();
+            const intendedPos = this.camera.position.clone();
+            const result = this.collisionSystem.checkCollision(currentPos, intendedPos);
+            if (result.hasCollision) {
+                this.camera.position.copy(result.position);
             }
         }
     }
 
     calculateMovement(inputs, delta) {
-        // FIXED: All input properties are now guaranteed to exist
         if (inputs.isCrouching) {
             this.movementSpeed = this.maxSpeed.crouch;
         } else if (inputs.isRunning) {
@@ -128,18 +234,15 @@ class PhysicsManager {
             this.movementSpeed = this.maxSpeed.walk;
         }
 
-        // Get camera's forward and right vectors
         const forward = new THREE.Vector3();
         const right = new THREE.Vector3();
         
         this.camera.getWorldDirection(forward);
-        forward.y = 0; // Remove vertical component
+        forward.y = 0;
         forward.normalize();
         
-        // Right vector is perpendicular to forward
         right.crossVectors(forward, new THREE.Vector3(0, 1, 0)).normalize();
 
-        // Calculate movement direction
         const movement = new THREE.Vector3();
         
         if (inputs.moveForward) movement.add(forward);
@@ -147,7 +250,6 @@ class PhysicsManager {
         if (inputs.moveRight) movement.add(right);
         if (inputs.moveLeft) movement.sub(right);
         
-        // Normalize diagonal movement
         if (movement.length() > 0) {
             movement.normalize();
             movement.multiplyScalar(this.movementSpeed);
@@ -160,40 +262,39 @@ class PhysicsManager {
     }
 
     applyPhysics(intendedMovement, inputs, delta) {
-        // Apply gravity
+        // FIXED: More controlled gravity application
         if (!this.isOnGround) {
+            // Apply gravity
             this.velocity.y += this.gravity * delta;
-        } else {
-            // Ground friction
-            this.velocity.x *= Math.pow(this.friction, delta * 60);
-            this.velocity.z *= Math.pow(this.friction, delta * 60);
-        }
-
-        // Apply movement to horizontal velocity
-        if (this.isOnGround) {
-            this.velocity.x = intendedMovement.x;
-            this.velocity.z = intendedMovement.z;
-        } else {
+            
             // Air control (reduced)
             this.velocity.x = THREE.MathUtils.lerp(this.velocity.x, intendedMovement.x * 0.3, delta * 5);
             this.velocity.z = THREE.MathUtils.lerp(this.velocity.z, intendedMovement.z * 0.3, delta * 5);
             
             // Air resistance
-            this.velocity.multiplyScalar(Math.pow(this.airResistance, delta * 60));
+            this.velocity.x *= Math.pow(this.airResistance, delta * 60);
+            this.velocity.z *= Math.pow(this.airResistance, delta * 60);
+        } else {
+            // Ground movement - direct control
+            this.velocity.x = intendedMovement.x;
+            this.velocity.z = intendedMovement.z;
+            
+            // FIXED: Only allow jump if truly on ground and not already moving up
+            if (inputs.jump && this.velocity.y <= 0) {
+                this.velocity.y = this.jumpForce;
+                this.isOnGround = false;
+                console.log('🦘 Jump!');
+            } else {
+                // Apply ground friction to vertical velocity
+                this.velocity.y *= 0.5;
+            }
         }
 
-        // Handle jumping
-        if (inputs.jump && this.isOnGround) {
-            this.velocity.y = this.jumpForce;
-            this.isOnGround = false;
-            console.log('🦘 Jump!');
-        }
-
-        // Limit velocity
+        // Clamp velocities
         const maxVel = this.movementSpeed * 2;
         this.velocity.x = THREE.MathUtils.clamp(this.velocity.x, -maxVel, maxVel);
         this.velocity.z = THREE.MathUtils.clamp(this.velocity.z, -maxVel, maxVel);
-        this.velocity.y = THREE.MathUtils.clamp(this.velocity.y, -30, 15);
+        this.velocity.y = THREE.MathUtils.clamp(this.velocity.y, -20, 15);
     }
 
     moveWithCollisionDetection(delta) {
@@ -202,23 +303,19 @@ class PhysicsManager {
             this.velocity.clone().multiplyScalar(delta)
         );
 
-        // Check collision if collision system is available
         if (this.collisionSystem && this.collisionSystem.checkCollision) {
             const collisionResult = this.collisionSystem.checkCollision(
                 currentPosition, 
                 intendedPosition
             );
 
-            // Apply the safe position
             this.camera.position.copy(collisionResult.position);
 
-            // If we hit something, reduce velocity in that direction
             if (collisionResult.hasCollision) {
                 const collisionDirection = new THREE.Vector3()
                     .subVectors(intendedPosition, collisionResult.position)
                     .normalize();
                 
-                // Remove velocity component in collision direction
                 const velocityInCollisionDir = this.velocity.dot(collisionDirection);
                 if (velocityInCollisionDir > 0) {
                     this.velocity.sub(
@@ -227,19 +324,16 @@ class PhysicsManager {
                 }
             }
         } else {
-            // Fallback: simple movement without collision detection
             this.camera.position.copy(intendedPosition);
         }
     }
 
     updateHeadBob(delta) {
-        if (!this.headBob.enabled) return;
+        if (!this.headBob.enabled || this.flyMode) return;
 
-        // Reset head bob offset
         this.camera.position.sub(this.headBob.offset);
         this.headBob.offset.set(0, 0, 0);
 
-        // Apply head bob if moving on ground
         if (this.isMoving && this.isOnGround) {
             this.headBob.time += delta * this.headBob.frequency;
             
@@ -247,17 +341,14 @@ class PhysicsManager {
             this.headBob.offset.y = Math.sin(this.headBob.time) * bobIntensity;
             this.headBob.offset.x = Math.sin(this.headBob.time * 0.5) * bobIntensity * 0.5;
             
-            // Apply speed modifier
             const speedModifier = this.movementSpeed / this.maxSpeed.walk;
             this.headBob.offset.multiplyScalar(speedModifier);
         }
 
-        // Apply head bob offset
         this.camera.position.add(this.headBob.offset);
     }
 
     updateFearEffects(delta) {
-        // Update fear-based camera shake
         if (this.fearLevel > 20) {
             const shakeIntensity = (this.fearLevel / 100) * 0.02;
             const shake = new THREE.Vector3(
@@ -266,12 +357,10 @@ class PhysicsManager {
                 (Math.random() - 0.5) * shakeIntensity
             );
             
-            // Remove previous shake
             if (this.fearEffects.lastShake) {
                 this.camera.position.sub(this.fearEffects.lastShake);
             }
             
-            // Apply new shake
             this.camera.position.add(shake);
             this.fearEffects.lastShake = shake;
         } else if (this.fearEffects.lastShake) {
@@ -283,17 +372,16 @@ class PhysicsManager {
     teleportTo(position) {
         this.camera.position.copy(position);
         this.velocity.set(0, 0, 0);
+        this.lastGroundY = position.y;
         console.log(`📍 Teleported to: ${position.x.toFixed(1)}, ${position.y.toFixed(1)}, ${position.z.toFixed(1)}`);
     }
 
     increaseFear(amount) {
         this.fearLevel = Math.min(100, this.fearLevel + amount);
-        console.log(`😰 Fear increased to: ${this.fearLevel}%`);
     }
 
     decreaseFear(amount) {
         this.fearLevel = Math.max(0, this.fearLevel - amount);
-        console.log(`😌 Fear decreased to: ${this.fearLevel}%`);
     }
 
     getFearLevel() {
@@ -310,11 +398,12 @@ class PhysicsManager {
             isMoving: this.isMoving,
             velocity: this.velocity.clone(),
             speed: this.getVelocityMagnitude(),
-            fearLevel: this.fearLevel
+            fearLevel: this.fearLevel,
+            devMode: this.devMode,
+            flyMode: this.flyMode
         };
     }
 
-    // Debug methods
     setDebugMode(enabled) {
         this.debugMode = enabled;
         console.log(`🐛 Debug mode: ${enabled ? 'enabled' : 'disabled'}`);
@@ -328,7 +417,9 @@ class PhysicsManager {
             isMoving: this.isMoving,
             fearLevel: this.fearLevel,
             movementSpeed: this.movementSpeed,
-            hasCollisionSystem: !!this.collisionSystem
+            lastGroundY: this.lastGroundY,
+            devMode: this.devMode,
+            flyMode: this.flyMode
         };
     }
 }

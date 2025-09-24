@@ -1,4 +1,4 @@
-// src/components/Player/PlayerControls.js - Fixed version
+// src/components/Player/PlayerControls.js - Enhanced with dev mode
 
 import * as THREE from 'https://unpkg.com/three@0.127.0/build/three.module.js';
 import { PointerLockControls } from 'https://unpkg.com/three@0.127.0/examples/jsm/controls/PointerLockControls.js';
@@ -18,6 +18,10 @@ class FirstPersonControls {
         this.isRunning = false;
         this.isCrouching = false;
         this.jump = false;
+        
+        // Dev mode controls
+        this.flyUp = false;
+        this.flyDown = false;
 
         // Legacy velocity (for backward compatibility if no physics manager)
         this.velocity = new THREE.Vector3();
@@ -29,8 +33,13 @@ class FirstPersonControls {
         // Mouse sensitivity
         this.mouseSensitivity = 0.002;
         this.controls.pointerSpeed = this.mouseSensitivity;
+        
+        // Dev mode state
+        this.devMode = false;
+        this.showingStats = false;
 
         console.log('🎮 FirstPersonControls initialized');
+        console.log('Press F9 for dev mode, F10 for fly mode (in dev), F11 for stats');
     }
 
     addEventListeners() {
@@ -43,7 +52,7 @@ class FirstPersonControls {
 
         const onKeyDown = (event) => {
             // Prevent default for movement keys to stop page scrolling
-            if (['KeyW', 'KeyA', 'KeyS', 'KeyD', 'Space', 'ShiftLeft', 'ControlLeft'].includes(event.code)) {
+            if (['KeyW', 'KeyA', 'KeyS', 'KeyD', 'Space', 'ShiftLeft', 'ControlLeft', 'KeyQ', 'KeyE'].includes(event.code)) {
                 event.preventDefault();
             }
 
@@ -69,11 +78,20 @@ class FirstPersonControls {
                 case 'ControlLeft':
                     this.isCrouching = true;
                     break;
+                case 'KeyQ':
+                    this.flyUp = true;
+                    break;
+                case 'KeyE':
+                    this.flyDown = true;
+                    break;
                 case 'Escape':
-                    // Allow escape to unlock pointer
                     if (this.controls.isLocked) {
                         this.controls.unlock();
                     }
+                    break;
+                case 'F11':
+                    event.preventDefault();
+                    this.toggleStats();
                     break;
             }
         };
@@ -101,6 +119,12 @@ class FirstPersonControls {
                 case 'ControlLeft':
                     this.isCrouching = false;
                     break;
+                case 'KeyQ':
+                    this.flyUp = false;
+                    break;
+                case 'KeyE':
+                    this.flyDown = false;
+                    break;
             }
         };
 
@@ -112,6 +136,7 @@ class FirstPersonControls {
 
         this.controls.addEventListener('unlock', () => {
             console.log('🔓 Pointer unlocked - game controls inactive');
+            this.hideStats();
         });
 
         document.addEventListener('keydown', onKeyDown);
@@ -120,12 +145,76 @@ class FirstPersonControls {
         // Store references for cleanup
         this.onKeyDown = onKeyDown;
         this.onKeyUp = onKeyUp;
+        
+        // Create stats display
+        this.createStatsDisplay();
+    }
+
+    createStatsDisplay() {
+        this.statsDisplay = document.createElement('div');
+        this.statsDisplay.id = 'dev-stats';
+        this.statsDisplay.style.cssText = `
+            position: fixed;
+            top: 10px;
+            right: 10px;
+            color: #0f0;
+            font-family: 'Courier New', monospace;
+            font-size: 12px;
+            background: rgba(0, 0, 0, 0.7);
+            padding: 10px;
+            border: 1px solid #0f0;
+            display: none;
+            z-index: 1000;
+            min-width: 200px;
+        `;
+        document.body.appendChild(this.statsDisplay);
+    }
+
+    toggleStats() {
+        this.showingStats = !this.showingStats;
+        this.statsDisplay.style.display = this.showingStats ? 'block' : 'none';
+        console.log(`📊 Stats display: ${this.showingStats ? 'ON' : 'OFF'}`);
+    }
+
+    hideStats() {
+        this.showingStats = false;
+        this.statsDisplay.style.display = 'none';
+    }
+
+    updateStats() {
+        if (!this.showingStats || !this.physicsManager) return;
+        
+        const state = this.physicsManager.getDebugInfo();
+        const pos = state.position;
+        const vel = state.velocity;
+        
+        this.statsDisplay.innerHTML = `
+            <strong>== DEV STATS ==</strong><br>
+            <strong>Position:</strong><br>
+            X: ${pos.x.toFixed(2)}<br>
+            Y: ${pos.y.toFixed(2)}<br>
+            Z: ${pos.z.toFixed(2)}<br>
+            <strong>Velocity:</strong><br>
+            X: ${vel.x.toFixed(2)}<br>
+            Y: ${vel.y.toFixed(2)}<br>
+            Z: ${vel.z.toFixed(2)}<br>
+            <strong>State:</strong><br>
+            On Ground: ${state.isOnGround ? 'Yes' : 'No'}<br>
+            Moving: ${state.isMoving ? 'Yes' : 'No'}<br>
+            Dev Mode: ${state.devMode ? 'ON' : 'OFF'}<br>
+            Fly Mode: ${state.flyMode ? 'ON' : 'OFF'}<br>
+            Fear Level: ${state.fearLevel}%<br>
+            <hr style="border-color: #0f0;">
+            <small>F9: Dev Mode<br>
+            F10: Fly Mode<br>
+            F11: Hide Stats</small>
+        `;
     }
 
     showControlHint() {
-        // Show controls hint when first locking
         if (!this.hasShownHint) {
             console.log('🎮 Controls: WASD to move, Shift to run, Ctrl to crouch, Space to jump, F for flashlight');
+            console.log('🔧 Dev: F9 for dev mode, F10 for fly (in dev), F11 for stats');
             this.hasShownHint = true;
         }
     }
@@ -142,11 +231,16 @@ class FirstPersonControls {
                 moveRight: this.moveRight,
                 jump: this.jump,
                 isRunning: this.isRunning,
-                isCrouching: this.isCrouching
+                isCrouching: this.isCrouching,
+                flyUp: this.flyUp,
+                flyDown: this.flyDown
             };
 
             // Let physics manager handle movement
             this.physicsManager.tick(delta, inputs);
+
+            // Update stats display
+            this.updateStats();
 
             // Reset one-shot inputs after physics processing
             this.jump = false;
@@ -208,6 +302,8 @@ class FirstPersonControls {
             isRunning: this.isRunning,
             isCrouching: this.isCrouching,
             jump: this.jump,
+            flyUp: this.flyUp,
+            flyDown: this.flyDown,
             isLocked: this.controls.isLocked
         };
     }
@@ -242,6 +338,8 @@ class FirstPersonControls {
         this.isRunning = false;
         this.isCrouching = false;
         this.jump = false;
+        this.flyUp = false;
+        this.flyDown = false;
         console.log('🔄 Input states reset');
     }
 
@@ -251,7 +349,8 @@ class FirstPersonControls {
             inputState: this.getInputState(),
             isLocked: this.controls.isLocked,
             mouseSensitivity: this.mouseSensitivity,
-            hasPhysics: !!this.physicsManager
+            hasPhysics: !!this.physicsManager,
+            showingStats: this.showingStats
         };
     }
 
@@ -265,6 +364,11 @@ class FirstPersonControls {
         }
         if (this.onKeyUp) {
             document.removeEventListener('keyup', this.onKeyUp);
+        }
+
+        // Remove stats display
+        if (this.statsDisplay) {
+            document.body.removeChild(this.statsDisplay);
         }
 
         // Reset inputs
