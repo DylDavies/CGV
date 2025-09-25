@@ -22,8 +22,8 @@ import { HorrorAtmosphere } from './systems/HorrorAtmosphere.js';
 import { FirstPersonControls } from './components/Player/PlayerControls.js';
 import { ImprovedFlashlight } from './components/Player/ImprovedFlashlight.js';
 
-// Import Puzzles
-import { ColorPuzzle } from './puzzles/ColorPuzzle.js';
+// import puzzles
+import { ColorPuzzle } from './puzzles/colorPuzzle/ColorPuzzle.js';
 
 async function main() {
     try {
