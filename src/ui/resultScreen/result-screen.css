@@ -1,0 +1,91 @@
+/*====THE FAILURE OR SUCCESS MESSAGE===*/
+#puzzle-result-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  background-color: rgba(0, 0, 0, 0.7);
+  z-index: 2000;
+  opacity: 1;
+  transition: opacity 0.5s ease-out;
+}
+
+#puzzle-result-overlay.hidden {
+  opacity: 0;
+  pointer-events: none;
+}
+
+#result-message {
+  text-align: center;
+  color: #fff;
+  text-transform: uppercase;
+}
+
+#result-title {
+  font-size: 8em;
+  letter-spacing: 5px;
+  animation: none;
+}
+
+#result-subtitle {
+  font-family: 'Courier New', Courier, monospace;
+  font-size: 1.5em;
+  color: #ccc;
+  margin-top: 10px;
+}
+
+/* --- Success Style --- */
+#puzzle-result-overlay.success #result-title {
+  font-family: 'Creepster', cursive; 
+  font-size: 8em;
+  color: #00ff00;
+  text-shadow: 0 0 15px #00ff00, 1px 1px 0 #fff, -1px -1px 0 #fff;
+  animation: success-flicker 2s ease-in-out;
+}
+
+/* --- Failure Style --- */
+#puzzle-result-overlay.failure {
+  background-color: rgba(0, 0, 0, 0.95);
+}
+
+#puzzle-result-overlay.failure #result-message {
+  animation: souls-death-fade-in 3s ease-out forwards;
+}
+
+#puzzle-result-overlay.failure #result-title {
+  font-family: 'Cinzel', serif; 
+  font-size: 9em;
+  font-weight: 700;
+  color: #6d0000;
+  text-shadow: 0 0 25px #ff0000;
+}
+
+#puzzle-result-overlay.failure #result-subtitle {
+  font-family: 'Courier New', Courier, monospace;
+  font-size: 1.5em;
+  color: #a1a1a1;
+  text-shadow: none;
+  margin-top: 15px;
+  opacity: 0.8;
+}
+
+/* Keyframes for animations */
+@keyframes success-flicker {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.8; transform: scale(1.02); }
+}
+
+@keyframes souls-death-fade-in {
+  0% {
+    opacity: 0;
+    transform: scale(1.1);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}

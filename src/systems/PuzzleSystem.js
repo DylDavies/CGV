@@ -10,6 +10,16 @@ class PuzzleSystem {
         this.puzzleTemplates = this.createPuzzleTemplates();
     }
 
+    // Register an instance o the puzzle system to be loaded
+    registerPuzzle(puzzleId, puzzleInstance) {
+        if (!puzzleId || !puzzleInstance) {
+            console.error("Failed to register puzzle: ID or instance is missing.");
+            return;
+        }
+        this.activePuzzles.set(puzzleId, puzzleInstance);
+        console.log(`🧩 Puzzle registered: ${puzzleId}`);
+    }
+
     createPuzzleTemplates() {
         return {
             combination_safe: {

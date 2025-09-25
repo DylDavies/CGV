@@ -5,25 +5,32 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Project HER</title>
     <link rel="stylesheet" href="./styles/main.css">
-</head>
-<body>
-  <div id="welcome-screen">
-    <div class="title-container">
-      <h1 class="glitch" data-text="PROJECT HER">PROJECT HER</h1>
-    </div>
-    <div class="menu-container">
-      <button id="play-btn" class="menu-btn">Play</button>
-      <button id="tutorial-btn" class="menu-btn">Tutorial</button>
-      <button id="settings-btn" class="menu-btn">Settings</button>
-      <button id="credits-btn" class="menu-btn">Credits</button>
-    </div>
-  </div>
 
-  <div id="loading-container" style="display: none;">
-      <div id="loading-bar"></div>
-      <span id="loading-text">Loading...</span>
-  </div>
-  <canvas id="game-canvas"></canvas>
-  <script type="module" src="/src/main.js"></script>
-</body>
+    <!-- put links to css files here -->
+    <link rel="stylesheet" href="./src/ui/welcomeScreen/welcome-screen.css">
+    <link rel="stylesheet" href="./src/ui/colorPuzzle/color-puzzle.css">
+    <link rel="stylesheet" href="./src/ui/resultScreen/result-screen.css">
+
+</head>
+  <body>
+      <div id="welcome-screen-container"></div>
+      <div id="puzzle-container" style="display: none;"></div>
+      
+        <div id="loading-container" style="display: none;">
+          <div id="loading-text">Loading...</div>
+        </div>
+      
+      <div id="game-ui-container" style="display: none;">
+          <div id="game-stats-container"></div>
+          <div id="objectives-container"></div>
+          <div id="inventory-container"></div>
+      </div>
+      
+      <div id="crosshair"></div>
+      <div id="interaction-prompt"></div>
+
+      <canvas id="game-canvas"></canvas>
+
+      <script type="module" src="src/main.js"></script>
+  </body>
 </html>
