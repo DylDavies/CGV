@@ -39,7 +39,7 @@ The project is driven by a collection of manager-style "systems" that handle dif
 ### Player System
 The player's experience is managed by a combination of camera manipulation, physics, and input controls.
 
-* **`src/components/Player/PlayerControls.js`**: This is the heart of player interaction. It uses Three.js's `PointerLockControls` to create a first-person perspective. It listens for keyboard input (WASD, Space, etc.) and translates it into movement intentions, which are then passed to the physics manager. It also contains the crucial `freeze()` and `unfreeze()` methods, which disable player movement when a UI element like a puzzle is active.
+* **`src/components/Player/PlayerControls.js`**: This is the heart of player interaction. It uses Three.js's `PointerLockControls` to create a first-person perspective. It listens for keyboard input (WASD, Space, etc.) and translates it into movement intentions, which are then passed to the physics manager.
 * **`src/components/Player/ImprovedFlashlight.js`**: This class creates and manages the player's flashlight. It's a `SpotLight` attached to the scene that continuously updates its position and target to match the camera's view. It includes features like a battery system, intensity flickering at low power, and a toggle function bound to the 'F' key.
 * **`src/systems/CannonPhysicsManager.js`**: This system gives the player a physical presence in the world using the `cannon-es` physics library. It creates a spherical physics body for the player, applies gravity, and handles collisions with the mansion's walls and floors. It receives input from `PlayerControls` to apply forces and velocities for walking, running, and jumping.
 
