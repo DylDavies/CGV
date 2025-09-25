@@ -1,8 +1,6 @@
 // src/main.js - Refactored and Integrated Version
 
 import * as THREE from 'https://unpkg.com/three@0.127.0/build/three.module.js';
-
-// Import Core Systems
 import { createScene } from './components/World/scene.js';
 import { createRenderer } from './systems/Renderer.js';
 import { Resizer } from './systems/Resizer.js';
@@ -10,19 +8,13 @@ import { Loop } from './systems/Loop.js';
 import { createStats } from './systems/Stats.js';
 import { UIManager } from './systems/uiManager.js';
 import { CannonPhysicsManager } from './systems/CannonPhysicsManager.js';
-
-// Import Game Logic Systems
 import { ProceduralMansion } from './systems/ProceduralMansion.js';
 import { GameManager } from './systems/GameManager.js';
 import { InteractionSystem } from './systems/InteractionSystem.js';
 import { PuzzleSystem } from './systems/PuzzleSystem.js';
 import { HorrorAtmosphere } from './systems/HorrorAtmosphere.js';
-
-// Import Player Components
 import { FirstPersonControls } from './components/Player/PlayerControls.js';
 import { ImprovedFlashlight } from './components/Player/ImprovedFlashlight.js';
-
-// import puzzles
 import { ColorPuzzle } from './puzzles/colorPuzzle/ColorPuzzle.js';
 
 async function main() {
@@ -30,7 +22,7 @@ async function main() {
         console.log('🚀 Initializing Project HER...');
         const canvas = document.querySelector('#game-canvas');
 
-        // --- 1. Initialize Core & UI Systems ---
+        // --- Initialize Core & UI Systems ---
         const scene = createScene();
         const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
         const renderer = createRenderer(canvas);
@@ -44,9 +36,9 @@ async function main() {
         const colorPuzzle = new ColorPuzzle();
         await colorPuzzle.loadLevels();
         
-        // --- 2. Show Welcome Screen & Wait for Player to Start ---
+        // --- UI Manager loading --- 
+        // show welcome screen
         uiManager.showWelcomeScreen(async () => {
-            // --- 3. Initialize Game World & Physics ---
             uiManager.updateLoadingText("Waking the spirits...");
             const horrorAtmosphere = new HorrorAtmosphere(scene, camera);
             
@@ -58,6 +50,7 @@ async function main() {
             mansion.generateMansion();
 
             const entranceRoom = mansion.rooms.find(room => room.type === 'entrance');
+
             if (entranceRoom) {
                 const spawnY = (entranceRoom.baseHeight || 0) + 1.8;
                 const spawnPos = new THREE.Vector3(entranceRoom.center.x, spawnY, entranceRoom.center.z + 3);
@@ -66,12 +59,12 @@ async function main() {
             }
             scene.add(camera);
 
-            // --- 4. Initialize Player Components ---
+            // --- Initialize Player Components ---
             uiManager.updateLoadingText("Preparing your escape...");
             const controls = new FirstPersonControls(camera, renderer.domElement, physicsManager, { colorPuzzle });
             const flashlight = new ImprovedFlashlight(camera, scene);
             
-            // --- 5. Initialize Game Logic & Puzzle Systems ---
+            // --- Initialize Game Logic & Puzzle Systems ---
             const gameManager = new GameManager(mansion, camera, scene, uiManager);
             const puzzleSystem = new PuzzleSystem(scene, gameManager);
             const interactionSystem = new InteractionSystem(camera, scene, gameManager, uiManager);
@@ -80,7 +73,7 @@ async function main() {
             colorPuzzle.setControls(controls);
             puzzleSystem.registerPuzzle('colorPuzzle', colorPuzzle);
 
-            // --- 6. Final Setup & Start Loop ---
+            // --- Final Setup & Start Loop ---
             new Resizer(camera, renderer);
             loop.updatables.push(
                 controls, 
