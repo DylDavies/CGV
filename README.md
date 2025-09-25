@@ -1,4 +1,4 @@
-# Project HER 👁️
+# Project HER 
 
 Welcome to Project HER, a procedurally generated 3D horror escape room experience built with **Three.js** and vanilla JavaScript. This document serves as a guide for developers looking to understand, contribute to, and expand the project. The goal is to create a tense, atmospheric game where players must solve puzzles and uncover secrets to escape a haunted mansion.
 
@@ -200,22 +200,3 @@ The puzzle system is designed to be modular, allowing new puzzles to be created 
     * **`PuzzleLogic.js`**: The "brain" of the puzzle. It manages the grid state and solves the flood-fill algorithm. It contains no DOM code.
     * **`PuzzleUI.js`**: The "hands" of the puzzle. It handles all rendering, DOM updates, and animations.
     * **`PuzzleTimer.js` & `PuzzleResult.js`**: Small, dedicated classes for managing the timer and the success/failure screen, respectively.
-
-### How to Add a New Puzzle
-1.  **Create the Puzzle Logic**: In `src/puzzles/`, create a new folder (e.g., `slidingTilePuzzle`). Inside, create your main puzzle class (`SlidingTilePuzzle.js`) and any other helper modules it needs.
-2.  **Create the UI**: Follow the steps in the UI System section to create the HTML and CSS files for your new puzzle in the `src/ui/` directory (e.g., `src/ui/slidingTilePuzzle/`).
-3.  **Instantiate in `main.js`**: Just like the `ColorPuzzle`, create an instance of your new puzzle when the game loads.
-    ```javascript
-    // src/main.js
-    import { SlidingTilePuzzle } from './puzzles/slidingTilePuzzle/SlidingTilePuzzle.js';
-    
-    // ... in main() ...
-    const slidingTilePuzzle = new SlidingTilePuzzle();
-    await slidingTilePuzzle.loadData(); // if it needs to load data
-    ```
-4.  **Register the Puzzle**: In `main.js`, after initializing the `PuzzleSystem`, register your new puzzle instance.
-    ```javascript
-    // src/main.js
-    puzzleSystem.registerPuzzle('slidingTilePuzzle', slidingTilePuzzle);
-    ```
-5.  **Create an Interaction Trigger**: In `src/systems/InteractionSystem.js`, add logic to trigger your puzzle. For example, you could add a new case in `handlePuzzleInteraction` that checks for `userData.puzzleType === 'sliding_tile'` and then calls `slidingTilePuzzle.show()`.
