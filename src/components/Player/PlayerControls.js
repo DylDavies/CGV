@@ -4,11 +4,17 @@ import * as THREE from 'https://unpkg.com/three@0.127.0/build/three.module.js';
 import { PointerLockControls } from 'https://unpkg.com/three@0.127.0/examples/jsm/controls/PointerLockControls.js';
 
 class FirstPersonControls {
-    constructor(camera, domElement, physicsManager = null) {
+    constructor(camera, domElement, physicsManager = null, puzzles = {}) {
         this.camera = camera;
         this.controls = new PointerLockControls(camera, domElement);
         this.domElement = domElement;
         this.physicsManager = physicsManager;
+
+        // Testing puzzle works with new system
+        this.puzzles = puzzles;
+
+        // used for tracking if player contols are frozen, e.g if they are interacting with an html puzzle
+        this.isFrozen = false;
 
         // Movement input states
         this.moveForward = false;
@@ -51,8 +57,8 @@ class FirstPersonControls {
         });
 
         const onKeyDown = (event) => {
-            // Prevent default for movement keys to stop page scrolling
-            if (['KeyW', 'KeyA', 'KeyS', 'KeyD', 'Space', 'ShiftLeft', 'ControlLeft', 'KeyQ', 'KeyE'].includes(event.code)) {
+            // Prevent default for movement keys to stop page scrolling - remove KeyP (currently here for testing)
+            if (['KeyW', 'KeyA', 'KeyS', 'KeyD', 'Space', 'ShiftLeft', 'ControlLeft', 'KeyQ', 'KeyE', 'KeyP'].includes(event.code)) {
                 event.preventDefault();
             }
 
@@ -92,6 +98,12 @@ class FirstPersonControls {
                 case 'F11':
                     event.preventDefault();
                     this.toggleStats();
+                    break;
+                case 'KeyP': // Remove this later, just here for testing
+                    console.log("Triggering color puzzle for testing");
+                    if (this.puzzles && this.puzzles.colorPuzzle) {
+                        this.puzzles.colorPuzzle.show(4);
+                    }
                     break;
             }
         };
@@ -220,7 +232,7 @@ class FirstPersonControls {
     }
 
     tick(delta) {
-        if (!this.controls.isLocked) return;
+        if (!this.controls.isLocked || this.isFrozen) return;
 
         if (this.physicsManager) {
             // Use physics-based movement
@@ -328,6 +340,17 @@ class FirstPersonControls {
 
     isLocked() {
         return this.controls.isLocked;
+    }
+
+    // For interactions that require mouse interactivity
+    freeze() {
+        this.isFrozen = true;
+        this.controls.unlock(); // Release the mouse pointer
+    }
+
+    unfreeze() {
+        this.isFrozen = false;
+        this.controls.lock(); // Re-lock the mouse pointer for gameplay
     }
 
     resetInputs() {

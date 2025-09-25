@@ -50,7 +50,7 @@ body::after {
         transparent 2px
     );
     pointer-events: none;
-    z-index: 1001; /* On top of everything */
+    z-index: 1001; 
     animation: glitch-lines 1.5s infinite;
 }
 
@@ -296,6 +296,7 @@ body.game-active::after {
 /* --- Color Match Puzzle CSS (Horror CRT/Flexbox Theme) --- */
 
 #puzzle-container {
+  display: none;
   position: absolute;
   top: 0;
   left: 0;

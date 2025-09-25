@@ -6,52 +6,25 @@
     <title>Project HER</title>
     <link rel="stylesheet" href="./styles/main.css">
 </head>
-<body>
-  <div id="welcome-screen">
-    <div class="title-container">
-      <h1 class="glitch" data-text="PROJECT HER">PROJECT HER</h1>
-    </div>
-    <div class="menu-container">
-      <button id="play-btn" class="menu-btn">Play</button>
-      <button id="tutorial-btn" class="menu-btn">Tutorial</button>
-      <button id="settings-btn" class="menu-btn">Settings</button>
-      <button id="credits-btn" class="menu-btn">Credits</button>
-    </div>
-  </div>
-
-  <div id="loading-container" style="display: none;">
-      <div id="loading-bar"></div>
-      <span id="loading-text">Loading...</span>
-  </div>
-
-  <!---Color match puzzle-->
-<div id="puzzle-container" style="display: none;">
-  
-    <div id="puzzle-box">
-      <div id="puzzle-board"></div>
-      <div id="puzzle-controls">
-        <h3 id="puzzle-objective">Turn all blocks into Red</h3>
-        <p>Moves Remaining: <span id="moves-remaining">5</span></p>
-        <div id="puzzle-timer">
-          TIME: <span id="timer-value">60.00</span>
+  <body>
+      <div id="welcome-screen-container"></div>
+      <div id="puzzle-container" style="display: none;"></div>
+      
+        <div id="loading-container" style="display: none;">
+          <div id="loading-text">Loading...</div>
         </div>
-        <div id="color-palette"></div>
-        <div class="puzzle-buttons">
-          <button id="reset-puzzle-btn">Reset</button>
-          <button id="close-puzzle-btn">Close</button>
-        </div>
+      
+      <div id="game-ui-container" style="display: none;">
+          <div id="game-stats-container"></div>
+          <div id="objectives-container"></div>
+          <div id="inventory-container"></div>
       </div>
-    </div>
+      
+      <div id="crosshair"></div>
+      <div id="interaction-prompt"></div>
 
-    <div id="puzzle-result-overlay" class="hidden">
-      <div id="result-message">
-        <h1 id="result-title"></h1>
-        <p id="result-subtitle"></p>
-      </div>
-    </div>
+      <canvas id="game-canvas"></canvas>
 
-  </div>
-  <canvas id="game-canvas"></canvas>
-  <script type="module" src="/src/main.js"></script>
-</body>
+      <script type="module" src="src/main.js"></script>
+  </body>
 </html>

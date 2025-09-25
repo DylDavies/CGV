@@ -7,29 +7,37 @@ export class ColorPuzzle {
         };
         this.paletteColors = [];
 
+        this.onSolveCallback = null;
+        this.currentLevelData = null;
+        this.onCloseCallback = null;
+        this.timerInterval = null;
+        this.timeRemaining = 60;
+        this.isAnimating = false;
+        this.controls = null;
+
+    }
+
+    _initializeUI() {
         this.puzzleContainer = document.getElementById('puzzle-container');
         this.boardElement = document.getElementById('puzzle-board');
         this.movesElement = document.getElementById('moves-remaining');
         this.objectiveElement = document.getElementById('puzzle-objective');
         this.paletteElement = document.getElementById('color-palette');
-        document.getElementById('reset-puzzle-btn').onclick = () => this.startCurrentLevel();
-        document.getElementById('close-puzzle-btn').onclick = () => this.hide();
-
-        this.onSolveCallback = null;
-        this.currentLevelData = null; // current data of a level for when user clicks reset
-        this.onCloseCallback = null;
-        document.getElementById('close-puzzle-btn').onclick = () => this.hide();
-
-        // Countdown 
-        this.timerInterval = null;
         this.timerValueElement = document.getElementById('timer-value');
-        this.timeRemaining = 60;
-
-        // The success or failure message
         this.resultOverlay = document.getElementById('puzzle-result-overlay');
         this.resultTitle = document.getElementById('result-title');
         this.resultSubtitle = document.getElementById('result-subtitle');
-        this.isAnimating = false;
+        
+        const resetButton = document.getElementById('reset-puzzle-btn');
+        if (resetButton) resetButton.onclick = () => this.startCurrentLevel();
+
+        const closeButton = document.getElementById('close-puzzle-btn');
+        if (closeButton) closeButton.onclick = () => this.hide();
+    }
+    
+    
+    setControls(controls) {
+        this.controls = controls;
     }
 
     /**
@@ -37,7 +45,7 @@ export class ColorPuzzle {
      */
     async loadLevels(){
         try{
-            const response = await fetch('../../public/puzzles/colorPuzzle/levels.json'); 
+            const response = await fetch('public/puzzles/colorPuzzle/levels.json'); 
            
             if (!response.ok) {
                 throw new Error(`HTTP error! status: ${response.status}`);
@@ -91,6 +99,7 @@ export class ColorPuzzle {
      * Sets up the game board and UI based on loaded level data.
      */
     setupLevel(levelData) {
+        this._initializeUI();
         const adaptedLevel = this.adaptLevelData(levelData);
 
         this.grid = adaptedLevel.board;
@@ -340,38 +349,36 @@ export class ColorPuzzle {
     showResultScreen(isSuccess) {
         this.stopTimer();
 
-        if (isSuccess){
-            this.resultOverlay.className = 'success'; 
+        if (!this.resultOverlay) {
+            console.error("Result overlay element not found! Make sure it exists in puzzle-ui.html.");
+            return;
+        }
+
+        if (isSuccess) {
+            this.resultOverlay.className = 'success';
             this.resultTitle.textContent = 'Success';
             this.resultSubtitle.textContent = 'The mechanism clicks open.';
             
-            // 5 second success popup
             setTimeout(() => {
                 if (this.onSolveCallback) this.onSolveCallback();
-                this.hide();
-            }, 5000);
+                this.hide(); // This correctly closes the puzzle and unfreezes controls
+            }, 3000);
 
-        } 
-        else{
-            // list of failure messages to choose from
+        } else {
             const failureMessages = [
-                "A floorboard creaks above you.",
-                "It's getting closer.",
-                "The creature grows restless.",
-                "You hear a faint scratching from behind the wall.",
-                "A guttural growl echoes from the darkness."
+                "A floorboard creaks above you.", "It's getting closer.", "The creature grows restless.",
+                "You hear a faint scratching from behind the wall.", "A guttural growl echoes from the darkness."
             ];
             const subtitle = failureMessages[Math.floor(Math.random() * failureMessages.length)];
 
-            this.resultOverlay.className = 'failure'; // Apply the .failure style
+            this.resultOverlay.className = 'failure';
             this.resultTitle.textContent = 'Failure';
             this.resultSubtitle.textContent = subtitle;
 
-            // Wait 5.5 secs then reset the puzzle
             setTimeout(() => {
                 this.resultOverlay.className = 'hidden'; // Hide the message
-                this.startCurrentLevel(); // Reset the board
-            }, 5500);
+                this.hide(); // Close the puzzle and unfreeze controls
+            }, 3500);
         }
 
         this.resultOverlay.classList.remove('hidden');
@@ -386,13 +393,27 @@ export class ColorPuzzle {
     }
 
     show(moveCount) {
-        this.puzzleContainer.style.display = 'flex';
+        // Freeze player so they can interact with the puzzle
+        if(this.controls){
+            this.controls.freeze();
+        }
+
+        //this._initializeUI();
+        if(this.puzzleContainer){
+            this.puzzleContainer.style.display = 'flex';
+        }
         this.start(moveCount);
         this.startTimer();
     }
 
     hide() {
-        this.puzzleContainer.style.display = 'none';
+        if (this.controls) {
+            this.controls.unfreeze();
+        }
+
+        if(this.puzzleContainer){
+            this.puzzleContainer.style.display= 'none';
+        }
         this.stopTimer();
         if(this.onCloseCallback) this.onCloseCallback();
        
