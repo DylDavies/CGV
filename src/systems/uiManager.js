@@ -8,8 +8,8 @@ export class UIManager {
         if (this.isInitialized) return;
 
         // Load the HTML content into the containers
-        await this._loadHTML('src//ui/welcome-screen.html', 'welcome-screen-container');
-        await this._loadHTML('src/ui/puzzle-ui.html', 'puzzle-container');
+        await this._loadHTML('src/ui/welcomeScreen/welcome-screen.html', 'welcome-screen-container');
+        await this._loadHTML('src/ui/colorPuzzle/color-puzzle.html', 'puzzle-container');
 
         // Now that the HTML is loaded, cache the elements inside it
         this.uiElements = {
@@ -25,7 +25,6 @@ export class UIManager {
             inventoryContainer: document.getElementById('inventory-container'),
         };
         
-        // --- FIX: Add validation to ensure elements were found ---
         if (!this.uiElements.welcomeScreen || !this.uiElements.playButton) {
             console.error("UIManager Critical Error: Welcome screen elements (#welcome-screen or #play-btn) not found after loading. Check file paths and the HTML content.");
             return; // Stop execution to prevent further errors
@@ -81,13 +80,11 @@ export class UIManager {
     }
 
     updateLoadingText(text) {
-        // This would have caused the next error. We check for it now.
         if (this.uiElements.loadingText) {
             this.uiElements.loadingText.textContent = text;
         }
     }
 
-    // --- Other methods remain the same ---
 
     updateObjectives(objectives) {
         if (this.uiElements.objectivesContainer) {

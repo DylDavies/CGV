@@ -5,7 +5,6 @@ export class PuzzleUI {
         this._addEventListeners();
     }
 
-    // Finds and stores all necessary HTML elements once.
     _cacheDOMElements() {
         this.elements = {
             board: document.getElementById('puzzle-board'),
@@ -15,7 +14,6 @@ export class PuzzleUI {
         };
     }
 
-    // Attaches event listeners to the puzzle's buttons.
     _addEventListeners() {
         const resetButton = document.getElementById('reset-puzzle-btn');
         const closeButton = document.getElementById('close-puzzle-btn');
@@ -24,7 +22,6 @@ export class PuzzleUI {
         if (closeButton) closeButton.onclick = () => this.callbacks.onClose();
     }
 
-    // Renders the entire puzzle based on the current logic state.
     render(logic) {
         this.renderBoard(logic);
         this.renderPalette(logic);
@@ -33,7 +30,6 @@ export class PuzzleUI {
 
     renderBoard(logic) {
         this.elements.board.innerHTML = '';
-        
         const cellSize = 40;
         const gap = 2;
         const padding = 10;
@@ -83,23 +79,16 @@ export class PuzzleUI {
         this.elements.objective.textContent = `Turn all blocks into ${logic.targetColor}`;
     }
 
-    /**
-     * Animates the tile changes wave by wave.
-     */
-    async animateTileChanges(steps, newColor){
+    async animateTileChanges(steps, newColor) {
         for (const wave of steps) {
-            for (const { row, col } of wave){
+            for (const { row, col } of wave) {
                 const tileElement = this.elements.board.querySelector(`[data-row='${row}'][data-col='${col}']`);
-
-                if (tileElement){
+                if (tileElement) {
                     tileElement.style.backgroundColor = newColor;
                     tileElement.classList.add('tile-pop');
-                    
                     setTimeout(() => tileElement.classList.remove('tile-pop'), 200);
                 }
             }
-
-            // Pause between each wave to make the animation visible
             await new Promise(resolve => setTimeout(resolve, 100));
         }
     }
