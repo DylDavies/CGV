@@ -1,0 +1,84 @@
+#credits-screen {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100vh;
+  background: #000;
+  color: #fff;
+  font-family: 'Courier New', monospace;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  flex-direction: column;
+}
+
+#credits-screen.hidden {
+    display: none;
+}
+
+.credits-container {
+  width: 80%;
+  height: 70%;
+  max-width: 600px;
+  overflow: hidden;
+  position: relative;
+  border: 2px solid #555;
+  background: #111;
+}
+
+.credits-container::after {
+  content: '';
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  width: 100%;
+  height: 50px;
+  background: linear-gradient(to top, #111, transparent);
+  pointer-events: none;
+}
+
+.credits-content {
+  position: absolute;
+  top: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 100%;
+  text-align: center;
+  animation: scroll 30s linear infinite;
+}
+
+.credit-section {
+  margin-bottom: 40px;
+}
+
+.credit-section h2 {
+  color: #ff6666;
+  font-size: 1.8em;
+  margin-bottom: 15px;
+}
+
+.credit-section p {
+  margin: 5px 0;
+  font-size: 1.2em;
+}
+
+.credit-section .role {
+  display: block;
+  font-size: 0.9em;
+  color: #aaa;
+}
+
+
+@keyframes scroll {
+  0% {
+    top: 100%;
+  }
+  100% {
+    top: -100%;
+  }
+}
+
+#close-credits-btn {
+    margin-top: 20px;
+}

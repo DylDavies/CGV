@@ -10,11 +10,16 @@ export class UIManager {
         // Load the HTML content into the containers
         await this._loadHTML('src/ui/welcomeScreen/welcome-screen.html', 'welcome-screen-container');
         await this._loadHTML('src/ui/colorPuzzle/color-puzzle.html', 'puzzle-container');
+        await this._loadHTML('src/ui/creditsScreen/credits-screen.html', 'credits-screen-container');
+        await this._loadHTML('src/ui/settingsScreen/settings-screen.html', 'settings-screen-container');
+
 
         // Now that the HTML is loaded, cache the elements inside it
         this.uiElements = {
             welcomeScreen: document.getElementById('welcome-screen'),
             playButton: document.getElementById('play-btn'),
+            creditsButton: document.getElementById('credits-btn'),
+            settingsButton: document.getElementById('settings-btn'),
             loadingContainer: document.getElementById('loading-container'),
             loadingText: document.getElementById('loading-text'),
             puzzleContainer: document.getElementById('puzzle-container'),
@@ -23,6 +28,10 @@ export class UIManager {
             gameStatsContainer: document.getElementById('game-stats-container'),
             objectivesContainer: document.getElementById('objectives-container'),
             inventoryContainer: document.getElementById('inventory-container'),
+            creditsScreen: document.getElementById('credits-screen'),
+            closeCreditsButton: document.getElementById('close-credits-btn'),
+            settingsScreen: document.getElementById('settings-screen'),
+            closeSettingsButton: document.getElementById('close-settings-btn'),
         };
         
         if (!this.uiElements.welcomeScreen || !this.uiElements.playButton) {
@@ -30,6 +39,7 @@ export class UIManager {
             return; // Stop execution to prevent further errors
         }
         
+        this._addMenuEventListeners();
         console.log('✅ UI Manager Initialized');
         this.isInitialized = true;
     }
@@ -49,6 +59,28 @@ export class UIManager {
         } catch (error) {
             console.error(`Error loading HTML from ${url}:`, error);
         }
+    }
+    
+    _addMenuEventListeners() {
+        this.uiElements.settingsButton.onclick = () => {
+            this.uiElements.welcomeScreen.style.display = 'none';
+            this.uiElements.settingsScreen.classList.remove('hidden');
+        };
+
+        this.uiElements.creditsButton.onclick = () => {
+            this.uiElements.welcomeScreen.style.display = 'none';
+            this.uiElements.creditsScreen.classList.remove('hidden');
+        };
+        
+        this.uiElements.closeSettingsButton.onclick = () => {
+            this.uiElements.settingsScreen.classList.add('hidden');
+            this.uiElements.welcomeScreen.style.display = 'flex';
+        };
+
+        this.uiElements.closeCreditsButton.onclick = () => {
+            this.uiElements.creditsScreen.classList.add('hidden');
+            this.uiElements.welcomeScreen.style.display = 'flex';
+        };
     }
 
     // --- Loading and Welcome Screen Methods ---
