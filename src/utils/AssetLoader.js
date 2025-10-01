@@ -1,23 +1,40 @@
-import { GLTFLoader } from 'https://unpkg.com/three@0.127.0/examples/jsm/loaders/GLTFLoader.js';
-import { DRACOLoader } from 'https://unpkg.com/three@0.127.0/examples/jsm/loaders/DRACOLoader.js';
+// src/utils/AssetLoader.js
 
-async function loadMap(filePaths) {
-  const gltfLoader = new GLTFLoader();
-  const dracoLoader = new DRACOLoader();
+import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
+import { LoadingManager } from 'three';
 
-  // The path needed to use /js/ instead of /jsm/ for this version.
-  dracoLoader.setDecoderPath('https://unpkg.com/three@0.127.0/examples/js/libs/draco/gltf/');
+const assetLoader = {
+    loadAssets: (assets, onProgress) => {
+        const manager = new LoadingManager();
+        const gltfLoader = new GLTFLoader(manager);
+        const textureLoader = new THREE.TextureLoader(manager); // Assuming you might need this later
 
-  gltfLoader.setDRACOLoader(dracoLoader);
-  
-  const promises = [];
+        const promises = [];
+        const loadedAssets = {};
 
-  for (const path of filePaths) {
-    promises.push(gltfLoader.loadAsync(path));
-  }
+        const assetsToLoad = [
+            ...assets,
+            // NEW: Add your monster model to the assets list
+            { name: 'monsterModel', type: 'gltf', path: 'models/untitled.glb' }
+        ];
 
-  const models = await Promise.all(promises);
-  return models;
-}
+        assetsToLoad.forEach(asset => {
+            const promise = new Promise((resolve, reject) => {
+                if (asset.type === 'gltf') {
+                    gltfLoader.load(asset.path, (gltf) => {
+                        loadedAssets[asset.name] = gltf;
+                        resolve();
+                    }, undefined, reject);
+                }
+                // Add other asset types like textures here if needed
+            });
+            promises.push(promise);
+        });
 
-export { loadMap };
+        manager.onProgress = onProgress;
+
+        return Promise.all(promises).then(() => loadedAssets);
+    }
+};
+
+export { assetLoader };

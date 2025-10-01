@@ -368,8 +368,13 @@ class ProceduralMansion {
         for (let i = x; i < x + width && i < this.mansionWidth; i++) {
             for (let j = z; j < z + height && j < this.mansionHeight; j++) {
                 if (grid[i] && grid[i][j]) {
+                    // Mark the temporary grid for the current level's layout
                     grid[i][j].occupied = true;
                     grid[i][j].roomId = roomId;
+                    
+                    // ALSO mark the main grid that the monster AI will use
+                    this.grid[i][j].occupied = true;
+                    this.grid[i][j].roomId = roomId;
                 }
             }
         }
