@@ -809,22 +809,24 @@ class GameManager {
 
     onRoomEntered(room) {
         console.log(`🚪 Entered ${room.type} (Room ${room.id})`);
-        
-        // Room-specific events
-        this.handleRoomEntry(room);
-        
-        // Show room-specific hints
-        if (room.puzzles.length > 0) {
-            const unsolvedPuzzles = room.puzzles.filter(p => !p.solved);
-            if (unsolvedPuzzles.length > 0) {
-                const puzzle = unsolvedPuzzles[0];
-                this.showHint(`🧩 This ${room.type} contains a puzzle: ${puzzle.hint}`, 6000);
-            }
+
+    // Room-specific events
+    this.handleRoomEntry(room);
+
+    // Show room-specific hints
+    // --- CHANGE THIS LINE ---
+    if (room.puzzles && room.puzzles.length > 0) {
+        const unsolvedPuzzles = room.puzzles.filter(p => !p.solved);
+        if (unsolvedPuzzles.length > 0) {
+            const puzzle = unsolvedPuzzles[0];
+            this.showHint(`🧩 This ${room.type} contains a puzzle: ${puzzle.hint}`, 6000);
         }
-        
-        // Special room events
-        this.triggerRoomSpecialEvents(room);
     }
+
+    // Special room events
+    this.triggerRoomSpecialEvents(room);
+}
+
 
     handleRoomEntry(room) {
         // Different events based on room type

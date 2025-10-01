@@ -105,7 +105,7 @@ class CannonPhysicsManager {
             lastShake: null
         };
 
-        this.setupDevControls();
+        //this.setupDevControls();
         console.log('🔧 CannonPhysicsManager initialized');
     }
 
@@ -121,29 +121,65 @@ class CannonPhysicsManager {
         }
     }
 
-    setupDevControls() {
-        document.addEventListener('keydown', (e) => {
-            // Toggle dev mode with F9
-            if (e.code === 'F9') {
-                this.devMode = !this.devMode;
-                this.updateDevMode();
-                console.log(`🔧 Developer mode: ${this.devMode ? 'ON' : 'OFF'}`);
-            }
+    // setupDevControls() {
+    //     document.addEventListener('keydown', (e) => {
+    //         // Toggle dev mode with F9
+    //         if (e.code === 'F9') {
+    //             this.devMode = !this.devMode;
+    //             this.updateDevMode();
+    //             console.log(`🔧 Developer mode: ${this.devMode ? 'ON' : 'OFF'}`);
+    //         }
 
-            // Toggle fly mode with F10 (only in dev mode)
-            if (e.code === 'F10' && this.devMode) {
-                this.flyMode = !this.flyMode;
-                if (this.flyMode) {
-                    // Disable gravity for player
-                    this.playerBody.type = CANNON.Body.KINEMATIC;
-                    console.log('✈️ Fly mode: ON');
-                } else {
-                    // Re-enable physics
-                    this.playerBody.type = CANNON.Body.DYNAMIC;
-                    console.log('✈️ Fly mode: OFF');
-                }
-            }
-        });
+    //         // Toggle fly mode with F10 (only in dev mode)
+    //         if (e.code === 'F10' && this.devMode) {
+    //             this.flyMode = !this.flyMode;
+    //             if (this.flyMode) {
+    //                 // Disable gravity for player
+    //                 this.playerBody.type = CANNON.Body.KINEMATIC;
+    //                 console.log('✈️ Fly mode: ON');
+    //             } else {
+    //                 // Re-enable physics
+    //                 this.playerBody.type = CANNON.Body.DYNAMIC;
+    //                 console.log('✈️ Fly mode: OFF');
+    //             }
+    //         }
+    //     });
+    // }
+
+    //  setupDevControls() {
+    //     document.addEventListener('keydown', (e) => {
+    //         // Toggle dev mode and fly mode together with F9
+    //         if (e.code === 'F9') {
+    //             this.devMode = !this.devMode;
+    //             this.flyMode = this.devMode; // Link fly mode directly to dev mode
+
+    //             if (this.flyMode) {
+    //                 // Disable gravity for player
+    //                 this.playerBody.type = CANNON.Body.KINEMATIC;
+    //                 console.log('✈️ Dev Mode / Flying: ON');
+    //             } else {
+    //                 // Re-enable physics
+    //                 this.playerBody.type = CANNON.Body.DYNAMIC;
+    //                 console.log('✈️ Dev Mode / Flying: OFF');
+    //             }
+    //             this.updateDevMode();
+    //         }
+    //     });
+    // }
+
+    toggleFlyMode() {
+        this.flyMode = !this.flyMode;
+
+        if (this.flyMode) {
+            this.playerBody.type = CANNON.Body.KINEMATIC; // Disable gravity
+            console.log('✈️ Fly Mode: ON');
+        } else {
+            this.playerBody.type = CANNON.Body.DYNAMIC; // Re-enable physics
+            console.log('✈️ Fly Mode: OFF');
+        }
+        // Also toggle dev mode's lighting effect if you want
+        this.devMode = this.flyMode;
+        this.updateDevMode();
     }
 
     tick(delta, inputs) {
@@ -308,7 +344,7 @@ class CannonPhysicsManager {
     syncCameraToPhysicsBody() {
         // Update camera position based on physics body
         this.camera.position.x = this.playerBody.position.x;
-        this.camera.position.y = this.playerBody.position.y + this.playerHeight/2; // Camera at head level
+        //this.camera.position.y = this.playerBody.position.y + this.playerHeight/2; // Camera at head level
         this.camera.position.z = this.playerBody.position.z;
     }
 

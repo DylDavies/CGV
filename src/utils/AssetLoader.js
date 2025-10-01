@@ -20,4 +20,20 @@ async function loadMap(filePaths) {
   return models;
 }
 
-export { loadMap };
+async function loadModel(path) {
+    const gltfLoader = new GLTFLoader();
+    const dracoLoader = new DRACOLoader();
+    dracoLoader.setDecoderPath('https://unpkg.com/three@0.127.0/examples/js/libs/draco/gltf/');
+    gltfLoader.setDRACOLoader(dracoLoader);
+
+    try {
+        const gltf = await gltfLoader.loadAsync(path);
+        console.log(`Model loaded successfully from ${path}`, gltf);
+        return gltf;
+    } catch (error) {
+        console.error(`Error loading model from ${path}:`, error);
+        throw error;
+    }
+}
+
+export { loadMap, loadModel };
