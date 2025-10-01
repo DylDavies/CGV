@@ -90,11 +90,12 @@ class FirstPersonControls {
                 case 'KeyE':
                     this.flyDown = true;
                     break;
-                case 'Escape':
-                    if (this.controls.isLocked) {
-                        this.controls.unlock();
-                    }
-                    break;
+                // ESC is now handled by PauseMenu, don't unlock here
+                // case 'Escape':
+                //     if (this.controls.isLocked) {
+                //         this.controls.unlock();
+                //     }
+                //     break;
                 case 'F11':
                     event.preventDefault();
                     this.toggleStats();

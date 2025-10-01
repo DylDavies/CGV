@@ -8,14 +8,15 @@ import { Loop } from './systems/Loop.js';
 import { createStats } from './systems/Stats.js';
 import { UIManager } from './systems/uiManager.js';
 import { CannonPhysicsManager } from './systems/CannonPhysicsManager.js';
-import { ProceduralMansion } from './systems/ProceduralMansion.js';
+import { MansionLoader } from './systems/MansionLoader.js';
 import { GameManager } from './systems/GameManager.js';
 import { InteractionSystem } from './systems/InteractionSystem.js';
 import { PuzzleSystem } from './systems/PuzzleSystem.js';
-import { HorrorAtmosphere } from './systems/HorrorAtmosphere.js';
+import { SimpleAtmosphere } from './systems/SimpleAtmosphere.js';
 import { FirstPersonControls } from './components/Player/PlayerControls.js';
 import { ImprovedFlashlight } from './components/Player/ImprovedFlashlight.js';
 import { ColorPuzzle } from './puzzles/colorPuzzle/ColorPuzzle.js';
+import { PauseMenu } from './systems/PauseMenu.js';
 
 async function main() {
     try {
@@ -39,23 +40,33 @@ async function main() {
         // --- UI Manager loading --- 
         // show welcome screen
         uiManager.showWelcomeScreen(async () => {
-            uiManager.updateLoadingText("Waking the spirits...");
-            const horrorAtmosphere = new HorrorAtmosphere(scene, camera);
+            uiManager.updateLoadingText("Preparing atmosphere...");
+            const atmosphere = new SimpleAtmosphere(scene, camera);
             
             uiManager.updateLoadingText("Setting up physics...");
             const physicsManager = new CannonPhysicsManager(camera);
-            
-            uiManager.updateLoadingText("Generating mansion...");
-            const mansion = new ProceduralMansion(scene, physicsManager);
-            mansion.generateMansion();
 
-            const entranceRoom = mansion.rooms.find(room => room.type === 'entrance');
+            uiManager.updateLoadingText("Loading mansion model...");
+            const mansionLoader = new MansionLoader(scene, physicsManager);
+            await mansionLoader.loadMansion('/blender/Mansion.glb');
 
+            // Find entrance room and spawn player
+            const entranceRoom = mansionLoader.getEntranceRoom();
             if (entranceRoom) {
-                const spawnY = (entranceRoom.baseHeight || 0) + 1.8;
-                const spawnPos = new THREE.Vector3(entranceRoom.center.x, spawnY, entranceRoom.center.z + 3);
+                // Spawn at the top of the room's bounding box + player height
+                const spawnY = entranceRoom.bounds.max.y + 2.5; // Top of room + 2.5 units
+                const spawnPos = new THREE.Vector3(entranceRoom.center.x, spawnY, entranceRoom.center.z);
                 camera.position.copy(spawnPos);
+
+                // Initialize physics immediately - let player fall to floor naturally
                 physicsManager.teleportTo(spawnPos);
+
+                console.log(`📍 Spawned at entrance: ${entranceRoom.name} at Y=${spawnY.toFixed(2)}`);
+                console.log(`⬇️ Falling to floor...`);
+            } else {
+                // Default spawn position
+                camera.position.set(0, 10, 5);
+                physicsManager.teleportTo(new THREE.Vector3(0, 10, 5));
             }
             scene.add(camera);
 
@@ -63,9 +74,10 @@ async function main() {
             uiManager.updateLoadingText("Preparing your escape...");
             const controls = new FirstPersonControls(camera, renderer.domElement, physicsManager, { colorPuzzle });
             const flashlight = new ImprovedFlashlight(camera, scene);
+            const pauseMenu = new PauseMenu(renderer, controls);
             
             // --- Initialize Game Logic & Puzzle Systems ---
-            const gameManager = new GameManager(mansion, camera, scene, uiManager);
+            const gameManager = new GameManager(mansionLoader, camera, scene, uiManager);
             const puzzleSystem = new PuzzleSystem(scene, gameManager);
             const interactionSystem = new InteractionSystem(camera, scene, gameManager, uiManager);
             
@@ -76,20 +88,20 @@ async function main() {
             // --- Final Setup & Start Loop ---
             new Resizer(camera, renderer);
             loop.updatables.push(
-                controls, 
-                physicsManager, 
-                flashlight, 
-                mansion, 
-                interactionSystem, 
-                puzzleSystem, 
+                controls,
+                physicsManager,
+                flashlight,
+                mansionLoader,
+                interactionSystem,
+                puzzleSystem,
                 gameManager,
-                horrorAtmosphere
+                atmosphere
             );
 
             // --- Global Debug ---
             window.gameControls = {
-                camera, scene, flashlight, physicsManager, mansion, gameManager,
-                interactionSystem, puzzleSystem, horrorAtmosphere, colorPuzzle
+                camera, scene, flashlight, physicsManager, mansionLoader, gameManager,
+                interactionSystem, puzzleSystem, atmosphere, colorPuzzle
             };
             console.log('🔧 Debug controls available in `window.gameControls`.');
 
