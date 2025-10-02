@@ -10,9 +10,9 @@ export class UIManager {
         // Load the HTML content into the containers
         await this._loadHTML('src/ui/welcomeScreen/welcome-screen.html', 'welcome-screen-container');
         await this._loadHTML('src/ui/colorPuzzle/color-puzzle.html', 'puzzle-container');
+        await this._loadHTML('src/ui/wirePuzzle/wire-puzzle.html', 'wire-puzzle-container'); // Add this line
         await this._loadHTML('src/ui/creditsScreen/credits-screen.html', 'credits-screen-container');
         await this._loadHTML('src/ui/settingsScreen/settings-screen.html', 'settings-screen-container');
-
 
         // Now that the HTML is loaded, cache the elements inside it
         this.uiElements = {
@@ -23,6 +23,7 @@ export class UIManager {
             loadingContainer: document.getElementById('loading-container'),
             loadingText: document.getElementById('loading-text'),
             puzzleContainer: document.getElementById('puzzle-container'),
+            wirePuzzleContainer: document.getElementById('wire-puzzle-container'), // Add this line
             crosshair: document.getElementById('crosshair'), 
             interactionPrompt: document.getElementById('interaction-prompt'),
             gameStatsContainer: document.getElementById('game-stats-container'),
@@ -62,6 +63,7 @@ export class UIManager {
     }
     
     _addMenuEventListeners() {
+        // ... (rest of the file is unchanged)
         this.uiElements.settingsButton.onclick = () => {
             this.uiElements.welcomeScreen.style.display = 'none';
             this.uiElements.settingsScreen.classList.remove('hidden');
@@ -85,7 +87,6 @@ export class UIManager {
 
     // --- Loading and Welcome Screen Methods ---
     showWelcomeScreen(onPlayCallback) {
-        // This check prevents the error if initialization failed
         if (this.uiElements.welcomeScreen && this.uiElements.playButton) {
             this.uiElements.welcomeScreen.style.display = 'flex';
             this.uiElements.playButton.onclick = () => {
@@ -117,7 +118,7 @@ export class UIManager {
         }
     }
 
-
+    // ... (rest of the file is unchanged)
     updateObjectives(objectives) {
         if (this.uiElements.objectivesContainer) {
             this.uiElements.objectivesContainer.innerHTML = `<h3>Objectives</h3><p>${objectives.length} active</p>`;

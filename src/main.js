@@ -1,5 +1,3 @@
-// src/main.js - Refactored and Integrated Version
-
 import * as THREE from 'https://unpkg.com/three@0.127.0/build/three.module.js';
 import { createScene } from './components/World/scene.js';
 import { createRenderer } from './systems/Renderer.js';
@@ -16,6 +14,7 @@ import { SimpleAtmosphere } from './systems/SimpleAtmosphere.js';
 import { FirstPersonControls } from './components/Player/PlayerControls.js';
 import { ImprovedFlashlight } from './components/Player/ImprovedFlashlight.js';
 import { ColorPuzzle } from './puzzles/colorPuzzle/ColorPuzzle.js';
+import { WirePuzzle } from './puzzles/wirePuzzle/WirePuzzle.js';
 import { PauseMenu } from './systems/PauseMenu.js';
 
 async function main() {
@@ -33,12 +32,14 @@ async function main() {
         const uiManager = new UIManager();
         await uiManager.initialize();
 
-        // create and load puzzle for colorPuzzle - can remove later for optimization and only load stuff when needed
+        // --- Initialize Puzzles ---
         const colorPuzzle = new ColorPuzzle();
         await colorPuzzle.loadLevels();
         
+        const wirePuzzle = new WirePuzzle();
+        await wirePuzzle.loadLevels();
+        
         // --- UI Manager loading --- 
-        // show welcome screen
         uiManager.showWelcomeScreen(async () => {
             uiManager.updateLoadingText("Preparing atmosphere...");
             const atmosphere = new SimpleAtmosphere(scene, camera);
@@ -50,21 +51,14 @@ async function main() {
             const mansionLoader = new MansionLoader(scene, physicsManager);
             await mansionLoader.loadMansion('/blender/Mansion.glb');
 
-            // Find entrance room and spawn player
             const entranceRoom = mansionLoader.getEntranceRoom();
             if (entranceRoom) {
-                // Spawn at the top of the room's bounding box + player height
-                const spawnY = entranceRoom.bounds.max.y + 2.5; // Top of room + 2.5 units
+                const spawnY = entranceRoom.bounds.max.y + 2.5;
                 const spawnPos = new THREE.Vector3(entranceRoom.center.x, spawnY, entranceRoom.center.z);
                 camera.position.copy(spawnPos);
-
-                // Initialize physics immediately - let player fall to floor naturally
                 physicsManager.teleportTo(spawnPos);
-
                 console.log(`📍 Spawned at entrance: ${entranceRoom.name} at Y=${spawnY.toFixed(2)}`);
-                console.log(`⬇️ Falling to floor...`);
             } else {
-                // Default spawn position
                 camera.position.set(0, 10, 5);
                 physicsManager.teleportTo(new THREE.Vector3(0, 10, 5));
             }
@@ -72,7 +66,8 @@ async function main() {
 
             // --- Initialize Player Components ---
             uiManager.updateLoadingText("Preparing your escape...");
-            const controls = new FirstPersonControls(camera, renderer.domElement, physicsManager, { colorPuzzle });
+            // Pass BOTH puzzles to the controls
+            const controls = new FirstPersonControls(camera, renderer.domElement, physicsManager, { colorPuzzle, wirePuzzle });
             const flashlight = new ImprovedFlashlight(camera, scene);
             const pauseMenu = new PauseMenu(renderer, controls);
             
@@ -81,9 +76,14 @@ async function main() {
             const puzzleSystem = new PuzzleSystem(scene, gameManager);
             const interactionSystem = new InteractionSystem(camera, scene, gameManager, uiManager);
             
-            controls.puzzles = { colorPuzzle };
+            // Set controls for BOTH puzzles
+            controls.puzzles = { colorPuzzle, wirePuzzle };
             colorPuzzle.setControls(controls);
+            wirePuzzle.setControls(controls);
+
+            // Register BOTH puzzles
             puzzleSystem.registerPuzzle('colorPuzzle', colorPuzzle);
+            puzzleSystem.registerPuzzle('wirePuzzle', wirePuzzle);
 
             // --- Final Setup & Start Loop ---
             new Resizer(camera, renderer);
@@ -101,7 +101,7 @@ async function main() {
             // --- Global Debug ---
             window.gameControls = {
                 camera, scene, flashlight, physicsManager, mansionLoader, gameManager,
-                interactionSystem, puzzleSystem, atmosphere, colorPuzzle
+                interactionSystem, puzzleSystem, atmosphere, colorPuzzle, wirePuzzle
             };
             console.log('🔧 Debug controls available in `window.gameControls`.');
 

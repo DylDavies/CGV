@@ -58,7 +58,7 @@ class FirstPersonControls {
 
         const onKeyDown = (event) => {
             // Prevent default for movement keys to stop page scrolling - remove KeyP (currently here for testing)
-            if (['KeyW', 'KeyA', 'KeyS', 'KeyD', 'Space', 'ShiftLeft', 'ControlLeft', 'KeyQ', 'KeyE', 'KeyP'].includes(event.code)) {
+            if (['KeyW', 'KeyA', 'KeyS', 'KeyD', 'Space', 'ShiftLeft', 'ControlLeft', 'KeyQ', 'KeyE', 'KeyP', 'KeyL'].includes(event.code)) {
                 event.preventDefault();
             }
 
@@ -104,6 +104,12 @@ class FirstPersonControls {
                     console.log("Triggering color puzzle for testing");
                     if (this.puzzles && this.puzzles.colorPuzzle) {
                         this.puzzles.colorPuzzle.show(4);
+                    }
+                    break;
+                case 'KeyL':
+                    if (this.puzzles && this.puzzles.wirePuzzle) {
+                        console.log("Triggering wire puzzle for testing");
+                        this.puzzles.wirePuzzle.show(1); // Show difficulty 1
                     }
                     break;
             }
