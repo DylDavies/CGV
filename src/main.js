@@ -1,5 +1,3 @@
-// src/main.js - Refactored and Integrated Version
-
 import * as THREE from 'https://unpkg.com/three@0.127.0/build/three.module.js';
 import { createScene } from './components/World/scene.js';
 import { createRenderer } from './systems/Renderer.js';
@@ -16,7 +14,7 @@ import { SimpleAtmosphere } from './systems/SimpleAtmosphere.js';
 import { FirstPersonControls } from './components/Player/PlayerControls.js';
 import { ImprovedFlashlight } from './components/Player/ImprovedFlashlight.js';
 import { ColorPuzzle } from './puzzles/colorPuzzle/ColorPuzzle.js';
-import { WirePuzzle } from './puzzles/wirePuzzle/WirePuzzle.js'; // Make sure this is imported
+import { WirePuzzle } from './puzzles/wirePuzzle/WirePuzzle.js';
 import { PauseMenu } from './systems/PauseMenu.js';
 
 async function main() {

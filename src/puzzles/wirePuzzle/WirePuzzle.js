@@ -1,5 +1,5 @@
 import { WirePuzzleLogic } from './WirePuzzleLogic.js';
-import { WirePuzzleUI } from './WirePuzzleUI.js'; // <-- THE MISSING IMPORT
+import { WirePuzzleUI } from './WirePuzzleUI.js';
 import { PuzzleTimer } from '../colorPuzzle/PuzzleTimer.js';
 import { PuzzleResult } from '../colorPuzzle/PuzzleResult.js';
 
@@ -13,7 +13,6 @@ export class WirePuzzle {
 
         this.container = document.getElementById('wire-puzzle-container');
         
-        // This line was causing the error because WirePuzzleUI was not imported
         this.ui = new WirePuzzleUI(document.getElementById('wire-puzzle-canvas'), {
             onPathStart: (x, y) => this.handlePathStart(x, y),
             onPathDraw: (x, y) => this.handlePathDraw(x, y),
@@ -43,16 +42,21 @@ export class WirePuzzle {
         this.controls = controls;
     }
 
-    show(difficulty = 1) {
+    show() { // Can add a difficulty parameter here then we can choose th levels we want to take
         if (this.controls) this.controls.freeze();
         this.container.style.display = 'flex';
         
-        const level = this.levels.find(l => l.difficulty === difficulty);
-        if (!level) {
-            console.error(`No wire puzzle found for difficulty: ${difficulty}`);
+        // check we were able to load levels
+        if (!this.levels || this.levels.length === 0) {
+            console.error(`No wire puzzle levels are loaded.`);
             this.hide();
             return;
         }
+
+        // random level selection
+        const randomIndex = Math.floor(Math.random() * this.levels.length);
+        const level = this.levels[randomIndex];
+        
         this.currentLevel = level;
         this.startCurrentLevel(true);
     }
@@ -84,14 +88,15 @@ export class WirePuzzle {
 
     handlePathDraw(x, y) {
         if (this.logic && this.logic.isDrawing) {
-            this.logic.addPointToPath(x, y);
+            this.logic.updatePath(x, y);
             this.ui.render(this.logic);
         }
     }
 
     handlePathEnd() {
         if (this.logic) {
-            this.logic.endPath(false);
+            this.logic.endPath();
+            this.ui.render(this.logic); // Re-render to show the final state
             if (this.logic.checkWinCondition()) {
                 if (this.timer) this.timer.stop();
                 console.log('Wire puzzle solved!');

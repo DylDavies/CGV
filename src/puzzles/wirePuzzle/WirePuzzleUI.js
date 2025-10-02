@@ -1,7 +1,6 @@
 export class WirePuzzleUI {
     constructor(canvas, callbacks) {
         this.canvas = canvas;
-        // THE FIX: Get the board container element, just like the color puzzle does
         this.boardContainer = document.getElementById('wire-puzzle-board'); 
         this.ctx = canvas.getContext('2d');
         this.callbacks = callbacks;
@@ -17,9 +16,8 @@ export class WirePuzzleUI {
     }
 
     getGridPos(event) {
-        // We now need to account for the board's padding
         const rect = this.boardContainer.getBoundingClientRect();
-        const padding = 10; // As defined in your wire-puzzle.css for #wire-puzzle-board
+        const padding = 10;
         const x = Math.floor((event.clientX - rect.left - padding) / this.cellSize);
         const y = Math.floor((event.clientY - rect.top - padding) / this.cellSize);
         return { x, y };
@@ -39,37 +37,30 @@ export class WirePuzzleUI {
         this.callbacks.onPathEnd();
     }
 
-    render(logic) {
-        if (!logic || !logic.gridSize) {
-            console.error('WirePuzzleUI Render ERROR: Logic object is invalid.');
-            return;
-        }
 
+    render(logic) {
+        if (!logic || !logic.gridSize) return;
         const numCols = logic.gridSize[0];
         const numRows = logic.gridSize[1];
         
-        // THE FIX: Calculate and set the size of the container div, not just the canvas
         const canvasWidth = numCols * this.cellSize;
         const canvasHeight = numRows * this.cellSize;
         
-        // Set the canvas drawing dimensions
         this.canvas.width = canvasWidth;
         this.canvas.height = canvasHeight;
 
-        // Set the CSS size of the container div (including padding)
-        // This is the step that was missing
-        const padding = 10; // From CSS
+        const padding = 10;
         this.boardContainer.style.width = `${canvasWidth + padding * 2}px`;
         this.boardContainer.style.height = `${canvasHeight + padding * 2}px`;
 
-        // Now, proceed with drawing
         this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
+
         this.drawGrid(logic);
         this.drawObstacles(logic);
-        this.drawPaths(logic.paths);
+        this.drawPaths(logic); 
         this.drawTerminals(logic.levelData.terminals);
     }
-
+    
     drawGrid(logic) {
         this.ctx.strokeStyle = '#333';
         for (let i = 0; i <= logic.gridSize[0]; i++) {
@@ -105,19 +96,39 @@ export class WirePuzzleUI {
         });
     }
 
-    drawPaths(paths) {
+
+    drawPaths(logic) {
         this.ctx.lineWidth = this.cellSize / 4;
         this.ctx.lineCap = 'round';
         this.ctx.lineJoin = 'round';
-        for (const color in paths) {
-            const path = paths[color];
-            this.ctx.strokeStyle = color;
-            this.ctx.beginPath();
-            this.ctx.moveTo(path[0][0] * this.cellSize + this.cellSize / 2, path[0][1] * this.cellSize + this.cellSize / 2);
-            path.forEach(p => {
-                this.ctx.lineTo(p[0] * this.cellSize + this.cellSize / 2, p[1] * this.cellSize + this.cellSize / 2);
-            });
-            this.ctx.stroke();
+
+        // Draw all the completed paths
+        for (const color in logic.paths) {
+            this.drawSinglePath(logic.paths[color], color);
         }
+
+        // If a path is actively being drawn, draw it on top
+        if (logic.isDrawing && logic.activePath.length > 0) {
+            this.drawSinglePath(logic.activePath, logic.activeColor);
+        }
+    }
+
+    // Helper function to draw a single line from an array of points
+    drawSinglePath(path, color) {
+        if (!path || path.length < 2) return;
+
+        this.ctx.strokeStyle = color;
+        this.ctx.beginPath();
+        this.ctx.moveTo(
+            path[0][0] * this.cellSize + this.cellSize / 2,
+            path[0][1] * this.cellSize + this.cellSize / 2
+        );
+        for (let i = 1; i < path.length; i++) {
+            this.ctx.lineTo(
+                path[i][0] * this.cellSize + this.cellSize / 2,
+                path[i][1] * this.cellSize + this.cellSize / 2
+            );
+        }
+        this.ctx.stroke();
     }
 }

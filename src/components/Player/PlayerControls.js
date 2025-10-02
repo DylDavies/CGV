@@ -106,7 +106,7 @@ class FirstPersonControls {
                         this.puzzles.colorPuzzle.show(4);
                     }
                     break;
-                case 'KeyL': // Add this case
+                case 'KeyL':
                     if (this.puzzles && this.puzzles.wirePuzzle) {
                         console.log("Triggering wire puzzle for testing");
                         this.puzzles.wirePuzzle.show(1); // Show difficulty 1
