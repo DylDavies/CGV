@@ -277,11 +277,28 @@ class MansionLoader {
         mesh.updateMatrixWorld(true);
         const box = new THREE.Box3().setFromObject(mesh);
 
+        // Check if bounding box is valid
+        if (box.isEmpty()) {
+            console.warn(`⚠️ Skipping physics for "${mesh.name}": Empty bounding box`);
+            return null;
+        }
+
         const center = new THREE.Vector3();
         box.getCenter(center);
 
         const size = new THREE.Vector3();
         box.getSize(size);
+
+        // Validate center and size
+        if (isNaN(center.x) || isNaN(center.y) || isNaN(center.z)) {
+            console.error(`❌ Skipping physics for "${mesh.name}": Invalid center (NaN)`);
+            return null;
+        }
+
+        if (isNaN(size.x) || isNaN(size.y) || isNaN(size.z)) {
+            console.error(`❌ Skipping physics for "${mesh.name}": Invalid size (NaN)`);
+            return null;
+        }
 
         // Create box-shaped collision body
         const body = this.physicsManager.createBoxBody(center, size);
@@ -504,6 +521,59 @@ class MansionLoader {
 
         // If no entrance found, return first room
         return this.rooms.values().next().value;
+    }
+
+    getEntranceDoorSpawnPoint() {
+        let entranceDoor = null;
+
+        this.model.traverse((node) => {
+            if (node.name.toLowerCase() === 's_entrance001') {
+                entranceDoor = node;
+            }
+        });
+
+        if (entranceDoor) {
+            // Get the door's world position
+            entranceDoor.updateMatrixWorld(true);
+            const doorPosition = new THREE.Vector3();
+            entranceDoor.getWorldPosition(doorPosition);
+
+            console.log(`📍 Found entrance door "${entranceDoor.name}" at: ${doorPosition.x.toFixed(2)}, ${doorPosition.y.toFixed(2)}, ${doorPosition.z.toFixed(2)}`);
+
+            // Validate door position is valid
+            if (isNaN(doorPosition.x) || isNaN(doorPosition.y) || isNaN(doorPosition.z)) {
+                console.error('❌ Door position is invalid (NaN), using fallback');
+                return null;
+            }
+
+            // Get the door's forward direction (assuming it faces along local -Z or +Z)
+            const worldQuaternion = new THREE.Quaternion();
+            entranceDoor.getWorldQuaternion(worldQuaternion);
+
+            // Try forward direction (adjust if needed based on door orientation)
+            const forward = new THREE.Vector3(-1, 2, -2);
+            forward.applyQuaternion(worldQuaternion);
+            forward.normalize();
+
+            // Spawn 2 meters in front of the door, 0.5 meters above the floor
+            const spawnPoint = doorPosition.clone();
+            spawnPoint.add(forward.multiplyScalar(2.0)); // 2 meters forward
+            spawnPoint.y += 0.5; // 0.5 meters above floor (will fall slightly)
+            spawnPoint.x += 0.5;
+
+            // Validate spawn point
+            if (isNaN(spawnPoint.x) || isNaN(spawnPoint.y) || isNaN(spawnPoint.z)) {
+                console.error('❌ Calculated spawn point is invalid (NaN), using fallback');
+                return null;
+            }
+
+            console.log(`📍 Spawn point set to: ${spawnPoint.x.toFixed(2)}, ${spawnPoint.y.toFixed(2)}, ${spawnPoint.z.toFixed(2)}`);
+
+            return spawnPoint;
+        }
+
+        console.warn('⚠️ s_entrance001 not found, using fallback spawn');
+        return null;
     }
 
     setOcclusionCulling(enabled) {

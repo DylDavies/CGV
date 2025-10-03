@@ -51,16 +51,26 @@ async function main() {
             const mansionLoader = new MansionLoader(scene, physicsManager);
             await mansionLoader.loadMansion('/blender/Mansion.glb');
 
-            const entranceRoom = mansionLoader.getEntranceRoom();
-            if (entranceRoom) {
-                const spawnY = entranceRoom.bounds.max.y + 2.5;
-                const spawnPos = new THREE.Vector3(entranceRoom.center.x, spawnY, entranceRoom.center.z);
-                camera.position.copy(spawnPos);
-                physicsManager.teleportTo(spawnPos);
-                console.log(`📍 Spawned at entrance: ${entranceRoom.name} at Y=${spawnY.toFixed(2)}`);
+            // Set initial camera position (will teleport properly after loop starts)
+            const doorSpawnPoint = mansionLoader.getEntranceDoorSpawnPoint();
+            let spawnPosition;
+
+            if (doorSpawnPoint) {
+                spawnPosition = doorSpawnPoint;
+                camera.position.copy(doorSpawnPoint);
+                console.log(`📍 Will spawn at entrance door`);
             } else {
-                camera.position.set(0, 10, 5);
-                physicsManager.teleportTo(new THREE.Vector3(0, 10, 5));
+                // Fallback to entrance room
+                const entranceRoom = mansionLoader.getEntranceRoom();
+                if (entranceRoom) {
+                    const spawnY = entranceRoom.bounds.max.y + 2.5;
+                    spawnPosition = new THREE.Vector3(entranceRoom.center.x, spawnY, entranceRoom.center.z);
+                    camera.position.copy(spawnPosition);
+                    console.log(`📍 Will spawn at entrance: ${entranceRoom.name} at Y=${spawnY.toFixed(2)}`);
+                } else {
+                    spawnPosition = new THREE.Vector3(0, 10, 5);
+                    camera.position.copy(spawnPosition);
+                }
             }
             scene.add(camera);
 
@@ -105,13 +115,29 @@ async function main() {
             };
             console.log('🔧 Debug controls available in `window.gameControls`.');
 
-            uiManager.updateLoadingText("Ready to play!");
+            uiManager.updateLoadingText("Preparing spawn point...");
+
+            // Start the loop but keep loading screen visible
+            loop.start();
+
+            // Wait a moment for the loop to start, then teleport
             setTimeout(() => {
-                uiManager.hideLoadingScreen();
-                document.body.classList.add('game-active');
-                loop.start();
-                controls.lock();
-            }, 1000);
+                physicsManager.teleportTo(spawnPosition);
+                console.log(`📍 Teleported and stabilizing...`);
+
+                // Wait for physics stabilization to complete (100ms total)
+                setTimeout(() => {
+                    uiManager.updateLoadingText("Ready to play!");
+
+                    // Small final delay before revealing the game
+                    setTimeout(() => {
+                        uiManager.hideLoadingScreen();
+                        document.body.classList.add('game-active');
+                        controls.lock();
+                        console.log('✅ Game ready!');
+                    }, 500);
+                }, 100);
+            }, 50);
         });
 
     } catch (error) {

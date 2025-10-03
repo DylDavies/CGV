@@ -20,11 +20,12 @@ export class UIManager {
             playButton: document.getElementById('play-btn'),
             creditsButton: document.getElementById('credits-btn'),
             settingsButton: document.getElementById('settings-btn'),
+            loadingScreen: document.getElementById('loading-screen'),
             loadingContainer: document.getElementById('loading-container'),
             loadingText: document.getElementById('loading-text'),
             puzzleContainer: document.getElementById('puzzle-container'),
             wirePuzzleContainer: document.getElementById('wire-puzzle-container'), // Add this line
-            crosshair: document.getElementById('crosshair'), 
+            crosshair: document.getElementById('crosshair'),
             interactionPrompt: document.getElementById('interaction-prompt'),
             gameStatsContainer: document.getElementById('game-stats-container'),
             objectivesContainer: document.getElementById('objectives-container'),
@@ -100,15 +101,15 @@ export class UIManager {
     }
 
     showLoadingScreen(text) {
-        if (this.uiElements.loadingContainer) {
-            this.uiElements.loadingContainer.style.display = 'flex';
+        if (this.uiElements.loadingScreen) {
+            this.uiElements.loadingScreen.style.display = 'flex';
             this.updateLoadingText(text);
         }
     }
-    
+
     hideLoadingScreen() {
-        if (this.uiElements.loadingContainer) {
-            this.uiElements.loadingContainer.style.display = 'none';
+        if (this.uiElements.loadingScreen) {
+            this.uiElements.loadingScreen.style.display = 'none';
         }
     }
 
