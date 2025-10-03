@@ -4,11 +4,12 @@ import * as THREE from 'https://unpkg.com/three@0.127.0/build/three.module.js';
 import { PointerLockControls } from 'https://unpkg.com/three@0.127.0/examples/jsm/controls/PointerLockControls.js';
 
 class FirstPersonControls {
-    constructor(camera, domElement, physicsManager = null, puzzles = {}) {
+    constructor(camera, domElement, physicsManager = null, puzzles = {}, mansionLoader = null) {
         this.camera = camera;
         this.controls = new PointerLockControls(camera, domElement);
         this.domElement = domElement;
         this.physicsManager = physicsManager;
+        this.mansionLoader = mansionLoader;
 
         // Testing puzzle works with new system
         this.puzzles = puzzles;
@@ -202,13 +203,22 @@ class FirstPersonControls {
 
     updateStats() {
         if (!this.showingStats || !this.physicsManager) return;
-        
+
         const state = this.physicsManager.getDebugInfo();
         const pos = state.position;
         const vel = state.velocity;
-        
+
+        // Get current room from mansion loader
+        let currentRoom = 'Unknown';
+        if (this.mansionLoader) {
+            const room = this.mansionLoader.getCurrentRoom(this.camera.position);
+            currentRoom = room ? room.name : 'Outside';
+        }
+
         this.statsDisplay.innerHTML = `
             <strong>== DEV STATS ==</strong><br>
+            <strong>Location:</strong><br>
+            Room: ${currentRoom}<br>
             <strong>Position:</strong><br>
             X: ${pos.x.toFixed(2)}<br>
             Y: ${pos.y.toFixed(2)}<br>

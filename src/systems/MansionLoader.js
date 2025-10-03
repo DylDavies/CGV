@@ -4,19 +4,21 @@ import * as THREE from 'https://unpkg.com/three@0.127.0/build/three.module.js';
 import { GLTFLoader } from 'https://unpkg.com/three@0.127.0/examples/jsm/loaders/GLTFLoader.js';
 
 class MansionLoader {
-    constructor(scene, physicsManager = null) {
+    constructor(scene, physicsManager = null, qualityPreset = 'medium') {
         this.scene = scene;
         this.physicsManager = physicsManager;
         this.model = null;
         this.rooms = new Map(); // Collection name -> room data
         this.physicsBodies = [];
 
+        // Quality settings
+        this.setQualityPreset(qualityPreset);
+
         // Occlusion culling settings
         this.frustumCulling = true;
         this.occlusionCulling = true;
         this.playerPosition = new THREE.Vector3();
         this.visibleRooms = new Set();
-        this.maxVisibleDistance = 20; // Only show rooms within this distance
 
         // Lamp system
         this.lamps = [];
@@ -27,7 +29,50 @@ class MansionLoader {
         this.fireplaces = [];
         this.fireplacesEnabled = true;
 
-        console.log('🏠 MansionLoader initialized');
+        // Listen for quality changes
+        window.addEventListener('qualitychange', (e) => {
+            this.setQualityPreset(e.detail.quality);
+            this.recreateFireplaces();
+        });
+
+        console.log(`🏠 MansionLoader initialized (${qualityPreset} quality)`);
+    }
+
+    setQualityPreset(preset) {
+        const presets = {
+            low: {
+                fireParticles: 15,
+                lampUpdateRate: 4,
+                fireplaceUpdateRate: 4,
+                maxVisibleDistance: 12
+            },
+            medium: {
+                fireParticles: 25,
+                lampUpdateRate: 3,
+                fireplaceUpdateRate: 3,
+                maxVisibleDistance: 15
+            },
+            high: {
+                fireParticles: 50,
+                lampUpdateRate: 2,
+                fireplaceUpdateRate: 2,
+                maxVisibleDistance: 20
+            },
+            ultra: {
+                fireParticles: 100,
+                lampUpdateRate: 1,
+                fireplaceUpdateRate: 1,
+                maxVisibleDistance: 25
+            }
+        };
+
+        const settings = presets[preset] || presets.medium;
+        this.fireParticleCount = settings.fireParticles;
+        this.lampUpdateRate = settings.lampUpdateRate;
+        this.fireplaceUpdateRate = settings.fireplaceUpdateRate;
+        this.maxVisibleDistance = settings.maxVisibleDistance;
+
+        console.log(`🎨 Quality preset "${preset}" applied to MansionLoader`);
     }
 
     async loadMansion(modelPath) {
@@ -395,14 +440,39 @@ class MansionLoader {
         console.log(`🔥 Found ${this.fireplaces.length} fireplaces`);
     }
 
+    recreateFireplaces() {
+        console.log('🔄 Recreating fireplaces with new quality settings...');
+
+        // Remove old fireplace particles and lights
+        for (const fireplace of this.fireplaces) {
+            this.scene.remove(fireplace.particles);
+            this.scene.remove(fireplace.light);
+            fireplace.particles.geometry.dispose();
+            fireplace.particles.material.dispose();
+        }
+
+        // Store fire nodes
+        const fireNodes = this.fireplaces.map(f => f.mesh);
+
+        // Clear fireplace array
+        this.fireplaces = [];
+
+        // Recreate all fireplaces with new settings
+        for (const fireNode of fireNodes) {
+            this.setupFireplace(fireNode);
+        }
+
+        console.log(`✅ Recreated ${this.fireplaces.length} fireplaces`);
+    }
+
     setupFireplace(fireNode) {
         // Get world position of fire mesh
         fireNode.updateMatrixWorld(true);
         const firePosition = new THREE.Vector3();
         fireNode.getWorldPosition(firePosition);
 
-        // Create fire particle system
-        const particleCount = 100;
+        // Create fire particle system - count based on quality setting
+        const particleCount = this.fireParticleCount;
         const geometry = new THREE.BufferGeometry();
         const positions = new Float32Array(particleCount * 3);
         const velocities = new Float32Array(particleCount * 3);
@@ -420,12 +490,16 @@ class MansionLoader {
         geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
         geometry.setAttribute('velocity', new THREE.BufferAttribute(velocities, 3));
 
+        // Performance: Set dynamic draw usage
+        geometry.attributes.position.setUsage(THREE.DynamicDrawUsage);
+
         const material = new THREE.PointsMaterial({
             color: 0xff6600,
             size: 0.15,
             transparent: true,
             opacity: 0.8,
-            blending: THREE.AdditiveBlending
+            blending: THREE.AdditiveBlending,
+            sizeAttenuation: true
         });
 
         const fireParticles = new THREE.Points(geometry, material);
@@ -615,6 +689,10 @@ class MansionLoader {
     updateLampFlickering(delta) {
         const time = Date.now() * 0.001; // Current time in seconds
 
+        // Performance optimization: Update based on quality setting
+        this.lampUpdateCounter = (this.lampUpdateCounter || 0) + 1;
+        if (this.lampUpdateCounter % this.lampUpdateRate !== 0) return;
+
         for (const lamp of this.lamps) {
             // Calculate flicker using sine wave with some noise
             const flicker = Math.sin(time * lamp.flickerSpeed * this.lampFlickerSpeed + lamp.flickerPhase);
@@ -629,27 +707,33 @@ class MansionLoader {
     updateFireplaces(delta) {
         const time = Date.now() * 0.001;
 
+        // Performance optimization: Update based on quality setting
+        this.fireplaceUpdateCounter = (this.fireplaceUpdateCounter || 0) + 1;
+        const shouldUpdateParticles = this.fireplaceUpdateCounter % this.fireplaceUpdateRate === 0;
+
         for (const fireplace of this.fireplaces) {
-            // Update fire particles
-            const positions = fireplace.particles.geometry.attributes.position.array;
-            const velocities = fireplace.particles.geometry.attributes.velocity.array;
+            // Update fire particles (only every other frame for performance)
+            if (shouldUpdateParticles) {
+                const positions = fireplace.particles.geometry.attributes.position.array;
+                const velocities = fireplace.particles.geometry.attributes.velocity.array;
 
-            for (let i = 0; i < positions.length; i += 3) {
-                positions[i] += velocities[i] * delta * 2;
-                positions[i + 1] += velocities[i + 1] * delta * 2;
-                positions[i + 2] += velocities[i + 2] * delta * 2;
+                for (let i = 0; i < positions.length; i += 3) {
+                    positions[i] += velocities[i] * delta * 2;
+                    positions[i + 1] += velocities[i + 1] * delta * 2;
+                    positions[i + 2] += velocities[i + 2] * delta * 2;
 
-                // Reset particles that rise too high
-                if (positions[i + 1] > 0.7) {
-                    positions[i] = (Math.random() - 0.5) * 0.5;
-                    positions[i + 1] = 0;
-                    positions[i + 2] = (Math.random() - 0.5) * 0.5;
+                    // Reset particles that rise too high
+                    if (positions[i + 1] > 0.7) {
+                        positions[i] = (Math.random() - 0.5) * 0.5;
+                        positions[i + 1] = 0;
+                        positions[i + 2] = (Math.random() - 0.5) * 0.5;
+                    }
                 }
+
+                fireplace.particles.geometry.attributes.position.needsUpdate = true;
             }
 
-            fireplace.particles.geometry.attributes.position.needsUpdate = true;
-
-            // Flicker fire light
+            // Flicker fire light (update every frame for smoothness)
             const flicker = Math.sin(time * 10 + fireplace.flickerPhase);
             const noise = Math.random() * 0.3;
             fireplace.light.intensity = fireplace.baseIntensity * (0.8 + flicker * 0.2 + noise);

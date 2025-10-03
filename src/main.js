@@ -41,14 +41,18 @@ async function main() {
         
         // --- UI Manager loading --- 
         uiManager.showWelcomeScreen(async () => {
+            // Load saved quality settings first
+            const savedSettings = localStorage.getItem('gameSettings');
+            const settings = savedSettings ? JSON.parse(savedSettings) : { quality: 'medium' };
+
             uiManager.updateLoadingText("Preparing atmosphere...");
-            const atmosphere = new SimpleAtmosphere(scene, camera);
-            
+            const atmosphere = new SimpleAtmosphere(scene, camera, settings.quality || 'medium');
+
             uiManager.updateLoadingText("Setting up physics...");
             const physicsManager = new CannonPhysicsManager(camera);
 
             uiManager.updateLoadingText("Loading mansion model...");
-            const mansionLoader = new MansionLoader(scene, physicsManager);
+            const mansionLoader = new MansionLoader(scene, physicsManager, settings.quality || 'medium');
             await mansionLoader.loadMansion('/blender/Mansion.glb');
 
             // Set initial camera position (will teleport properly after loop starts)
@@ -76,8 +80,8 @@ async function main() {
 
             // --- Initialize Player Components ---
             uiManager.updateLoadingText("Preparing your escape...");
-            // Pass BOTH puzzles to the controls
-            const controls = new FirstPersonControls(camera, renderer.domElement, physicsManager, { colorPuzzle, wirePuzzle });
+            // Pass BOTH puzzles and mansionLoader to the controls
+            const controls = new FirstPersonControls(camera, renderer.domElement, physicsManager, { colorPuzzle, wirePuzzle }, mansionLoader);
             const flashlight = new ImprovedFlashlight(camera, scene);
             const pauseMenu = new PauseMenu(renderer, controls);
             
