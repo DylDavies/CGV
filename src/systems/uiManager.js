@@ -27,9 +27,6 @@ export class UIManager {
             wirePuzzleContainer: document.getElementById('wire-puzzle-container'), // Add this line
             crosshair: document.getElementById('crosshair'),
             interactionPrompt: document.getElementById('interaction-prompt'),
-            gameStatsContainer: document.getElementById('game-stats-container'),
-            objectivesContainer: document.getElementById('objectives-container'),
-            inventoryContainer: document.getElementById('inventory-container'),
             creditsScreen: document.getElementById('credits-screen'),
             closeCreditsButton: document.getElementById('close-credits-btn'),
             settingsScreen: document.getElementById('settings-screen'),
@@ -119,18 +116,6 @@ export class UIManager {
         }
     }
 
-    // ... (rest of the file is unchanged)
-    updateObjectives(objectives) {
-        if (this.uiElements.objectivesContainer) {
-            this.uiElements.objectivesContainer.innerHTML = `<h3>Objectives</h3><p>${objectives.length} active</p>`;
-        }
-    }
-    
-    updateInventory(inventory) {
-        if (this.uiElements.inventoryContainer) {
-            this.uiElements.inventoryContainer.innerHTML = `<h3>Inventory</h3><p>${inventory.length} items</p>`;
-        }
-    }
 
     showInteractionPrompt(text) {
         if (this.uiElements.interactionPrompt) {

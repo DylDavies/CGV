@@ -24,7 +24,8 @@ async function main() {
 
         // --- Initialize Core & UI Systems ---
         const scene = createScene();
-        const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+        // Camera far plane set to just beyond fog end (25) for better performance
+        const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 50);
         const renderer = createRenderer(canvas);
         const stats = createStats();
         const loop = new Loop(camera, scene, renderer, stats);
