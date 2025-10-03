@@ -40,6 +40,8 @@ export class UIManager {
         }
         
         this._addMenuEventListeners();
+        this._setupSettingsTabs();
+        this._setupVideoSettings();
         console.log('✅ UI Manager Initialized');
         this.isInitialized = true;
     }
@@ -65,13 +67,14 @@ export class UIManager {
         this.uiElements.settingsButton.onclick = () => {
             this.uiElements.welcomeScreen.style.display = 'none';
             this.uiElements.settingsScreen.classList.remove('hidden');
+            this._loadVideoSettings(); // Load current settings when opening
         };
 
         this.uiElements.creditsButton.onclick = () => {
             this.uiElements.welcomeScreen.style.display = 'none';
             this.uiElements.creditsScreen.classList.remove('hidden');
         };
-        
+
         this.uiElements.closeSettingsButton.onclick = () => {
             this.uiElements.settingsScreen.classList.add('hidden');
             this.uiElements.welcomeScreen.style.display = 'flex';
@@ -81,6 +84,121 @@ export class UIManager {
             this.uiElements.creditsScreen.classList.add('hidden');
             this.uiElements.welcomeScreen.style.display = 'flex';
         };
+    }
+
+    _setupSettingsTabs() {
+        const tabButtons = document.querySelectorAll('#settings-screen .tab-btn');
+        const tabContents = document.querySelectorAll('#settings-screen .tab-content');
+
+        tabButtons.forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                // Skip if button is disabled
+                if (btn.disabled) return;
+
+                const targetTab = e.target.getAttribute('data-tab');
+
+                // Update active tab button
+                tabButtons.forEach(b => {
+                    b.classList.remove('active');
+                });
+                e.target.classList.add('active');
+
+                // Update active tab content
+                tabContents.forEach(tab => {
+                    tab.classList.remove('active');
+                });
+                document.getElementById(`${targetTab}-tab`).classList.add('active');
+            });
+        });
+    }
+
+    _setupVideoSettings() {
+        // Load settings from localStorage or use defaults
+        this.settings = {
+            antialiasing: false,
+            quality: 'medium'
+        };
+
+        const saved = localStorage.getItem('gameSettings');
+        if (saved) {
+            this.settings = JSON.parse(saved);
+            if (!this.settings.quality) {
+                this.settings.quality = 'medium';
+            }
+        }
+
+        // Quality preset selector
+        const qualitySelect = document.getElementById('quality-select');
+        if (qualitySelect) {
+            qualitySelect.value = this.settings.quality;
+            qualitySelect.addEventListener('change', (e) => {
+                this.settings.quality = e.target.value;
+                this._saveSettings();
+                this._showNotification(`✅ Quality set to ${this.settings.quality}`);
+
+                // Emit custom event that other systems can listen to
+                window.dispatchEvent(new CustomEvent('qualitychange', {
+                    detail: { quality: this.settings.quality }
+                }));
+            });
+        }
+
+        // Anti-aliasing toggle
+        const aaToggle = document.getElementById('antialiasing-toggle');
+        if (aaToggle) {
+            aaToggle.checked = this.settings.antialiasing;
+            aaToggle.addEventListener('change', (e) => {
+                this.settings.antialiasing = e.target.checked;
+                this._saveSettings();
+                this._showNotification('⚠️ Restart required for anti-aliasing change');
+            });
+        }
+    }
+
+    _loadVideoSettings() {
+        const saved = localStorage.getItem('gameSettings');
+        if (saved) {
+            this.settings = JSON.parse(saved);
+            if (!this.settings.quality) {
+                this.settings.quality = 'medium';
+            }
+
+            const qualitySelect = document.getElementById('quality-select');
+            const aaToggle = document.getElementById('antialiasing-toggle');
+
+            if (qualitySelect) qualitySelect.value = this.settings.quality;
+            if (aaToggle) aaToggle.checked = this.settings.antialiasing;
+        }
+    }
+
+    _saveSettings() {
+        localStorage.setItem('gameSettings', JSON.stringify(this.settings));
+        console.log('💾 Settings saved');
+    }
+
+    _showNotification(message) {
+        const notification = document.createElement('div');
+        notification.style.cssText = `
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            background: #4a6fa5;
+            color: white;
+            padding: 15px 20px;
+            border-radius: 8px;
+            z-index: 10001;
+            font-family: 'Courier New', monospace;
+        `;
+        notification.textContent = message;
+        document.body.appendChild(notification);
+
+        setTimeout(() => {
+            notification.remove();
+        }, 3000);
+    }
+
+    getSettings() {
+        return this.settings;
     }
 
     // --- Loading and Welcome Screen Methods ---

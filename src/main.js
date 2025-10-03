@@ -100,7 +100,7 @@ async function main() {
             uiManager.updateLoadingText("Preparing your escape...");
             const controls = new FirstPersonControls(camera, renderer.domElement, physicsManager, { colorPuzzle, wirePuzzle }, monsterAI, mansionLoader);
             const flashlight = new ImprovedFlashlight(camera, scene);
-            const pauseMenu = new PauseMenu(renderer, controls);
+            const pauseMenu = new PauseMenu(renderer, controls, loop);
             
             // --- Initialize Game Logic & Puzzle Systems ---
             const gameManager = new GameManager(mansionLoader, camera, scene, uiManager);
