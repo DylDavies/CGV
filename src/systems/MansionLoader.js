@@ -8,7 +8,7 @@ class MansionLoader {
         this.scene = scene;
         this.physicsManager = physicsManager;
         this.model = null;
-        this.rooms = new Map(); // Collection name -> room data
+        this.rooms = new Map();
         this.physicsBodies = [];
 
         // Quality settings
@@ -29,6 +29,9 @@ class MansionLoader {
         this.fireplaces = [];
         this.fireplacesEnabled = true;
 
+        // Material caching for performance
+        this.materialCache = new Map();
+
         // Listen for quality changes
         window.addEventListener('qualitychange', (e) => {
             this.setQualityPreset(e.detail.quality);
@@ -44,25 +47,29 @@ class MansionLoader {
                 fireParticles: 15,
                 lampUpdateRate: 4,
                 fireplaceUpdateRate: 4,
-                maxVisibleDistance: 12
+                maxVisibleDistance: 12,
+                maxActiveLights: 6
             },
             medium: {
                 fireParticles: 25,
                 lampUpdateRate: 3,
                 fireplaceUpdateRate: 3,
-                maxVisibleDistance: 15
+                maxVisibleDistance: 15,
+                maxActiveLights: 8
             },
             high: {
                 fireParticles: 50,
                 lampUpdateRate: 2,
                 fireplaceUpdateRate: 2,
-                maxVisibleDistance: 20
+                maxVisibleDistance: 20,
+                maxActiveLights: 12
             },
             ultra: {
                 fireParticles: 100,
                 lampUpdateRate: 1,
                 fireplaceUpdateRate: 1,
-                maxVisibleDistance: 25
+                maxVisibleDistance: 25,
+                maxActiveLights: 15
             }
         };
 
@@ -71,6 +78,7 @@ class MansionLoader {
         this.lampUpdateRate = settings.lampUpdateRate;
         this.fireplaceUpdateRate = settings.fireplaceUpdateRate;
         this.maxVisibleDistance = settings.maxVisibleDistance;
+        this.maxActiveLights = settings.maxActiveLights;
 
         console.log(`🎨 Quality preset "${preset}" applied to MansionLoader`);
     }
@@ -87,7 +95,7 @@ class MansionLoader {
                     console.log('✅ Mansion model loaded successfully');
                     this.model = gltf.scene;
 
-                    // Process the model
+                    // Process the model (includes material sharing)
                     this.processModel();
 
                     // Add to scene
@@ -122,52 +130,129 @@ class MansionLoader {
         });
     }
 
-    processModel() {
-        console.log('🔍 Processing mansion model...');
+processModel() {
+        console.log('🔍 Processing mansion model - optimizing Blender materials...');
 
-        // Performance optimizations and shadow setup
+        let totalMeshes = 0;
+        let sharedMaterials = 0;
+        const materialMap = new Map(); // Track materials by their properties
+
+        // Performance optimizations while keeping Blender materials
         this.model.traverse((node) => {
             if (node.isMesh) {
-                // Disable shadows for most objects - only enable for important ones
+                totalMeshes++;
+
+                // Disable shadows for most objects
                 node.castShadow = false;
                 node.receiveShadow = false;
 
                 // Enable frustum culling
                 node.frustumCulled = true;
 
-                // Optimize materials
+                // Optimize existing Blender materials
                 if (node.material) {
-                    const material = Array.isArray(node.material) ? node.material[0] : node.material;
-
-                    // Reduce material precision for performance
-                    material.precision = 'mediump';
-
-                    // Disable unnecessary features
-                    material.flatShading = false;
-
-                    material.needsUpdate = true;
+                    const materials = Array.isArray(node.material) ? node.material : [node.material];
+                    
+                    materials.forEach((material, index) => {
+                        // Create a key based on material properties (color, type, etc.)
+                        const key = this.getMaterialKey(material);
+                        
+                        if (!materialMap.has(key)) {
+                            // First time seeing this material - optimize it
+                            this.optimizeMaterial(material);
+                            materialMap.set(key, material);
+                        } else {
+                            // We've seen this material before - reuse it!
+                            const existingMaterial = materialMap.get(key);
+                            if (Array.isArray(node.material)) {
+                                node.material[index] = existingMaterial;
+                            } else {
+                                node.material = existingMaterial;
+                            }
+                            sharedMaterials++;
+                        }
+                    });
                 }
 
-                // Merge geometries for static objects where possible
+                // Optimize geometry
                 if (node.geometry) {
                     node.geometry.computeBoundingSphere();
+                    
+                    // Remove unused attributes to save memory
+                    if (node.geometry.attributes.uv2) {
+                        node.geometry.deleteAttribute('uv2');
+                    }
+                    if (node.geometry.attributes.tangent) {
+                        node.geometry.deleteAttribute('tangent');
+                    }
                 }
             }
         });
+
+        console.log(`♻️ Material optimization complete:`);
+        console.log(`   Total meshes: ${totalMeshes}`);
+        console.log(`   Unique materials: ${materialMap.size}`);
+        console.log(`   Materials shared: ${sharedMaterials}`);
+        console.log(`   Memory saved: ~${Math.round((sharedMaterials / totalMeshes) * 100)}%`);
+
+        // Store the material map for later use
+        this.materialCache = materialMap;
 
         // Organize meshes by room collections
         this.organizeByRooms();
     }
 
+    optimizeMaterial(material) {
+        // Optimize the material without changing its appearance
+        
+        // Set precision to medium for better performance
+        material.precision = 'mediump';
+        
+        // Disable features that hurt performance if not needed
+        material.flatShading = false;
+        
+        // For MeshStandardMaterial or MeshPhysicalMaterial, reduce expensive features
+        if (material.isMeshStandardMaterial || material.isMeshPhysicalMaterial) {
+            // Reduce roughness/metalness if very high (won't be noticeable)
+            if (material.roughness !== undefined && material.roughness > 0.95) {
+                material.roughness = 1;
+            }
+            if (material.metalness !== undefined && material.metalness < 0.05) {
+                material.metalness = 0;
+            }
+            
+            // Disable expensive features if not being used
+            if (!material.envMap) {
+                material.envMapIntensity = 0;
+            }
+        }
+        
+        material.needsUpdate = true;
+    }
+
+    getMaterialKey(material) {
+        // Create a unique key for material caching based on its properties
+        const props = {
+            type: material.type,
+            color: material.color ? material.color.getHex() : 0,
+            opacity: material.opacity || 1,
+            transparent: material.transparent || false,
+            // Include texture references if they exist
+            map: material.map ? material.map.uuid : 'none',
+            roughness: material.roughness || 0,
+            metalness: material.metalness || 0
+        };
+        
+        return JSON.stringify(props);
+    }
+
     organizeByRooms() {
         console.log('🗂️ Organizing rooms from collections...');
 
-        // Each collection in Blender becomes a group
         this.model.traverse((node) => {
             if (node.type === 'Group' && node.children.length > 0) {
                 const roomName = node.name;
 
-                // Calculate room bounds for occlusion culling
                 const box = new THREE.Box3().setFromObject(node);
                 const center = new THREE.Vector3();
                 box.getCenter(center);
@@ -181,7 +266,6 @@ class MansionLoader {
                     visible: true
                 };
 
-                // Collect all meshes in this room
                 node.traverse((child) => {
                     if (child.isMesh) {
                         roomData.meshes.push(child);
@@ -196,12 +280,10 @@ class MansionLoader {
 
     generatePhysics() {
         console.log('⚙️ Generating physics collision bodies...');
-        console.log('💡 TIP: Run window.gameControls.mansionLoader.listAllObjects() to see all object names');
 
         let collisionCount = 0;
         let skippedCount = 0;
 
-        // Traverse all meshes and create collision bodies
         this.model.traverse((node) => {
             if (node.isMesh) {
                 const nodeName = node.name.toLowerCase();
@@ -216,7 +298,6 @@ class MansionLoader {
                         currentName.includes('opening') ||
                         currentName.includes('doorway')) {
                         shouldSkipByHierarchy = true;
-                        console.log(`🚪 Skipping collision (parent hierarchy): ${node.name} (parent: ${currentNode.name})`);
                         break;
                     }
                     currentNode = currentNode.parent;
@@ -227,19 +308,16 @@ class MansionLoader {
                     return;
                 }
 
-                // Check if this mesh itself should have collision
                 const shouldSkip = nodeName.includes('nocollision') ||
-                    nodeName.includes('door') ||  // Any object with "door" in the name
+                    nodeName.includes('door') ||
                     nodeName.includes('opening') ||
                     nodeName.includes('doorway');
 
                 if (shouldSkip && !nodeName.includes("entrance")) {
-                    console.log(`🚪 Skipping collision for: ${node.name}`);
                     skippedCount++;
                     return;
                 }
 
-                // Create physics body based on mesh
                 const body = this.createPhysicsBodyFromMesh(node);
                 if (body) {
                     this.physicsManager.addBody(body);
@@ -265,7 +343,6 @@ class MansionLoader {
             if (node.isMesh) {
                 const nodeName = node.name.toLowerCase();
 
-                // Check if this is a debug/helper object that should be hidden
                 const isDebugObject =
                     nodeName.includes('helper') ||
                     nodeName.includes('debug') ||
@@ -274,28 +351,23 @@ class MansionLoader {
                     nodeName.includes('gizmo') ||
                     nodeName.includes('temp');
 
-                // Check if this is a portrait/painting that should be hidden
                 const isPortrait =
                     nodeName.includes('portrait') ||
                     nodeName.includes('painting') ||
                     nodeName.includes('picture') ||
                     nodeName.includes('frame');
 
-                // Check material for debug colors (bright red, green, blue)
                 let hasDebugMaterial = false;
                 if (node.material) {
                     const material = Array.isArray(node.material) ? node.material[0] : node.material;
                     if (material.color) {
                         const color = material.color;
-                        // Check for pure red (debug color)
                         if (color.r > 0.9 && color.g < 0.1 && color.b < 0.1) {
                             hasDebugMaterial = true;
                         }
-                        // Check for pure green
                         if (color.g > 0.9 && color.r < 0.1 && color.b < 0.1) {
                             hasDebugMaterial = true;
                         }
-                        // Check for pure blue
                         if (color.b > 0.9 && color.r < 0.1 && color.g < 0.1) {
                             hasDebugMaterial = true;
                         }
@@ -305,11 +377,9 @@ class MansionLoader {
                 if (isDebugObject || hasDebugMaterial) {
                     node.visible = false;
                     hiddenCount++;
-                    console.log(`👻 Hidden debug object: ${node.name}`);
                 } else if (isPortrait) {
                     node.visible = false;
                     hiddenCount++;
-                    console.log(`🖼️ Hidden portrait/painting: ${node.name}`);
                 }
             }
         });
@@ -318,13 +388,10 @@ class MansionLoader {
     }
 
     createPhysicsBodyFromMesh(mesh) {
-        // Get world position and bounding box
         mesh.updateMatrixWorld(true);
         const box = new THREE.Box3().setFromObject(mesh);
 
-        // Check if bounding box is valid
         if (box.isEmpty()) {
-            console.warn(`⚠️ Skipping physics for "${mesh.name}": Empty bounding box`);
             return null;
         }
 
@@ -334,20 +401,15 @@ class MansionLoader {
         const size = new THREE.Vector3();
         box.getSize(size);
 
-        // Validate center and size
         if (isNaN(center.x) || isNaN(center.y) || isNaN(center.z)) {
-            console.error(`❌ Skipping physics for "${mesh.name}": Invalid center (NaN)`);
             return null;
         }
 
         if (isNaN(size.x) || isNaN(size.y) || isNaN(size.z)) {
-            console.error(`❌ Skipping physics for "${mesh.name}": Invalid size (NaN)`);
             return null;
         }
 
-        // Create box-shaped collision body
         const body = this.physicsManager.createBoxBody(center, size);
-
         return body;
     }
 
@@ -359,63 +421,57 @@ class MansionLoader {
         this.model.traverse((node) => {
             const nodeName = node.name.toLowerCase();
 
-            // Check if this object is a lamp (WallLamp, Chandelier, etc.)
             if (nodeName.includes('walllamp') || nodeName.includes('chandelier') ||
                 nodeName.includes('lamp') || nodeName.includes('light')) {
 
-                // Get world position of the lamp mesh
                 node.updateMatrixWorld(true);
                 const lampPosition = new THREE.Vector3();
                 node.getWorldPosition(lampPosition);
 
-                // Determine light properties based on lamp type
                 let lightColor, lightIntensity, lightDistance;
 
                 if (nodeName.includes('chandelier')) {
-                    lightColor = 0xffaa55; // Warm orange candlelight
-                    lightIntensity = 3.0; // Brighter
-                    lightDistance = 6; // Shorter range to prevent bleeding
-                } else if (nodeName.includes('walllamp')) {
-                    lightColor = 0xffbb66; // Slightly warmer
-                    lightIntensity = 2.5; // Brighter
-                    lightDistance = 4; // Shorter range
-                } else {
-                    lightColor = 0xffcc77; // Generic warm light
+                    lightColor = 0xffaa55;
                     lightIntensity = 2.0;
-                    lightDistance = 5;
+                    lightDistance = 4;
+                } else if (nodeName.includes('walllamp')) {
+                    lightColor = 0xffbb66;
+                    lightIntensity = 1.5;
+                    lightDistance = 3;
+                } else {
+                    lightColor = 0xffcc77;
+                    lightIntensity = 1.5;
+                    lightDistance = 4;
                 }
 
-                // Create point light - offset for wall lamps using normal direction
-                const lampLight = new THREE.PointLight(lightColor, lightIntensity, lightDistance, 2);
+                const lampLight = new THREE.PointLight(lightColor, lightIntensity, lightDistance, 3);
 
                 if (nodeName.includes('walllamp')) {
-                    // Get the lamp's rotation to determine outward direction
                     const worldQuaternion = new THREE.Quaternion();
                     node.getWorldQuaternion(worldQuaternion);
 
-                    // Try different forward vectors to find the right one
-                    // Wall lamps typically face along local +Z axis
                     const forward = new THREE.Vector3(0.5, 0, 0);
                     forward.applyQuaternion(worldQuaternion);
                     forward.normalize();
 
-                    // Offset light outward from wall
                     lampLight.position.copy(lampPosition);
                     lampLight.position.add(forward.multiplyScalar(0.4));
-                    lampLight.position.y += 0.1; // Slight upward offset
+                    lampLight.position.y += 0.1;
                 } else {
-                    // Chandeliers and other lamps - exact position
                     lampLight.position.copy(lampPosition);
                 }
 
                 lampLight.castShadow = false;
+                
+                // CRITICAL FIX: Start with light visible!
+                lampLight.visible = true;
 
-                // Add light to scene
                 this.scene.add(lampLight);
 
-                console.log(`💡 ${node.name}: pos=${lampLight.position.x.toFixed(1)},${lampLight.position.y.toFixed(1)},${lampLight.position.z.toFixed(1)}`);
+                if (lampCount < 3) {
+                    console.log(`💡 ${node.name}: pos=${lampLight.position.x.toFixed(1)},${lampLight.position.y.toFixed(1)},${lampLight.position.z.toFixed(1)}`);
+                }
 
-                // Store lamp data
                 const lampData = {
                     mesh: node,
                     light: lampLight,
@@ -430,7 +486,6 @@ class MansionLoader {
                 lampCount++;
             }
 
-            // Check for fireplace
             if (nodeName.includes('fire') && !nodeName.includes('fireplace')) {
                 this.setupFireplace(node);
             }
@@ -443,7 +498,6 @@ class MansionLoader {
     recreateFireplaces() {
         console.log('🔄 Recreating fireplaces with new quality settings...');
 
-        // Remove old fireplace particles and lights
         for (const fireplace of this.fireplaces) {
             this.scene.remove(fireplace.particles);
             this.scene.remove(fireplace.light);
@@ -451,13 +505,9 @@ class MansionLoader {
             fireplace.particles.material.dispose();
         }
 
-        // Store fire nodes
         const fireNodes = this.fireplaces.map(f => f.mesh);
-
-        // Clear fireplace array
         this.fireplaces = [];
 
-        // Recreate all fireplaces with new settings
         for (const fireNode of fireNodes) {
             this.setupFireplace(fireNode);
         }
@@ -466,31 +516,27 @@ class MansionLoader {
     }
 
     setupFireplace(fireNode) {
-        // Get world position of fire mesh
         fireNode.updateMatrixWorld(true);
         const firePosition = new THREE.Vector3();
         fireNode.getWorldPosition(firePosition);
 
-        // Create fire particle system - count based on quality setting
         const particleCount = this.fireParticleCount;
         const geometry = new THREE.BufferGeometry();
         const positions = new Float32Array(particleCount * 3);
         const velocities = new Float32Array(particleCount * 3);
 
         for (let i = 0; i < particleCount * 3; i += 3) {
-            positions[i] = (Math.random() - 0.5) * 0.5;     // x
-            positions[i + 1] = Math.random() * 0.2;          // y
-            positions[i + 2] = (Math.random() - 0.5) * 0.5; // z
+            positions[i] = (Math.random() - 0.5) * 0.5;
+            positions[i + 1] = Math.random() * 0.2;
+            positions[i + 2] = (Math.random() - 0.5) * 0.5;
 
             velocities[i] = (Math.random() - 0.5) * 0.02;
-            velocities[i + 1] = 0.5 + Math.random() * 0.5; // Rising
+            velocities[i + 1] = 0.5 + Math.random() * 0.5;
             velocities[i + 2] = (Math.random() - 0.5) * 0.02;
         }
 
         geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
         geometry.setAttribute('velocity', new THREE.BufferAttribute(velocities, 3));
-
-        // Performance: Set dynamic draw usage
         geometry.attributes.position.setUsage(THREE.DynamicDrawUsage);
 
         const material = new THREE.PointsMaterial({
@@ -506,12 +552,10 @@ class MansionLoader {
         fireParticles.position.copy(firePosition);
         this.scene.add(fireParticles);
 
-        // Create fire light - shorter range to prevent bleeding
         const fireLight = new THREE.PointLight(0xff6600, 4.0, 6, 2);
         fireLight.position.copy(firePosition);
         this.scene.add(fireLight);
 
-        // Store fireplace data
         const fireplaceData = {
             mesh: fireNode,
             particles: fireParticles,
@@ -521,20 +565,32 @@ class MansionLoader {
         };
 
         this.fireplaces.push(fireplaceData);
-        console.log(`🔥 Added fireplace at: ${firePosition.x.toFixed(1)},${firePosition.y.toFixed(1)},${firePosition.z.toFixed(1)}`);
     }
 
     setupOcclusionCulling() {
         console.log('👁️ Setting up occlusion culling system...');
 
-        // Enable frustum culling on all meshes
+        let meshCount = 0;
         this.model.traverse((node) => {
             if (node.isMesh) {
-                node.frustumCulled = this.frustumCulling;
+                // Enable frustum culling to skip rendering objects outside camera view
+                node.frustumCulled = true;
+
+                // Set material side to reduce overdraw
+                if (node.material) {
+                    if (Array.isArray(node.material)) {
+                        node.material.forEach(mat => mat.side = THREE.FrontSide);
+                    } else {
+                        node.material.side = THREE.FrontSide;
+                    }
+                }
+
+                meshCount++;
             }
         });
 
-        // Initialize all rooms as visible
+        console.log(`👁️ Frustum culling enabled on ${meshCount} meshes`);
+
         for (const roomData of this.rooms.values()) {
             this.visibleRooms.add(roomData.name);
         }
@@ -545,12 +601,10 @@ class MansionLoader {
 
         this.playerPosition.copy(cameraPosition);
 
-        // Update visibility for each room based on distance
         for (const [roomName, roomData] of this.rooms) {
             const distance = this.playerPosition.distanceTo(roomData.center);
             const shouldBeVisible = distance <= this.maxVisibleDistance;
 
-            // Only update if visibility changed
             if (roomData.visible !== shouldBeVisible) {
                 roomData.visible = shouldBeVisible;
                 roomData.group.visible = shouldBeVisible;
@@ -565,7 +619,6 @@ class MansionLoader {
     }
 
     getCurrentRoom(position) {
-        // Find which room the player is currently in
         for (const [roomName, roomData] of this.rooms) {
             if (roomData.bounds.containsPoint(position)) {
                 return roomData;
@@ -583,7 +636,6 @@ class MansionLoader {
     }
 
     getEntranceRoom() {
-        // Try to find entrance room by name
         const entranceNames = ['entrance', 'Entrance', 'Entry', 'entry', 'Foyer', 'foyer'];
 
         for (const name of entranceNames) {
@@ -593,7 +645,6 @@ class MansionLoader {
             }
         }
 
-        // If no entrance found, return first room
         return this.rooms.values().next().value;
     }
 
@@ -607,46 +658,33 @@ class MansionLoader {
         });
 
         if (entranceDoor) {
-            // Get the door's world position
             entranceDoor.updateMatrixWorld(true);
             const doorPosition = new THREE.Vector3();
             entranceDoor.getWorldPosition(doorPosition);
 
-            console.log(`📍 Found entrance door "${entranceDoor.name}" at: ${doorPosition.x.toFixed(2)}, ${doorPosition.y.toFixed(2)}, ${doorPosition.z.toFixed(2)}`);
-
-            // Validate door position is valid
             if (isNaN(doorPosition.x) || isNaN(doorPosition.y) || isNaN(doorPosition.z)) {
-                console.error('❌ Door position is invalid (NaN), using fallback');
                 return null;
             }
 
-            // Get the door's forward direction (assuming it faces along local -Z or +Z)
             const worldQuaternion = new THREE.Quaternion();
             entranceDoor.getWorldQuaternion(worldQuaternion);
 
-            // Try forward direction (adjust if needed based on door orientation)
             const forward = new THREE.Vector3(-1, 2, -2);
             forward.applyQuaternion(worldQuaternion);
             forward.normalize();
 
-            // Spawn 2 meters in front of the door, 0.5 meters above the floor
             const spawnPoint = doorPosition.clone();
-            spawnPoint.add(forward.multiplyScalar(2.0)); // 2 meters forward
-            spawnPoint.y += 0.5; // 0.5 meters above floor (will fall slightly)
+            spawnPoint.add(forward.multiplyScalar(2.0));
+            spawnPoint.y += 0.5;
             spawnPoint.x += 0.5;
 
-            // Validate spawn point
             if (isNaN(spawnPoint.x) || isNaN(spawnPoint.y) || isNaN(spawnPoint.z)) {
-                console.error('❌ Calculated spawn point is invalid (NaN), using fallback');
                 return null;
             }
-
-            console.log(`📍 Spawn point set to: ${spawnPoint.x.toFixed(2)}, ${spawnPoint.y.toFixed(2)}, ${spawnPoint.z.toFixed(2)}`);
 
             return spawnPoint;
         }
 
-        console.warn('⚠️ s_entrance001 not found, using fallback spawn');
         return null;
     }
 
@@ -670,49 +708,76 @@ class MansionLoader {
     }
 
     tick(delta, cameraPosition) {
-        // Update occlusion culling
         if (cameraPosition) {
             this.updateOcclusionCulling(cameraPosition);
         }
 
-        // Update lamp flickering
         if (this.lampsEnabled) {
             this.updateLampFlickering(delta);
         }
 
-        // Update fireplace effects
         if (this.fireplacesEnabled) {
             this.updateFireplaces(delta);
         }
     }
 
     updateLampFlickering(delta) {
-        const time = Date.now() * 0.001; // Current time in seconds
+        const time = Date.now() * 0.001;
+        const playerPos = this.playerPosition;
 
-        // Performance optimization: Update based on quality setting
         this.lampUpdateCounter = (this.lampUpdateCounter || 0) + 1;
         if (this.lampUpdateCounter % this.lampUpdateRate !== 0) return;
 
-        for (const lamp of this.lamps) {
-            // Calculate flicker using sine wave with some noise
-            const flicker = Math.sin(time * lamp.flickerSpeed * this.lampFlickerSpeed + lamp.flickerPhase);
-            const noise = Math.random() * 0.1 - 0.05; // Small random variation
+        // FIXED: Only cull if player position is set (not at 0,0,0)
+        const playerPosSet = playerPos.length() > 0.1;
+        
+        if (playerPosSet) {
+            // Distance-based light culling
+            let activeLights = 0;
+            
+            const lampDistances = this.lamps.map(lamp => ({
+                lamp,
+                distance: lamp.light.position.distanceTo(playerPos)
+            }));
+            
+            lampDistances.sort((a, b) => a.distance - b.distance);
 
-            // Vary intensity slightly (90% to 110% of base)
-            const intensityVariation = 0.9 + (flicker * 0.05) + noise;
-            lamp.light.intensity = lamp.baseIntensity * intensityVariation;
+            for (const { lamp, distance } of lampDistances) {
+                // More generous distance check
+                if (distance < lamp.light.distance * 2.5 && activeLights < this.maxActiveLights) {
+                    lamp.light.visible = true;
+                    
+                    const flicker = Math.sin(time * lamp.flickerSpeed * this.lampFlickerSpeed + lamp.flickerPhase);
+                    const noise = Math.random() * 0.1 - 0.05;
+                    lamp.light.intensity = lamp.baseIntensity * (0.9 + flicker * 0.05 + noise);
+                    
+                    activeLights++;
+                } else if (activeLights >= this.maxActiveLights) {
+                    // Gradually fade out distant lights instead of instantly hiding
+                    lamp.light.intensity *= 0.95;
+                    if (lamp.light.intensity < 0.1) {
+                        lamp.light.visible = false;
+                    }
+                }
+            }
+        } else {
+            // Player position not set yet, show all lights
+            for (const lamp of this.lamps) {
+                lamp.light.visible = true;
+                const flicker = Math.sin(time * lamp.flickerSpeed * this.lampFlickerSpeed + lamp.flickerPhase);
+                const noise = Math.random() * 0.1 - 0.05;
+                lamp.light.intensity = lamp.baseIntensity * (0.9 + flicker * 0.05 + noise);
+            }
         }
     }
 
     updateFireplaces(delta) {
         const time = Date.now() * 0.001;
 
-        // Performance optimization: Update based on quality setting
         this.fireplaceUpdateCounter = (this.fireplaceUpdateCounter || 0) + 1;
         const shouldUpdateParticles = this.fireplaceUpdateCounter % this.fireplaceUpdateRate === 0;
 
         for (const fireplace of this.fireplaces) {
-            // Update fire particles (only every other frame for performance)
             if (shouldUpdateParticles) {
                 const positions = fireplace.particles.geometry.attributes.position.array;
                 const velocities = fireplace.particles.geometry.attributes.velocity.array;
@@ -722,7 +787,6 @@ class MansionLoader {
                     positions[i + 1] += velocities[i + 1] * delta * 2;
                     positions[i + 2] += velocities[i + 2] * delta * 2;
 
-                    // Reset particles that rise too high
                     if (positions[i + 1] > 0.7) {
                         positions[i] = (Math.random() - 0.5) * 0.5;
                         positions[i + 1] = 0;
@@ -733,7 +797,6 @@ class MansionLoader {
                 fireplace.particles.geometry.attributes.position.needsUpdate = true;
             }
 
-            // Flicker fire light (update every frame for smoothness)
             const flicker = Math.sin(time * 10 + fireplace.flickerPhase);
             const noise = Math.random() * 0.3;
             fireplace.light.intensity = fireplace.baseIntensity * (0.8 + flicker * 0.2 + noise);
@@ -743,12 +806,9 @@ class MansionLoader {
     // Lamp control API
     setLampsEnabled(enabled) {
         this.lampsEnabled = enabled;
-
-        // Toggle all lamp lights
         for (const lamp of this.lamps) {
             lamp.light.visible = enabled;
         }
-
         console.log(`💡 Lamps ${enabled ? 'enabled' : 'disabled'}`);
     }
 
@@ -818,6 +878,7 @@ class MansionLoader {
     }
 
     getDebugInfo() {
+        const activeLamps = this.lamps.filter(l => l.light.visible).length;
         return {
             totalRooms: this.rooms.size,
             visibleRooms: this.visibleRooms.size,
@@ -825,7 +886,10 @@ class MansionLoader {
             occlusionCulling: this.occlusionCulling,
             maxVisibleDistance: this.maxVisibleDistance,
             totalLamps: this.lamps.length,
-            lampsEnabled: this.lampsEnabled
+            activeLamps: activeLamps,
+            lampsEnabled: this.lampsEnabled,
+            sharedMaterials: Object.keys(this.sharedMaterials).length,
+            cachedMaterials: this.materialCache.size
         };
     }
 
@@ -912,13 +976,11 @@ class MansionLoader {
     dispose() {
         console.log('🧹 Disposing mansion loader...');
 
-        // Remove physics bodies
         for (const { body } of this.physicsBodies) {
             this.physicsManager.removeBody(body);
         }
         this.physicsBodies = [];
 
-        // Remove all lamp lights from scene
         for (const lamp of this.lamps) {
             if (lamp.light) {
                 this.scene.remove(lamp.light);
@@ -927,11 +989,9 @@ class MansionLoader {
         }
         this.lamps = [];
 
-        // Remove model from scene
         if (this.model) {
             this.scene.remove(this.model);
 
-            // Dispose geometries and materials
             this.model.traverse((node) => {
                 if (node.isMesh) {
                     if (node.geometry) node.geometry.dispose();

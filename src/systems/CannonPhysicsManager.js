@@ -11,7 +11,10 @@ class CannonPhysicsManager {
         // Create Cannon.js world
         this.world = new CANNON.World();
         this.world.gravity.set(0, -15, 0); // Gravity pointing down
-        this.world.broadphase = new CANNON.NaiveBroadphase(); // Simple collision detection
+        this.world.broadphase = new CANNON.SAPBroadphase(this.world); // Simple collision detection
+
+        this.world.allowSleep = true;
+        this.world.solver.iterations = 5;
 
         // Player physics body - using a sphere for simplicity
         this.playerRadius = 0.5;
@@ -32,6 +35,8 @@ class CannonPhysicsManager {
             this.camera.position.y - this.playerHeight/2,
             this.camera.position.z
         );
+
+        this.playerBody.allowSleep = false;
 
         // Add player to world
         this.world.addBody(this.playerBody);
