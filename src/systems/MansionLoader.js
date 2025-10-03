@@ -1,7 +1,8 @@
 // src/systems/MansionLoader.js - Load and manage the mansion model with occlusion culling
 
-import * as THREE from 'https://unpkg.com/three@0.127.0/build/three.module.js';
-import { GLTFLoader } from 'https://unpkg.com/three@0.127.0/examples/jsm/loaders/GLTFLoader.js';
+import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.127.0/build/three.module.js';
+import { GLTFLoader } from 'https://cdn.jsdelivr.net/npm/three@0.127.0/examples/jsm/loaders/GLTFLoader.js';
+import { Pathfinding } from 'https://unpkg.com/three-pathfinding@1.2.0/dist/three-pathfinding.module.js';
 
 class MansionLoader {
     constructor(scene, physicsManager = null, qualityPreset = 'medium') {
@@ -10,6 +11,12 @@ class MansionLoader {
         this.model = null;
         this.rooms = new Map();
         this.physicsBodies = [];
+
+        // --- NEW: Pathfinding Properties ---
+        this.pathfinding = new Pathfinding();
+        this.navMesh = null;
+        this.navMeshVisualizer = null;
+        this.ZONE = 'mansion';
 
         // Quality settings
         this.setQualityPreset(qualityPreset);
@@ -28,6 +35,7 @@ class MansionLoader {
         // Fireplace system
         this.fireplaces = [];
         this.fireplacesEnabled = true;
+        this.navMeshNodesVisualizer = null;
 
         // Material caching for performance
         this.materialCache = new Map();
@@ -412,6 +420,107 @@ processModel() {
         const body = this.physicsManager.createBoxBody(center, size);
         return body;
     }
+
+    // --- NEW: Method to load and process the NavMesh ---
+    async loadNavMesh(path) {
+        return new Promise((resolve, reject) => {
+            const loader = new GLTFLoader();
+            loader.load(path, (gltf) => {
+                const navMeshNode = gltf.scene.children[0];
+                if (!navMeshNode || !navMeshNode.geometry) {
+                    console.error('NavMesh GLB must contain a single mesh.');
+                    return reject();
+                }
+
+                this.navMesh = navMeshNode;
+                // Hide the original navmesh model
+                this.navMesh.visible = false; 
+
+                console.log('🧠 Building navigation zone...');
+                const zone = Pathfinding.createZone(navMeshNode.geometry);
+                this.pathfinding.setZoneData(this.ZONE, zone);
+                console.log('✅ Navigation mesh created successfully.');
+
+                this.createNavMeshVisualizer();
+                this.createNavMeshNodesVisualizer();
+                resolve();
+
+            }, undefined, (error) => {
+                console.error(`❌ Error loading navigation mesh from ${path}:`, error);
+                reject(error);
+            });
+        });
+    }
+
+    // --- NEW: Method to visualize the generated NavMesh ---
+    createNavMeshVisualizer() {
+        // Note: getNavMesh() is not a standard part of three-pathfinding,
+        // we are creating a visual representation from the source geometry.
+        const geometry = this.navMesh.geometry;
+        const material = new THREE.MeshBasicMaterial({
+            color: 0xff00ff, // A bright, obvious magenta color
+            wireframe: false, // Turn off wireframe to make it solid
+            transparent: true, // Allow transparency
+            opacity: 0.5 // Make it 50% transparent to see the floor below
+        });
+        const visualMesh = new THREE.Mesh(geometry, material);
+        
+        this.navMeshVisualizer = visualMesh;
+        this.navMeshVisualizer.visible = false; // Initially hidden
+        this.scene.add(this.navMeshVisualizer);
+        console.log("✅ Navigation mesh visualizer created. Toggle with gameControls.toggleNavMeshVisualizer()");
+    }
+
+    createNavMeshNodesVisualizer() {
+    const zone = this.pathfinding.zones[this.ZONE];
+    console.log("Inspecting the navigation zone object:", zone); 
+    if (!zone) {
+        console.warn("Could not create node visualizer: Zone not found.");
+        return;
+    }
+
+    const group = new THREE.Group();
+    const nodeMaterial = new THREE.MeshBasicMaterial({ color: 0x00aaff }); // A bright blue color
+    const nodeGeometry = new THREE.SphereGeometry(0.1); // Small spheres for each node
+
+    // The pathfinding library stores nodes in zone.groups[GROUP_ID].nodes
+    // We'll assume a single group (groupID = 0) for this NavMesh.
+    const navMeshNodes = zone.groups[0];
+
+    for (const node of navMeshNodes) {
+        const nodeMesh = new THREE.Mesh(nodeGeometry, nodeMaterial);
+        nodeMesh.position.copy(node.centroid);
+        group.add(nodeMesh);
+    }
+
+    this.navMeshNodesVisualizer = group;
+    this.navMeshNodesVisualizer.visible = false; // Initially hidden
+    this.scene.add(this.navMeshNodesVisualizer);
+    console.log(`✅ Navigation mesh node visualizer created with ${navMeshNodes.length} nodes.`);
+}
+
+toggleNavMeshNodesVisualizer() {
+    if (this.navMeshNodesVisualizer) {
+        this.navMeshNodesVisualizer.visible = !this.navMeshNodesVisualizer.visible;
+        console.log(`NavMesh nodes visualizer ${this.navMeshNodesVisualizer.visible ? 'ON' : 'OFF'}`);
+    }
+}
+    
+    // --- NEW: Helper to toggle the visualizer ---
+    toggleNavMeshVisualizer() {
+        if (this.navMeshVisualizer) {
+            this.navMeshVisualizer.visible = !this.navMeshVisualizer.visible;
+            console.log(`NavMesh visualizer ${this.navMeshVisualizer.visible ? 'ON' : 'OFF'}`);
+        }
+    }
+
+    toggleMansionVisibility() {
+    if (this.model) {
+        this.model.visible = !this.model.visible;
+        console.log(`Mansion model visibility ${this.model.visible ? 'ON' : 'OFF'}`);
+    }
+}
+
 
     setupLamps() {
         console.log('💡 Setting up automatic lamp lighting...');
@@ -950,7 +1059,7 @@ processModel() {
                     item.name.toLowerCase().includes('door')
                 );
 
-                console.log(`Has "door" in parent hierarchy: ${hasDoorParent ? '✅ YES' : '❌ NO'}`);
+                console.log(`Has "door" in parent hierarchy: ${hassDoorParent ? '✅ YES' : '❌ NO'}`);
             }
         });
     }
@@ -1014,3 +1123,4 @@ processModel() {
 }
 
 export { MansionLoader };
+

@@ -13,13 +13,15 @@ import { PuzzleSystem } from './systems/PuzzleSystem.js';
 import { SimpleAtmosphere } from './systems/SimpleAtmosphere.js';
 import { FirstPersonControls } from './components/Player/PlayerControls.js';
 import { ImprovedFlashlight } from './components/Player/ImprovedFlashlight.js';
+import { createMonster } from './components/Monster/Monster.js';
+import { MonsterAI } from './components/Monster/MonsterAI.js';
 import { ColorPuzzle } from './puzzles/colorPuzzle/ColorPuzzle.js';
 import { WirePuzzle } from './puzzles/wirePuzzle/WirePuzzle.js';
 import { PauseMenu } from './systems/PauseMenu.js';
 
 async function main() {
     try {
-        console.log('🚀 Initializing Project HER...');
+        console.log('噫 Initializing Project HER...');
         const canvas = document.querySelector('#game-canvas');
 
         // --- Initialize Core & UI Systems ---
@@ -55,6 +57,11 @@ async function main() {
             uiManager.updateLoadingText("Loading mansion model...");
             const mansionLoader = new MansionLoader(scene, physicsManager, settings.quality || 'medium');
             await mansionLoader.loadMansion('/blender/Mansion.glb');
+            
+            // --- NEW: Load the navigation mesh ---
+            uiManager.updateLoadingText("Analyzing walkable areas...");
+            await mansionLoader.loadNavMesh(`/blender/NavMesh.glb?v=${Date.now()}`);
+
 
             // Set initial camera position (will teleport properly after loop starts)
             const doorSpawnPoint = mansionLoader.getEntranceDoorSpawnPoint();
@@ -79,10 +86,17 @@ async function main() {
             }
             scene.add(camera);
 
+            // --- Initialize Monster ---
+            uiManager.updateLoadingText("Waking the beast...");
+            const monster = await createMonster('/blender/monster.glb');
+            scene.add(monster);
+
+            // --- UPDATED: Pass the pathfinding instance to the AI ---
+            const monsterAI = new MonsterAI(monster, camera, mansionLoader.pathfinding, scene);
+            monsterAI.spawn();
             // --- Initialize Player Components ---
             uiManager.updateLoadingText("Preparing your escape...");
-            // Pass BOTH puzzles and mansionLoader to the controls
-            const controls = new FirstPersonControls(camera, renderer.domElement, physicsManager, { colorPuzzle, wirePuzzle }, mansionLoader);
+            const controls = new FirstPersonControls(camera, renderer.domElement, physicsManager, { colorPuzzle, wirePuzzle }, monsterAI, mansionLoader);
             const flashlight = new ImprovedFlashlight(camera, scene);
             const pauseMenu = new PauseMenu(renderer, controls);
             
@@ -110,15 +124,26 @@ async function main() {
                 interactionSystem,
                 puzzleSystem,
                 gameManager,
-                atmosphere
+                atmosphere,
+                monsterAI 
             );
 
             // --- Global Debug ---
-            window.gameControls = {
+           window.gameControls = {
                 camera, scene, flashlight, physicsManager, mansionLoader, gameManager,
-                interactionSystem, puzzleSystem, atmosphere, colorPuzzle, wirePuzzle
+                interactionSystem, puzzleSystem, atmosphere, colorPuzzle, wirePuzzle, monsterAI,
+                toggleNavMesh: () => {
+                    mansionLoader.toggleNavMeshVisualizer();
+                },
+                toggleMansion: () => {
+                    mansionLoader.toggleMansionVisibility();
+                },
+                toggleNavMeshNodes: () => {
+                    mansionLoader.toggleNavMeshNodesVisualizer();
+                }
             };
             console.log('🔧 Debug controls available in `window.gameControls`.');
+            console.log("庁 To toggle the navigation mesh visualizer, type `gameControls.toggleNavMesh()` in the console.");
 
             uiManager.updateLoadingText("Preparing spawn point...");
 
@@ -146,7 +171,7 @@ async function main() {
         });
 
     } catch (error) {
-        console.error('🚨 A critical error occurred during initialization:', error);
+        console.error('圷 A critical error occurred during initialization:', error);
         const loadingText = document.getElementById('loading-text');
         if (loadingText) {
             loadingText.textContent = `Error: Could not start the game.`;
@@ -156,3 +181,4 @@ async function main() {
 }
 
 main();
+
