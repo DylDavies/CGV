@@ -18,6 +18,7 @@ import { MonsterAI } from './components/Monster/MonsterAI.js';
 import { ColorPuzzle } from './puzzles/colorPuzzle/ColorPuzzle.js';
 import { WirePuzzle } from './puzzles/wirePuzzle/WirePuzzle.js';
 import { PauseMenu } from './systems/PauseMenu.js';
+import { AudioManager } from './systems/AudioManager.js'; // <-- IMPORT aUDIO MANAGER
 
 async function main() {
     try {
@@ -32,7 +33,8 @@ async function main() {
         const stats = createStats();
         const loop = new Loop(camera, scene, renderer, stats);
         
-        const uiManager = new UIManager();
+        const audioManager = new AudioManager(camera); // <-- INITIALIZE AUDIO MANAGER
+        const uiManager = new UIManager(audioManager); // <-- PASS TO UI MANAGER
         await uiManager.initialize();
 
         // --- Initialize Puzzles ---
@@ -131,7 +133,8 @@ async function main() {
             // --- Global Debug ---
            window.gameControls = {
                 camera, scene, flashlight, physicsManager, mansionLoader, gameManager,
-                interactionSystem, puzzleSystem, atmosphere, colorPuzzle, wirePuzzle, monsterAI,
+                interactionSystem, puzzleSystem, atmosphere, colorPuzzle, wirePuzzle,
+                audioManager, monsterAI,
                 toggleNavMesh: () => {
                     mansionLoader.toggleNavMeshVisualizer();
                 },

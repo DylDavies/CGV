@@ -1,7 +1,8 @@
 export class UIManager {
-    constructor() {
+    constructor(audioManager) { 
         this.uiElements = {};
         this.isInitialized = false;
+        this.audioManager = audioManager; 
     }
 
     async initialize() {
@@ -10,7 +11,7 @@ export class UIManager {
         // Load the HTML content into the containers
         await this._loadHTML('src/ui/welcomeScreen/welcome-screen.html', 'welcome-screen-container');
         await this._loadHTML('src/ui/colorPuzzle/color-puzzle.html', 'puzzle-container');
-        await this._loadHTML('src/ui/wirePuzzle/wire-puzzle.html', 'wire-puzzle-container'); // Add this line
+        await this._loadHTML('src/ui/wirePuzzle/wire-puzzle.html', 'wire-puzzle-container');
         await this._loadHTML('src/ui/creditsScreen/credits-screen.html', 'credits-screen-container');
         await this._loadHTML('src/ui/settingsScreen/settings-screen.html', 'settings-screen-container');
 
@@ -24,7 +25,7 @@ export class UIManager {
             loadingContainer: document.getElementById('loading-container'),
             loadingText: document.getElementById('loading-text'),
             puzzleContainer: document.getElementById('puzzle-container'),
-            wirePuzzleContainer: document.getElementById('wire-puzzle-container'), // Add this line
+            wirePuzzleContainer: document.getElementById('wire-puzzle-container'), 
             crosshair: document.getElementById('crosshair'),
             interactionPrompt: document.getElementById('interaction-prompt'),
             creditsScreen: document.getElementById('credits-screen'),
@@ -61,7 +62,6 @@ export class UIManager {
     }
     
     _addMenuEventListeners() {
-        // ... (rest of the file is unchanged)
         this.uiElements.settingsButton.onclick = () => {
             this.uiElements.welcomeScreen.style.display = 'none';
             this.uiElements.settingsScreen.classList.remove('hidden');
@@ -87,7 +87,17 @@ export class UIManager {
     showWelcomeScreen(onPlayCallback) {
         if (this.uiElements.welcomeScreen && this.uiElements.playButton) {
             this.uiElements.welcomeScreen.style.display = 'flex';
+            
+            // Play main menu music
+            if (this.audioManager) {
+                this.audioManager.playMusic('public/audio/music/main_menu_audio.mp3');
+            }
+
             this.uiElements.playButton.onclick = () => {
+                if (this.audioManager) {
+                    this.audioManager.stopMusic(); // Fade out the music
+                }
+
                 this.uiElements.welcomeScreen.style.display = 'none';
                 this.showLoadingScreen("Initializing...");
                 onPlayCallback();
@@ -116,6 +126,17 @@ export class UIManager {
         }
     }
 
+    updateObjectives(objectives) {
+        if (this.uiElements.objectivesContainer) {
+            this.uiElements.objectivesContainer.innerHTML = `<h3>Objectives</h3><p>${objectives.length} active</p>`;
+        }
+    }
+    
+    updateInventory(inventory) {
+        if (this.uiElements.inventoryContainer) {
+            this.uiElements.inventoryContainer.innerHTML = `<h3>Inventory</h3><p>${inventory.length} items</p>`;
+        }
+    }
 
     showInteractionPrompt(text) {
         if (this.uiElements.interactionPrompt) {
