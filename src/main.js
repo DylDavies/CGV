@@ -75,7 +75,7 @@ async function main() {
 
             // --- Initialize Monster ---
             uiManager.updateLoadingText("Waking the beast...");
-            const monster = createMonster();
+            const monster = await createMonster('/blender/monster.glb');
             scene.add(monster);
 
             // --- UPDATED: Pass the pathfinding instance to the AI ---
@@ -83,7 +83,7 @@ async function main() {
             monsterAI.spawn();
             // --- Initialize Player Components ---
             uiManager.updateLoadingText("Preparing your escape...");
-            const controls = new FirstPersonControls(camera, renderer.domElement, physicsManager, { colorPuzzle });
+            const controls = new FirstPersonControls(camera, renderer.domElement, physicsManager, { colorPuzzle }, monsterAI);
             const flashlight = new ImprovedFlashlight(camera, scene);
             const pauseMenu = new PauseMenu(renderer, controls);
             

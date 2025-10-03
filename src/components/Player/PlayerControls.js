@@ -1,7 +1,7 @@
 // src/components/Player/PlayerControls.js - Enhanced with dev mode
 
-import * as THREE from 'https://unpkg.com/three@0.127.0/build/three.module.js';
-import { PointerLockControls } from 'https://unpkg.com/three@0.127.0/examples/jsm/controls/PointerLockControls.js';
+import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.127.0/build/three.module.js';
+import { PointerLockControls } from 'https://cdn.jsdelivr.net/npm/three@0.127.0/examples/jsm/controls/PointerLockControls.js';
 
 class FirstPersonControls {
    constructor(camera, domElement, physicsManager = null, puzzles = {}, monsterAI = null) {
@@ -107,13 +107,18 @@ class FirstPersonControls {
                         this.puzzles.colorPuzzle.show(4);
                     }
                     break;
-                case 'KeyG': // <-- ADD THIS NEW CASE
+                case 'KeyG': 
                     if (this.monsterAI) {
                         this.monsterAI.cycleAggression();
                         console.log("clicked");
                     }
                     else{
                         console.log("no monster AI to change")
+                    }
+                    break;
+                case 'KeyH': // NEW: Toggle for path visualization
+                    if (this.monsterAI) {
+                        this.monsterAI.togglePathVisualization();
                     }
                     break;
                 }
@@ -416,3 +421,4 @@ class FirstPersonControls {
 }
 
 export { FirstPersonControls };
+
