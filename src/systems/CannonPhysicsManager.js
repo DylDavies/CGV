@@ -26,10 +26,10 @@ class CannonPhysicsManager {
         });
         this.playerBody.addShape(playerShape);
 
-        // Set initial position
+        // Position at camera location
         this.playerBody.position.set(
             this.camera.position.x,
-            this.camera.position.y - this.playerHeight/2, // Body center is lower than camera
+            this.camera.position.y - this.playerHeight/2,
             this.camera.position.z
         );
 
@@ -38,24 +38,27 @@ class CannonPhysicsManager {
 
         // Movement properties
         this.maxSpeed = {
-            walk: 5.0,
-            run: 8.0,
-            crouch: 2.0,
+            walk: 8.0,
+            run: 12.0,
+            crouch: 3.0,
             fly: 10.0
         };
 
-        this.jumpForce = 8.0;
         this.movementSpeed = this.maxSpeed.walk;
 
         // State tracking
-        this.isOnGround = false;
         this.isMoving = false;
-        this.canJump = false;
 
         // Developer mode
         this.devMode = false;
         this.flyMode = false;
         this.noclipMode = false;
+        this.fixedYMode = false; // New mode: constant Y height
+        this.fixedYHeight = 0; // Store the Y height when fixed Y mode is enabled
+
+        // Physics debugging
+        this.debugRenderer = null;
+        this.debugEnabled = false;
 
         // Ground contact detection
         const groundMaterial = new CANNON.Material('ground');
@@ -63,35 +66,19 @@ class CannonPhysicsManager {
             groundMaterial,
             playerMaterial,
             {
-                friction: 0.8,
-                restitution: 0.1 // Low bounce
+                friction: 0.0, // Zero friction for smooth movement
+                restitution: 0.0, // No bounce
+                contactEquationStiffness: 1e8, // Very stiff contact
+                contactEquationRelaxation: 3 // Quick settling
             }
         );
         this.world.addContactMaterial(this.groundContactMaterial);
 
-        // Track ground contacts
-        this.playerBody.addEventListener('collide', (event) => {
-            // Check if collision is with ground (from below)
-            const contact = event.contact;
-            let normal = contact.ni;
-
-            // Make sure we get the right normal direction
-            if (event.target === this.playerBody) {
-                normal = contact.ni;
-            } else {
-                normal = contact.ni.clone().negate();
-            }
-
-            // If normal points up (y > 0.5), we're likely on ground
-            if (normal.y > 0.5) {
-                this.isOnGround = true;
-                this.canJump = true;
-            }
-        });
+        // No ground tracking needed - fixed Y height
 
         // Head bob system
         this.headBob = {
-            enabled: true,
+            enabled: false, // Disable head bob - causing bouncing
             intensity: 0.02,
             frequency: 8.0,
             time: 0,
@@ -128,20 +115,43 @@ class CannonPhysicsManager {
                 this.devMode = !this.devMode;
                 this.updateDevMode();
                 console.log(`🔧 Developer mode: ${this.devMode ? 'ON' : 'OFF'}`);
+
+                // Show dev mode help
+                if (this.devMode) {
+                    console.log('🔧 Dev Mode Controls:');
+                    console.log('  F10 - Toggle Fixed Y Mode (constant height flying)');
+                    console.log('  F11 - Toggle Physics Debug Renderer');
+                }
             }
 
-            // Toggle fly mode with F10 (only in dev mode)
+            // Toggle fixed Y mode with F10 (only in dev mode)
             if (e.code === 'F10' && this.devMode) {
-                this.flyMode = !this.flyMode;
-                if (this.flyMode) {
+                this.fixedYMode = !this.fixedYMode;
+
+                if (this.fixedYMode) {
+                    // Set to safe height (at least Y=0 or current position, whichever is higher)
+                    this.fixedYHeight = Math.max(0, this.camera.position.y);
+
                     // Disable gravity for player
                     this.playerBody.type = CANNON.Body.KINEMATIC;
-                    console.log('✈️ Fly mode: ON');
+                    this.playerBody.velocity.set(0, 0, 0);
+
+                    // Immediately set position to fixed height
+                    this.playerBody.position.y = this.fixedYHeight - this.playerHeight/2;
+                    this.camera.position.y = this.fixedYHeight;
+
+                    console.log(`✈️ Fixed Y Mode: ON (height locked at Y=${this.fixedYHeight.toFixed(2)})`);
+                    console.log(`💡 Use SPACE to go up, SHIFT to go down`);
                 } else {
                     // Re-enable physics
                     this.playerBody.type = CANNON.Body.DYNAMIC;
-                    console.log('✈️ Fly mode: OFF');
+                    console.log('✈️ Fixed Y Mode: OFF');
                 }
+            }
+
+            // Toggle physics debug with F11 (only in dev mode)
+            if (e.code === 'F11' && this.devMode) {
+                this.togglePhysicsDebug();
             }
         });
     }
@@ -149,15 +159,13 @@ class CannonPhysicsManager {
     tick(delta, inputs) {
         const safeInputs = inputs || {};
 
-        // Reset ground state (will be set by collision detection)
-        this.isOnGround = false;
-        this.canJump = false;
-
         // Step the physics world
         this.world.step(delta);
 
         if (this.noclipMode) {
             this.handleNoclipMode(safeInputs, delta);
+        } else if (this.fixedYMode && this.devMode) {
+            this.handleFixedYMode(safeInputs, delta);
         } else if (this.flyMode && this.devMode) {
             this.handleFlyMode(safeInputs, delta);
         } else {
@@ -168,8 +176,12 @@ class CannonPhysicsManager {
         this.syncCameraToPhysicsBody();
 
         // Update effects
-        this.updateHeadBob(delta);
         this.updateFearEffects(delta);
+
+        // Update physics debug renderer
+        if (this.debugEnabled && this.debugRenderer) {
+            this.debugRenderer.update();
+        }
     }
 
     handleNormalMovement(inputs, delta) {
@@ -188,9 +200,20 @@ class CannonPhysicsManager {
 
         this.camera.getWorldDirection(forward);
         forward.y = 0; // Remove vertical component
-        forward.normalize();
 
-        right.crossVectors(forward, new THREE.Vector3(0, 1, 0)).normalize();
+        // Safety check to prevent NaN
+        if (forward.length() > 0.001) {
+            forward.normalize();
+        } else {
+            forward.set(0, 0, -1); // Default forward
+        }
+
+        right.crossVectors(forward, new THREE.Vector3(0, 1, 0));
+        if (right.length() > 0.001) {
+            right.normalize();
+        } else {
+            right.set(1, 0, 0); // Default right
+        }
 
         // Calculate intended movement
         const movement = new THREE.Vector3();
@@ -204,29 +227,68 @@ class CannonPhysicsManager {
             movement.normalize();
             movement.multiplyScalar(this.movementSpeed);
 
-            // Apply horizontal force
+            // Direct velocity control for responsive movement (only horizontal)
             this.playerBody.velocity.x = movement.x;
             this.playerBody.velocity.z = movement.z;
+
             this.isMoving = true;
         } else {
-            // Apply friction when not moving
-            this.playerBody.velocity.x *= 0.8;
-            this.playerBody.velocity.z *= 0.8;
+            // Apply strong friction when not moving (only horizontal)
+            this.playerBody.velocity.x *= 0.5;
+            this.playerBody.velocity.z *= 0.5;
             this.isMoving = false;
         }
 
-        // Jumping
-        if (inputs.jump && this.canJump && this.isOnGround) {
-            this.playerBody.velocity.y = this.jumpForce;
-            this.canJump = false;
-            console.log('🦘 Jump!');
-        }
+        // No jumping - just let gravity work naturally, no jump input handling
 
         // Limit maximum speeds
         const maxVel = this.movementSpeed * 1.5;
         this.playerBody.velocity.x = Math.max(-maxVel, Math.min(maxVel, this.playerBody.velocity.x));
         this.playerBody.velocity.z = Math.max(-maxVel, Math.min(maxVel, this.playerBody.velocity.z));
         this.playerBody.velocity.y = Math.max(-20, Math.min(15, this.playerBody.velocity.y));
+    }
+
+    handleFixedYMode(inputs, delta) {
+        // Movement at constant Y height - perfect for exploring/flying around
+        const speed = this.maxSpeed.fly;
+
+        // Get camera's forward and right vectors (flatten to horizontal plane)
+        const forward = new THREE.Vector3();
+        const right = new THREE.Vector3();
+
+        this.camera.getWorldDirection(forward);
+        forward.y = 0; // Remove vertical component
+        forward.normalize();
+
+        right.crossVectors(forward, new THREE.Vector3(0, 1, 0)).normalize();
+
+        // Calculate horizontal movement
+        const movement = new THREE.Vector3();
+
+        if (inputs.moveForward) movement.add(forward);
+        if (inputs.moveBackward) movement.sub(forward);
+        if (inputs.moveRight) movement.add(right);
+        if (inputs.moveLeft) movement.sub(right);
+
+        // Apply horizontal movement
+        if (movement.length() > 0) {
+            movement.normalize();
+            movement.multiplyScalar(speed * delta);
+
+            this.playerBody.position.x += movement.x;
+            this.playerBody.position.z += movement.z;
+        }
+
+        // Always maintain fixed Y height
+        this.playerBody.position.y = this.fixedYHeight - this.playerHeight/2;
+
+        // Allow adjusting the fixed height with space/shift
+        if (inputs.jump) {
+            this.fixedYHeight += speed * delta;
+        }
+        if (inputs.isCrouching) {
+            this.fixedYHeight -= speed * delta;
+        }
     }
 
     handleFlyMode(inputs, delta) {
@@ -384,6 +446,29 @@ class CannonPhysicsManager {
         console.log(`📍 Teleported to: ${position.x.toFixed(1)}, ${position.y.toFixed(1)}, ${position.z.toFixed(1)}`);
     }
 
+    // Emergency recovery function if player falls through floor
+    emergencyRescue() {
+        const currentPos = this.camera.position;
+        const safeHeight = Math.max(0, currentPos.y);
+
+        console.log('🚁 Emergency rescue activated!');
+        console.log(`📍 Current position: Y=${currentPos.y.toFixed(2)}`);
+
+        // Enable fixed Y mode automatically
+        this.fixedYMode = true;
+        this.fixedYHeight = safeHeight;
+        this.playerBody.type = CANNON.Body.KINEMATIC;
+        this.playerBody.velocity.set(0, 0, 0);
+
+        // Teleport to safe height
+        this.playerBody.position.y = this.fixedYHeight - this.playerHeight/2;
+        this.camera.position.y = this.fixedYHeight;
+
+        console.log(`✅ Rescued! Now at Y=${this.fixedYHeight.toFixed(2)}`);
+        console.log('✈️ Fixed Y Mode enabled - use SPACE/SHIFT to adjust height');
+        console.log('💡 Press F10 to disable Fixed Y Mode when ready');
+    }
+
     increaseFear(amount) {
         this.fearLevel = Math.min(100, this.fearLevel + amount);
     }
@@ -423,6 +508,9 @@ class CannonPhysicsManager {
             movementSpeed: this.movementSpeed,
             devMode: this.devMode,
             flyMode: this.flyMode,
+            fixedYMode: this.fixedYMode,
+            fixedYHeight: this.fixedYHeight,
+            physicsDebug: this.debugEnabled,
             canJump: this.canJump
         };
     }
@@ -445,7 +533,100 @@ class CannonPhysicsManager {
         console.log(`🚪 Noclip mode: ${enabled ? 'ON' : 'OFF'}`);
     }
 
+    togglePhysicsDebug() {
+        this.debugEnabled = !this.debugEnabled;
+
+        if (this.debugEnabled) {
+            // Create debug renderer
+            if (!this.debugRenderer) {
+                console.log('💡 Creating simple wireframe physics debugger...');
+                this.createSimpleDebugRenderer();
+            } else {
+                // Show existing renderer
+                if (this.debugRenderer.group) {
+                    this.debugRenderer.group.visible = true;
+                }
+            }
+            console.log('🔍 Physics Debug: ON');
+            console.log(`📊 Showing ${this.world.bodies.length} physics bodies`);
+        } else {
+            // Hide debug renderer
+            if (this.debugRenderer && this.debugRenderer.group) {
+                this.debugRenderer.group.visible = false;
+            }
+            console.log('🔍 Physics Debug: OFF');
+        }
+    }
+
+    createSimpleDebugRenderer() {
+        // Fallback: Simple debug renderer using wireframes
+        const scene = this.camera.parent;
+        if (!scene) return;
+
+        const debugGroup = new THREE.Group();
+        debugGroup.name = 'physics_debug';
+
+        // Create wireframe boxes for all physics bodies
+        for (const body of this.world.bodies) {
+            if (body.shapes.length > 0) {
+                const shape = body.shapes[0];
+
+                let geometry;
+                if (shape.type === CANNON.Shape.types.BOX) {
+                    geometry = new THREE.BoxGeometry(
+                        shape.halfExtents.x * 2,
+                        shape.halfExtents.y * 2,
+                        shape.halfExtents.z * 2
+                    );
+                } else if (shape.type === CANNON.Shape.types.SPHERE) {
+                    geometry = new THREE.SphereGeometry(shape.radius, 8, 8);
+                }
+
+                if (geometry) {
+                    const material = new THREE.MeshBasicMaterial({
+                        color: body === this.playerBody ? 0x00ff00 : 0xff0000,
+                        wireframe: true
+                    });
+                    const mesh = new THREE.Mesh(geometry, material);
+                    mesh.position.copy(body.position);
+                    mesh.quaternion.copy(body.quaternion);
+                    mesh.userData.body = body;
+                    debugGroup.add(mesh);
+                }
+            }
+        }
+
+        scene.add(debugGroup);
+        this.debugRenderer = {
+            group: debugGroup,
+            update: () => {
+                // Update positions of debug meshes
+                debugGroup.children.forEach(mesh => {
+                    if (mesh.userData.body) {
+                        mesh.position.copy(mesh.userData.body.position);
+                        mesh.quaternion.copy(mesh.userData.body.quaternion);
+                    }
+                });
+            }
+        };
+
+        console.log('🔍 Simple Physics Debug Renderer created');
+    }
+
+    setNoclip(enabled) {
+        this.noclipMode = enabled;
+        console.log(`🚪 Noclip mode: ${enabled ? 'ON' : 'OFF'}`);
+    }
+
     dispose() {
+        // Clean up debug renderer
+        if (this.debugRenderer && this.debugRenderer.group) {
+            const scene = this.camera.parent;
+            if (scene) {
+                scene.remove(this.debugRenderer.group);
+            }
+        }
+
         // Clean up physics world
         this.world.removeBody(this.playerBody);
         console.log('🧹 CannonPhysicsManager disposed');
