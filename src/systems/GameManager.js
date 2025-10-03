@@ -48,20 +48,8 @@ class GameManager {
             priority: 2
         });
 
-        // Add sub-objectives based on puzzles
-        for (const room of this.mansion.puzzleRooms) {
-            for (const puzzle of room.puzzles) {
-                this.objectives.push({
-                    id: `puzzle_${room.id}_${puzzle.type}`,
-                    description: puzzle.hint,
-                    completed: false,
-                    type: 'puzzle',
-                    roomId: room.id,
-                    priority: 3,
-                    difficulty: puzzle.difficulty || 1
-                });
-            }
-        }
+        // Note: Puzzles can be added later via addObjective() when discovered
+        // The mansion loader doesn't automatically generate puzzles like the procedural system did
 
         // Add survival objectives
         this.objectives.push({
@@ -317,8 +305,8 @@ class GameManager {
         const minutes = Math.floor(gameTime / 60);
         const seconds = gameTime % 60;
         
-        const currentRoomName = this.currentRoom ? 
-            `${this.currentRoom.type.charAt(0).toUpperCase() + this.currentRoom.type.slice(1)} (Room ${this.currentRoom.id})` : 
+        const currentRoomName = this.currentRoom ?
+            this.currentRoom.name :
             'Unknown Location';
         
         const statusHTML = `
@@ -784,22 +772,22 @@ class GameManager {
     // Room management
     tick(delta) {
         if (this.gameState !== 'playing') return;
-        
+
         // Update current room based on camera position
-        const currentRoom = this.mansion.getRoomAt(this.camera.position);
+        const currentRoom = this.mansion.getCurrentRoom(this.camera.position);
         if (currentRoom && currentRoom !== this.currentRoom) {
             this.onRoomEntered(currentRoom);
             this.previousRoom = this.currentRoom;
             this.currentRoom = currentRoom;
-            this.gameStats.roomsVisited.add(currentRoom.id);
+            this.gameStats.roomsVisited.add(currentRoom.name);
             this.updateUI();
         }
-        
+
         // Update exploration objective
         if (this.gameStats.roomsVisited.size >= 5) {
             this.completeObjective('explore_mansion');
         }
-        
+
         // Survival time tracking
         const survivalTime = (Date.now() - this.gameStats.startTime) / 1000;
         if (survivalTime > 300) { // 5 minutes
@@ -808,78 +796,56 @@ class GameManager {
     }
 
     onRoomEntered(room) {
-        console.log(`🚪 Entered ${room.type} (Room ${room.id})`);
-        
+        console.log(`🚪 Entered ${room.name}`);
+
         // Room-specific events
         this.handleRoomEntry(room);
-        
-        // Show room-specific hints
-        if (room.puzzles.length > 0) {
-            const unsolvedPuzzles = room.puzzles.filter(p => !p.solved);
-            if (unsolvedPuzzles.length > 0) {
-                const puzzle = unsolvedPuzzles[0];
-                this.showHint(`🧩 This ${room.type} contains a puzzle: ${puzzle.hint}`, 6000);
-            }
-        }
-        
+
+        // Note: Puzzles are now handled separately through the PuzzleSystem
+        // Room-specific puzzle detection would go here
+
         // Special room events
         this.triggerRoomSpecialEvents(room);
     }
 
     handleRoomEntry(room) {
-        // Different events based on room type
-        switch (room.type) {
-            case 'entrance':
-                if (!this.gameStats.roomsVisited.has(room.id)) {
-                    this.showHint("You're in the mansion's entrance hall. Look for clues about how to escape.");
-                }
-                break;
-                
-            case 'library':
-                if (!this.gameStats.roomsVisited.has(room.id)) {
-                    this.showHint("Ancient books line the walls. Some might contain important information.");
-                }
-                break;
-                
-            case 'kitchen':
-                if (!this.gameStats.roomsVisited.has(room.id)) {
-                    this.showHint("The kitchen feels cold and unused. Check the cabinets and drawers.");
-                }
-                break;
-                
-            case 'bedroom':
-                if (!this.gameStats.roomsVisited.has(room.id)) {
-                    this.showHint("Someone once slept here. Search under the bed and in the dresser.");
-                }
-                break;
-                
-            case 'study':
-                if (!this.gameStats.roomsVisited.has(room.id)) {
-                    this.showHint("This study might contain the mansion owner's personal documents.");
-                }
-                break;
-                
-            case 'attic':
-                if (!this.gameStats.roomsVisited.has(room.id)) {
-                    this.showHint("The attic is full of old memories... and perhaps old secrets.");
-                }
-                break;
+        // Show hint when entering a room for the first time
+        if (!this.gameStats.roomsVisited.has(room.name)) {
+            // Extract room type from name (lowercase)
+            const roomType = room.name.toLowerCase();
+
+            if (roomType.includes('entrance')) {
+                this.showHint("You're in the mansion's entrance hall. Look for clues about how to escape.");
+            } else if (roomType.includes('library')) {
+                this.showHint("Ancient books line the walls. Some might contain important information.");
+            } else if (roomType.includes('kitchen')) {
+                this.showHint("The kitchen feels cold and unused. Check the cabinets and drawers.");
+            } else if (roomType.includes('bedroom')) {
+                this.showHint("Someone once slept here. Search under the bed and in the dresser.");
+            } else if (roomType.includes('study')) {
+                this.showHint("This study might contain the mansion owner's personal documents.");
+            } else if (roomType.includes('attic')) {
+                this.showHint("The attic is full of old memories... and perhaps old secrets.");
+            } else {
+                this.showHint(`Entered: ${room.name}`);
+            }
         }
     }
 
     triggerRoomSpecialEvents(room) {
         // Random room events based on room type and visit count
         const visitCount = this.gameStats.roomsVisited.size;
-        
+        const roomType = room.name.toLowerCase();
+
         if (visitCount > 10 && Math.random() < 0.1) {
             this.showHint("You feel like you're being watched...", 3000);
         }
-        
-        if (room.type === 'attic' && Math.random() < 0.2) {
+
+        if (roomType.includes('attic') && Math.random() < 0.2) {
             this.showHint("You hear creaking floorboards above... but you're already in the attic.", 4000);
         }
-        
-        if (room.type === 'basement' && Math.random() < 0.3) {
+
+        if (roomType.includes('basement') && Math.random() < 0.3) {
             this.showHint("The temperature drops noticeably. Your breath becomes visible.", 3000);
         }
     }

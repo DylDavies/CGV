@@ -1,11 +1,12 @@
 // src/components/Player/PlayerControls.js - Enhanced with dev mode
 
-import * as THREE from 'https://unpkg.com/three@0.127.0/build/three.module.js';
-import { PointerLockControls } from 'https://unpkg.com/three@0.127.0/examples/jsm/controls/PointerLockControls.js';
+import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.127.0/build/three.module.js';
+import { PointerLockControls } from 'https://cdn.jsdelivr.net/npm/three@0.127.0/examples/jsm/controls/PointerLockControls.js';
 
 class FirstPersonControls {
-    constructor(camera, domElement, physicsManager = null, puzzles = {}) {
+   constructor(camera, domElement, physicsManager = null, puzzles = {}, monsterAI = null) {
         this.camera = camera;
+        this.monsterAI = monsterAI; 
         this.controls = new PointerLockControls(camera, domElement);
         this.domElement = domElement;
         this.physicsManager = physicsManager;
@@ -90,11 +91,12 @@ class FirstPersonControls {
                 case 'KeyE':
                     this.flyDown = true;
                     break;
-                case 'Escape':
-                    if (this.controls.isLocked) {
-                        this.controls.unlock();
-                    }
-                    break;
+                // ESC is now handled by PauseMenu, don't unlock here
+                // case 'Escape':
+                //     if (this.controls.isLocked) {
+                //         this.controls.unlock();
+                //     }
+                //     break;
                 case 'F11':
                     event.preventDefault();
                     this.toggleStats();
@@ -105,7 +107,21 @@ class FirstPersonControls {
                         this.puzzles.colorPuzzle.show(4);
                     }
                     break;
-            }
+                case 'KeyG': 
+                    if (this.monsterAI) {
+                        this.monsterAI.cycleAggression();
+                        console.log("clicked");
+                    }
+                    else{
+                        console.log("no monster AI to change")
+                    }
+                    break;
+                case 'KeyH': // NEW: Toggle for path visualization
+                    if (this.monsterAI) {
+                        this.monsterAI.togglePathVisualization();
+                    }
+                    break;
+                }
         };
 
         const onKeyUp = (event) => {
@@ -405,3 +421,4 @@ class FirstPersonControls {
 }
 
 export { FirstPersonControls };
+
