@@ -75,7 +75,7 @@ class GameManager {
             gameMenu: document.createElement('div')
         };
 
-        // Main UI container
+        // Main UI container - HIDDEN (UI elements removed per user request)
         ui.container.style.cssText = `
             position: fixed;
             top: 20px;
@@ -86,9 +86,10 @@ class GameManager {
             font-size: 14px;
             pointer-events: none;
             text-shadow: 2px 2px 4px rgba(0,0,0,0.8);
+            display: none;
         `;
 
-        // Inventory UI
+        // Inventory UI - HIDDEN (replaced with popup on 'I' key)
         ui.inventory.style.cssText = `
             background: rgba(0,0,0,0.8);
             padding: 15px;
@@ -97,9 +98,10 @@ class GameManager {
             border-radius: 8px;
             backdrop-filter: blur(5px);
             max-width: 250px;
+            display: none;
         `;
 
-        // Objectives UI
+        // Objectives UI - HIDDEN (per user request)
         ui.objectives.style.cssText = `
             background: rgba(0,0,0,0.8);
             padding: 15px;
@@ -110,9 +112,10 @@ class GameManager {
             max-width: 300px;
             max-height: 300px;
             overflow-y: auto;
+            display: none;
         `;
 
-        // Status UI
+        // Status UI - HIDDEN (per user request)
         ui.status.style.cssText = `
             background: rgba(0,0,0,0.8);
             padding: 10px;
@@ -120,6 +123,7 @@ class GameManager {
             border-radius: 8px;
             backdrop-filter: blur(5px);
             max-width: 250px;
+            display: none;
         `;
 
         // Hint UI
@@ -215,7 +219,119 @@ class GameManager {
         document.body.appendChild(ui.interaction);
         document.body.appendChild(ui.gameMenu);
 
+        // Create inventory popup (shown on 'I' key press)
+        ui.inventoryPopup = this.createInventoryPopup();
+        document.body.appendChild(ui.inventoryPopup);
+
         return ui;
+    }
+
+    createInventoryPopup() {
+        const popup = document.createElement('div');
+        popup.id = 'inventory-popup';
+        popup.style.cssText = `
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: rgba(0,0,0,0.95);
+            padding: 30px;
+            border: 3px solid #888;
+            border-radius: 10px;
+            display: none;
+            pointer-events: auto;
+            z-index: 1500;
+            backdrop-filter: blur(10px);
+            box-shadow: 0 0 30px rgba(0,0,0,0.8);
+            min-width: 400px;
+            max-width: 600px;
+            max-height: 80vh;
+            overflow-y: auto;
+            color: white;
+            font-family: 'Courier New', monospace;
+        `;
+
+        // Set up key listener for 'I' key
+        document.addEventListener('keydown', (e) => {
+            if (e.code === 'KeyI' && this.gameState === 'playing') {
+                e.preventDefault();
+                this.toggleInventoryPopup();
+            }
+        });
+
+        return popup;
+    }
+
+    toggleInventoryPopup() {
+        const isVisible = this.ui.inventoryPopup.style.display === 'block';
+
+        if (isVisible) {
+            this.ui.inventoryPopup.style.display = 'none';
+        } else {
+            this.updateInventoryPopup();
+            this.ui.inventoryPopup.style.display = 'block';
+        }
+    }
+
+    updateInventoryPopup() {
+        const inventoryHTML = `
+            <div style="text-align: center; margin-bottom: 20px;">
+                <h2 style="margin: 0 0 10px 0; color: #ffaa00;">🎒 Inventory</h2>
+                <p style="margin: 0; color: #888; font-size: 12px;">${this.inventory.length}/10 items</p>
+            </div>
+            <hr style="border-color: #444; margin-bottom: 20px;">
+            ${this.inventory.length === 0 ?
+                '<p style="color: #888; font-style: italic; text-align: center; padding: 40px 20px;">Your inventory is empty</p>' :
+                '<div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 15px;">' +
+                this.inventory.map((item, index) =>
+                    `<div class="inventory-item-card" onclick="window.gameManager?.useItem?.(${index})" style="
+                        background: rgba(255,255,255,0.05);
+                        padding: 15px;
+                        border: 2px solid #${this.getItemColor(item.type)};
+                        border-radius: 8px;
+                        cursor: pointer;
+                        transition: all 0.3s ease;
+                        text-align: center;
+                    " onmouseover="this.style.background='rgba(255,255,255,0.1)'; this.style.borderColor='#fff'"
+                       onmouseout="this.style.background='rgba(255,255,255,0.05)'; this.style.borderColor='#${this.getItemColor(item.type)}'">
+                        <div style="font-size: 24px; margin-bottom: 8px;">${this.getItemIcon(item.type)}</div>
+                        <div style="color: #${this.getItemColor(item.type)}; font-weight: bold; margin-bottom: 5px; font-size: 14px;">${item.name}</div>
+                        ${item.quantity && item.quantity > 1 ? `<div style="color: #888; font-size: 11px;">x${item.quantity}</div>` : ''}
+                        ${item.description ? `<div style="color: #aaa; font-size: 10px; margin-top: 5px; line-height: 1.3;">${item.description}</div>` : ''}
+                    </div>`
+                ).join('') + '</div>'
+            }
+            <hr style="border-color: #444; margin: 20px 0;">
+            <div style="text-align: center;">
+                <button onclick="window.gameManager?.toggleInventoryPopup?.()" style="
+                    background: linear-gradient(45deg, #444, #666);
+                    color: white;
+                    border: 1px solid #888;
+                    padding: 10px 30px;
+                    cursor: pointer;
+                    border-radius: 5px;
+                    font-family: 'Courier New', monospace;
+                    font-size: 14px;
+                    transition: all 0.2s ease;
+                " onmouseover="this.style.background='linear-gradient(45deg, #555, #777)'"
+                   onmouseout="this.style.background='linear-gradient(45deg, #444, #666)'">Close (I)</button>
+            </div>
+        `;
+
+        this.ui.inventoryPopup.innerHTML = inventoryHTML;
+    }
+
+    getItemIcon(itemType) {
+        const icons = {
+            'key': '🔑',
+            'scroll': '📜',
+            'tool': '🔧',
+            'weight_object': '⚖️',
+            'symbol': '🔮',
+            'potion': '🧪',
+            'book': '📖'
+        };
+        return icons[itemType] || '📦';
     }
 
     updateUI() {
@@ -537,14 +653,13 @@ class GameManager {
         
         this.gameStats.itemsCollected++;
         this.updateUI();
-        this.showHint(`Added ${item.name} to inventory`, 2000);
-        
-        // Add glow effect to inventory
-        this.ui.inventory.style.boxShadow = '0 0 20px rgba(255, 170, 0, 0.5)';
-        setTimeout(() => {
-            this.ui.inventory.style.boxShadow = 'none';
-        }, 1000);
-        
+        this.showHint(`Added ${item.name} to inventory (Press I to view)`, 2000);
+
+        // Update popup if it's visible
+        if (this.ui.inventoryPopup && this.ui.inventoryPopup.style.display === 'block') {
+            this.updateInventoryPopup();
+        }
+
         return true;
     }
 
@@ -553,6 +668,12 @@ class GameManager {
         if (index !== -1) {
             const removed = this.inventory.splice(index, 1)[0];
             this.updateUI();
+
+            // Update popup if it's visible
+            if (this.ui.inventoryPopup && this.ui.inventoryPopup.style.display === 'block') {
+                this.updateInventoryPopup();
+            }
+
             return removed;
         }
         return null;
@@ -603,7 +724,12 @@ class GameManager {
         // Remove potion from inventory
         this.inventory.splice(itemIndex, 1);
         this.updateUI();
-        
+
+        // Update popup if it's visible
+        if (this.ui.inventoryPopup && this.ui.inventoryPopup.style.display === 'block') {
+            this.updateInventoryPopup();
+        }
+
         // Apply potion effects
         switch (potion.effect) {
             case 'healing':

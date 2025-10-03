@@ -1,11 +1,11 @@
 export class PuzzleTimer {
-    constructor(duration, onTick, onEnd) {
+    constructor(duration, onTick, onEnd, elementId = 'timer-value') { // Default to old ID
         this.duration = duration;
         this.onTick = onTick;
         this.onEnd = onEnd;
         this.timeRemaining = duration;
         this.timerInterval = null; 
-        this.timerValueElement = document.getElementById('timer-value');
+        this.timerValueElement = document.getElementById(elementId); // Use the provided ID
     }
 
     start() {

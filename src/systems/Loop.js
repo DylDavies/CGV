@@ -16,13 +16,21 @@ class Loop {
         this.stats.begin();
 
       // Get the time since the last frame
-      const delta = clock.getDelta();
+      let delta = clock.getDelta();
+
+      // Cap delta to prevent physics issues when tab is inactive
+      // Max delta of 0.1s (equivalent to 10 FPS minimum)
+      const maxDelta = 0.1;
+      if (delta > maxDelta) {
+        console.warn(`⚠️ Large delta detected (${delta.toFixed(3)}s), capping to ${maxDelta}s to prevent physics issues`);
+        delta = maxDelta;
+      }
 
       // Call the tick method for each object in the updatables array
       for (const object of this.updatables) {
         object.tick(delta);
       }
-      
+
       // Render the scene
       this.renderer.render(this.scene, this.camera);
 

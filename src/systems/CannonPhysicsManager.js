@@ -11,7 +11,10 @@ class CannonPhysicsManager {
         // Create Cannon.js world
         this.world = new CANNON.World();
         this.world.gravity.set(0, -15, 0); // Gravity pointing down
-        this.world.broadphase = new CANNON.NaiveBroadphase(); // Simple collision detection
+        this.world.broadphase = new CANNON.SAPBroadphase(this.world); // Simple collision detection
+
+        this.world.allowSleep = true;
+        this.world.solver.iterations = 5;
 
         // Player physics body - using a sphere for simplicity
         this.playerRadius = 0.5;
@@ -32,6 +35,8 @@ class CannonPhysicsManager {
             this.camera.position.y - this.playerHeight/2,
             this.camera.position.z
         );
+
+        this.playerBody.allowSleep = false;
 
         // Add player to world
         this.world.addBody(this.playerBody);
@@ -92,6 +97,13 @@ class CannonPhysicsManager {
             lastShake: null
         };
 
+        // Debug spawn freeze
+        this.spawnFrozen = false;
+
+        // Physics stabilization after teleport
+        this.physicsStabilizing = false;
+        this.stabilizationTimer = 0;
+
         this.setupDevControls();
         console.log('🔧 CannonPhysicsManager initialized');
     }
@@ -110,6 +122,22 @@ class CannonPhysicsManager {
 
     setupDevControls() {
         document.addEventListener('keydown', (e) => {
+            // Toggle spawn freeze with F8
+            if (e.code === 'F8') {
+                this.spawnFrozen = !this.spawnFrozen;
+
+                if (this.spawnFrozen) {
+                    this.playerBody.type = CANNON.Body.KINEMATIC;
+                    this.playerBody.velocity.set(0, 0, 0);
+                    console.log('🔒 SPAWN FROZEN - Position locked for debugging');
+                    console.log(`📍 Current position: X=${this.camera.position.x.toFixed(2)}, Y=${this.camera.position.y.toFixed(2)}, Z=${this.camera.position.z.toFixed(2)}`);
+                    console.log('💡 Press F8 again to unfreeze');
+                } else {
+                    this.playerBody.type = CANNON.Body.DYNAMIC;
+                    console.log('🔓 SPAWN UNFROZEN - Physics enabled');
+                }
+            }
+
             // Toggle dev mode with F9
             if (e.code === 'F9') {
                 this.devMode = !this.devMode;
@@ -119,6 +147,7 @@ class CannonPhysicsManager {
                 // Show dev mode help
                 if (this.devMode) {
                     console.log('🔧 Dev Mode Controls:');
+                    console.log('  F8 - Toggle Spawn Freeze (lock position for debugging)');
                     console.log('  F10 - Toggle Fixed Y Mode (constant height flying)');
                     console.log('  F11 - Toggle Physics Debug Renderer');
                 }
@@ -159,8 +188,39 @@ class CannonPhysicsManager {
     tick(delta, inputs) {
         const safeInputs = inputs || {};
 
+        // If spawn frozen, skip all physics
+        if (this.spawnFrozen) {
+            return;
+        }
+
+        // Handle physics stabilization period after teleport
+        if (this.physicsStabilizing) {
+            this.stabilizationTimer -= delta;
+
+            if (this.stabilizationTimer <= 0) {
+                // Stabilization complete, re-enable physics
+                this.playerBody.type = CANNON.Body.DYNAMIC;
+                this.physicsStabilizing = false;
+                console.log('✅ Physics stabilization complete, physics enabled');
+            } else {
+                // Skip physics entirely during stabilization - don't even step the world
+                // This prevents any collision calculations during the freeze period
+                return;
+            }
+        }
+
         // Step the physics world
         this.world.step(delta);
+
+        // Check for NaN before movement
+        if (isNaN(this.playerBody.position.x) || isNaN(this.playerBody.position.y) || isNaN(this.playerBody.position.z)) {
+            console.error('❌ CRITICAL: Player body position is NaN before movement!');
+            console.error('Position:', this.playerBody.position);
+            console.error('Velocity:', this.playerBody.velocity);
+            // Reset to safe position
+            this.playerBody.position.set(0, 2, 0);
+            this.playerBody.velocity.set(0, 0, 0);
+        }
 
         if (this.noclipMode) {
             this.handleNoclipMode(safeInputs, delta);
@@ -170,6 +230,16 @@ class CannonPhysicsManager {
             this.handleFlyMode(safeInputs, delta);
         } else {
             this.handleNormalMovement(safeInputs, delta);
+        }
+
+        // Check for NaN after movement
+        if (isNaN(this.playerBody.position.x) || isNaN(this.playerBody.position.y) || isNaN(this.playerBody.position.z)) {
+            console.error('❌ CRITICAL: Player body position is NaN after movement!');
+            console.error('Position:', this.playerBody.position);
+            console.error('Velocity:', this.playerBody.velocity);
+            // Reset to safe position
+            this.playerBody.position.set(0, 2, 0);
+            this.playerBody.velocity.set(0, 0, 0);
         }
 
         // Update camera position based on physics body
@@ -429,6 +499,23 @@ class CannonPhysicsManager {
 
     // Create a static box body (for walls, floors)
     createBoxBody(position, size) {
+        // Validate inputs
+        if (isNaN(position.x) || isNaN(position.y) || isNaN(position.z)) {
+            console.error('❌ Cannot create box body: Invalid position (NaN)', position);
+            return null;
+        }
+        if (isNaN(size.x) || isNaN(size.y) || isNaN(size.z)) {
+            console.error('❌ Cannot create box body: Invalid size (NaN)', size);
+            return null;
+        }
+
+        // Skip flat objects (decals, carpets, etc.) - they have one dimension that's too small
+        const minThickness = 0.01;
+        if (size.x < minThickness || size.y < minThickness || size.z < minThickness) {
+            // Silently skip - these are decorative flat objects
+            return null;
+        }
+
         const shape = new CANNON.Box(new CANNON.Vec3(size.x/2, size.y/2, size.z/2));
         const body = new CANNON.Body({
             mass: 0, // Static body
@@ -440,10 +527,38 @@ class CannonPhysicsManager {
     }
 
     teleportTo(position) {
+        // Validate input position
+        if (isNaN(position.x) || isNaN(position.y) || isNaN(position.z)) {
+            console.error('❌ Cannot teleport: Invalid position (NaN)');
+            return;
+        }
+
+        // Freeze physics temporarily to let collision system stabilize
+        this.playerBody.type = CANNON.Body.KINEMATIC;
+
         this.playerBody.position.set(position.x, position.y - this.playerHeight/2, position.z);
         this.playerBody.velocity.set(0, 0, 0);
+        this.playerBody.angularVelocity.set(0, 0, 0);
+        this.playerBody.force.set(0, 0, 0);
+        this.playerBody.torque.set(0, 0, 0);
+
+        // Verify the teleport worked
+        if (isNaN(this.playerBody.position.x) || isNaN(this.playerBody.position.y) || isNaN(this.playerBody.position.z)) {
+            console.error('❌ Teleport failed: Player body position is NaN after setting!');
+            console.error('Attempted position:', position);
+            console.error('Player body:', this.playerBody.position);
+            return;
+        }
+
         this.syncCameraToPhysicsBody();
+
+        // Start stabilization period (50ms freeze to let physics settle)
+        this.physicsStabilizing = true;
+        this.stabilizationTimer = 0.05; // 50ms
+
         console.log(`📍 Teleported to: ${position.x.toFixed(1)}, ${position.y.toFixed(1)}, ${position.z.toFixed(1)}`);
+        console.log(`📍 Player body at: ${this.playerBody.position.x.toFixed(1)}, ${this.playerBody.position.y.toFixed(1)}, ${this.playerBody.position.z.toFixed(1)}`);
+        console.log(`⏸️ Physics stabilizing for 50ms...`);
     }
 
     // Emergency recovery function if player falls through floor

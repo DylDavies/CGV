@@ -11,7 +11,8 @@ class PauseMenu {
 
         // Settings
         this.settings = {
-            antialiasing: false // Default off for performance
+            antialiasing: false, // Default off for performance
+            quality: 'medium' // low, medium, high
         };
 
         this.createMenu();
@@ -78,6 +79,24 @@ class PauseMenu {
 
                 <div id="video-tab" class="tab-content" style="display: none;">
                     <h2 style="margin-bottom: 15px;">Graphics Settings</h2>
+
+                    <!-- Quality Preset -->
+                    <div style="background: rgba(0,0,0,0.3); padding: 15px; margin-bottom: 15px; text-align: left; max-width: 400px; margin: 0 auto 15px auto;">
+                        <label style="display: block; font-size: 16px; margin-bottom: 10px;">
+                            <span style="font-weight: bold;">Quality Preset</span>
+                        </label>
+                        <select id="quality-select" style="width: 100%; padding: 10px; background: #222; color: #fff; border: 1px solid #555; font-size: 14px; font-family: 'Courier New', monospace; cursor: pointer;">
+                            <option value="low">Low (Minimum)</option>
+                            <option value="medium" selected>Medium (Balanced)</option>
+                            <option value="high">High (Recommended)</option>
+                            <option value="ultra">Ultra (Maximum)</option>
+                        </select>
+                        <p style="margin: 8px 0 0 0; font-size: 12px; color: #aaa;">
+                            Adjusts particles, lights, and effects
+                        </p>
+                    </div>
+
+                    <!-- Anti-aliasing -->
                     <div style="background: rgba(0,0,0,0.3); padding: 15px; margin-bottom: 15px; text-align: left; max-width: 400px; margin: 0 auto 15px auto;">
                         <label style="display: flex; align-items: center; cursor: pointer; font-size: 16px;">
                             <input type="checkbox" id="antialiasing-toggle" style="margin-right: 10px; width: 20px; height: 20px; cursor: pointer;">
@@ -145,6 +164,15 @@ class PauseMenu {
         document.getElementById('resume-btn').addEventListener('click', () => this.hide());
         document.getElementById('restart-btn').addEventListener('click', () => this.restart());
 
+        // Quality preset selector
+        const qualitySelect = document.getElementById('quality-select');
+        qualitySelect.value = this.settings.quality;
+        qualitySelect.addEventListener('change', (e) => {
+            this.settings.quality = e.target.value;
+            this.saveSettings();
+            this.applyQualitySettings();
+        });
+
         // Anti-aliasing toggle
         const aaToggle = document.getElementById('antialiasing-toggle');
         aaToggle.checked = this.settings.antialiasing;
@@ -162,7 +190,22 @@ class PauseMenu {
         document.addEventListener('keydown', (e) => {
             if (e.code === 'Escape') {
                 e.preventDefault();
-                this.toggle();
+                e.stopPropagation();
+
+                // If pointer is locked, unlock it first and show pause menu
+                if (document.pointerLockElement) {
+                    document.exitPointerLock();
+                }
+
+                this.show();
+            }
+        });
+
+        // Handle pointer lock changes - if unlocked outside of pause menu, relock
+        document.addEventListener('pointerlockchange', () => {
+            if (!document.pointerLockElement && !this.isPaused) {
+                // Pointer was unlocked but we're not paused - might be accidental ESC
+                // Don't auto-relock, let the pause menu handle it
             }
         });
     }
@@ -219,8 +262,13 @@ class PauseMenu {
         const saved = localStorage.getItem('gameSettings');
         if (saved) {
             this.settings = JSON.parse(saved);
+            // Set default quality if not present
+            if (!this.settings.quality) {
+                this.settings.quality = 'medium';
+            }
             document.getElementById('antialiasing-toggle').checked = this.settings.antialiasing;
-            console.log('📂 Settings loaded');
+            document.getElementById('quality-select').value = this.settings.quality;
+            console.log('📂 Settings loaded:', this.settings);
         }
     }
 
@@ -251,8 +299,72 @@ class PauseMenu {
         }
     }
 
+    applyQualitySettings() {
+        console.log(`🎨 Applying ${this.settings.quality} quality settings`);
+
+        // Notify user that quality settings are applied
+        const notification = document.createElement('div');
+        notification.style.cssText = `
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            background: #4a6fa5;
+            color: white;
+            padding: 15px 20px;
+            border-radius: 8px;
+            z-index: 10001;
+            font-family: 'Courier New', monospace;
+        `;
+        notification.textContent = `✅ Quality set to ${this.settings.quality}`;
+        document.body.appendChild(notification);
+
+        setTimeout(() => {
+            notification.remove();
+        }, 2000);
+
+        // Emit custom event that other systems can listen to
+        window.dispatchEvent(new CustomEvent('qualitychange', {
+            detail: { quality: this.settings.quality }
+        }));
+    }
+
     getSettings() {
         return this.settings;
+    }
+
+    getQualityPreset() {
+        const presets = {
+            low: {
+                dustParticles: 150,
+                fireParticles: 15,
+                lampUpdateRate: 4, // Update every 4th frame
+                fireplaceUpdateRate: 4,
+                maxVisibleDistance: 12
+            },
+            medium: {
+                dustParticles: 250,
+                fireParticles: 25,
+                lampUpdateRate: 3, // Update every 3rd frame
+                fireplaceUpdateRate: 3,
+                maxVisibleDistance: 15
+            },
+            high: {
+                dustParticles: 500,
+                fireParticles: 50,
+                lampUpdateRate: 2, // Update every 2nd frame
+                fireplaceUpdateRate: 2,
+                maxVisibleDistance: 20
+            },
+            ultra: {
+                dustParticles: 1000,
+                fireParticles: 100,
+                lampUpdateRate: 1, // Update every frame
+                fireplaceUpdateRate: 1,
+                maxVisibleDistance: 25
+            }
+        };
+
+        return presets[this.settings.quality] || presets.medium;
     }
 
     tick(delta) {

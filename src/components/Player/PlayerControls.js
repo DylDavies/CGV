@@ -4,12 +4,13 @@ import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.127.0/build/three.m
 import { PointerLockControls } from 'https://cdn.jsdelivr.net/npm/three@0.127.0/examples/jsm/controls/PointerLockControls.js';
 
 class FirstPersonControls {
-   constructor(camera, domElement, physicsManager = null, puzzles = {}, monsterAI = null) {
+   constructor(camera, domElement, physicsManager = null, puzzles = {}, monsterAI = null, mansionLoader = null) {
         this.camera = camera;
         this.monsterAI = monsterAI; 
         this.controls = new PointerLockControls(camera, domElement);
         this.domElement = domElement;
         this.physicsManager = physicsManager;
+        this.mansionLoader = mansionLoader;
 
         // Testing puzzle works with new system
         this.puzzles = puzzles;
@@ -59,7 +60,7 @@ class FirstPersonControls {
 
         const onKeyDown = (event) => {
             // Prevent default for movement keys to stop page scrolling - remove KeyP (currently here for testing)
-            if (['KeyW', 'KeyA', 'KeyS', 'KeyD', 'Space', 'ShiftLeft', 'ControlLeft', 'KeyQ', 'KeyE', 'KeyP'].includes(event.code)) {
+            if (['KeyW', 'KeyA', 'KeyS', 'KeyD', 'Space', 'ShiftLeft', 'ControlLeft', 'KeyQ', 'KeyE', 'KeyP', 'KeyL'].includes(event.code)) {
                 event.preventDefault();
             }
 
@@ -105,6 +106,12 @@ class FirstPersonControls {
                     console.log("Triggering color puzzle for testing");
                     if (this.puzzles && this.puzzles.colorPuzzle) {
                         this.puzzles.colorPuzzle.show(4);
+                    }
+                    break;
+                case 'KeyL':
+                    if (this.puzzles && this.puzzles.wirePuzzle) {
+                        console.log("Triggering wire puzzle for testing");
+                        this.puzzles.wirePuzzle.show(1); // Show difficulty 1
                     }
                     break;
                 case 'KeyG': 
@@ -211,13 +218,22 @@ class FirstPersonControls {
 
     updateStats() {
         if (!this.showingStats || !this.physicsManager) return;
-        
+
         const state = this.physicsManager.getDebugInfo();
         const pos = state.position;
         const vel = state.velocity;
-        
+
+        // Get current room from mansion loader
+        let currentRoom = 'Unknown';
+        if (this.mansionLoader) {
+            const room = this.mansionLoader.getCurrentRoom(this.camera.position);
+            currentRoom = room ? room.name : 'Outside';
+        }
+
         this.statsDisplay.innerHTML = `
             <strong>== DEV STATS ==</strong><br>
+            <strong>Location:</strong><br>
+            Room: ${currentRoom}<br>
             <strong>Position:</strong><br>
             X: ${pos.x.toFixed(2)}<br>
             Y: ${pos.y.toFixed(2)}<br>

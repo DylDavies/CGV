@@ -1,7 +1,8 @@
 export class UIManager {
-    constructor() {
+    constructor(audioManager) { 
         this.uiElements = {};
         this.isInitialized = false;
+        this.audioManager = audioManager; 
     }
 
     async initialize() {
@@ -10,9 +11,9 @@ export class UIManager {
         // Load the HTML content into the containers
         await this._loadHTML('src/ui/welcomeScreen/welcome-screen.html', 'welcome-screen-container');
         await this._loadHTML('src/ui/colorPuzzle/color-puzzle.html', 'puzzle-container');
+        await this._loadHTML('src/ui/wirePuzzle/wire-puzzle.html', 'wire-puzzle-container');
         await this._loadHTML('src/ui/creditsScreen/credits-screen.html', 'credits-screen-container');
         await this._loadHTML('src/ui/settingsScreen/settings-screen.html', 'settings-screen-container');
-
 
         // Now that the HTML is loaded, cache the elements inside it
         this.uiElements = {
@@ -20,14 +21,13 @@ export class UIManager {
             playButton: document.getElementById('play-btn'),
             creditsButton: document.getElementById('credits-btn'),
             settingsButton: document.getElementById('settings-btn'),
+            loadingScreen: document.getElementById('loading-screen'),
             loadingContainer: document.getElementById('loading-container'),
             loadingText: document.getElementById('loading-text'),
             puzzleContainer: document.getElementById('puzzle-container'),
-            crosshair: document.getElementById('crosshair'), 
+            wirePuzzleContainer: document.getElementById('wire-puzzle-container'), 
+            crosshair: document.getElementById('crosshair'),
             interactionPrompt: document.getElementById('interaction-prompt'),
-            gameStatsContainer: document.getElementById('game-stats-container'),
-            objectivesContainer: document.getElementById('objectives-container'),
-            inventoryContainer: document.getElementById('inventory-container'),
             creditsScreen: document.getElementById('credits-screen'),
             closeCreditsButton: document.getElementById('close-credits-btn'),
             settingsScreen: document.getElementById('settings-screen'),
@@ -85,10 +85,19 @@ export class UIManager {
 
     // --- Loading and Welcome Screen Methods ---
     showWelcomeScreen(onPlayCallback) {
-        // This check prevents the error if initialization failed
         if (this.uiElements.welcomeScreen && this.uiElements.playButton) {
             this.uiElements.welcomeScreen.style.display = 'flex';
+            
+            // Play main menu music
+            if (this.audioManager) {
+                this.audioManager.playMusic('public/audio/music/main_menu_audio.mp3');
+            }
+
             this.uiElements.playButton.onclick = () => {
+                if (this.audioManager) {
+                    this.audioManager.stopMusic(); // Fade out the music
+                }
+
                 this.uiElements.welcomeScreen.style.display = 'none';
                 this.showLoadingScreen("Initializing...");
                 onPlayCallback();
@@ -99,15 +108,15 @@ export class UIManager {
     }
 
     showLoadingScreen(text) {
-        if (this.uiElements.loadingContainer) {
-            this.uiElements.loadingContainer.style.display = 'flex';
+        if (this.uiElements.loadingScreen) {
+            this.uiElements.loadingScreen.style.display = 'flex';
             this.updateLoadingText(text);
         }
     }
-    
+
     hideLoadingScreen() {
-        if (this.uiElements.loadingContainer) {
-            this.uiElements.loadingContainer.style.display = 'none';
+        if (this.uiElements.loadingScreen) {
+            this.uiElements.loadingScreen.style.display = 'none';
         }
     }
 
@@ -116,7 +125,6 @@ export class UIManager {
             this.uiElements.loadingText.textContent = text;
         }
     }
-
 
     updateObjectives(objectives) {
         if (this.uiElements.objectivesContainer) {

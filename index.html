@@ -12,6 +12,7 @@
     <link rel="stylesheet" href="./src/ui/creditsScreen/credits-screen.css">
     <link rel="stylesheet" href="./src/ui/settingsScreen/settings-screen.css">
     <link rel="stylesheet" href="./src/ui/wirePuzzle/wire-puzzle.css">
+    <link rel="stylesheet" href="./src/ui/wirePuzzle/wire-puzzle.css">
 
 </head>
 
@@ -30,16 +31,15 @@
       
       <div id="puzzle-container" style="display: none;"></div>
       <div id="wire-puzzle-container" style="display: none;"></div>
-      
-      <div id="loading-container" style="display: none;">
-          <div id="loading-text">Loading...</div>
+
+      <!-- Full-screen loading overlay -->
+      <div id="loading-screen" style="display: none;">
+          <div id="loading-container">
+              <div id="loading-bar"></div>
+              <div id="loading-text">Loading...</div>
+          </div>
       </div>
       
-      <div id="game-ui-container" style="display: none;">
-          <div id="game-stats-container"></div>
-          <div id="objectives-container"></div>
-          <div id="inventory-container"></div>
-      </div>
       
       <div id="crosshair"></div>
       <div id="interaction-prompt"></div>

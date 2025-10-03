@@ -1,6 +1,4 @@
-// src/main.js - Refactored and Integrated Version
-
-import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.127.0/build/three.module.js';
+import * as THREE from 'https://unpkg.com/three@0.127.0/build/three.module.js';
 import { createScene } from './components/World/scene.js';
 import { createRenderer } from './systems/Renderer.js';
 import { Resizer } from './systems/Resizer.js';
@@ -18,7 +16,9 @@ import { ImprovedFlashlight } from './components/Player/ImprovedFlashlight.js';
 import { createMonster } from './components/Monster/Monster.js';
 import { MonsterAI } from './components/Monster/MonsterAI.js';
 import { ColorPuzzle } from './puzzles/colorPuzzle/ColorPuzzle.js';
+import { WirePuzzle } from './puzzles/wirePuzzle/WirePuzzle.js';
 import { PauseMenu } from './systems/PauseMenu.js';
+import { AudioManager } from './systems/AudioManager.js'; // <-- IMPORT aUDIO MANAGER
 
 async function main() {
     try {
@@ -27,29 +27,37 @@ async function main() {
 
         // --- Initialize Core & UI Systems ---
         const scene = createScene();
-        const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+        // Camera far plane set to just beyond fog end (25) for better performance
+        const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 50);
         const renderer = createRenderer(canvas);
         const stats = createStats();
         const loop = new Loop(camera, scene, renderer, stats);
         
-        const uiManager = new UIManager();
+        const audioManager = new AudioManager(camera); // <-- INITIALIZE AUDIO MANAGER
+        const uiManager = new UIManager(audioManager); // <-- PASS TO UI MANAGER
         await uiManager.initialize();
 
-        // create and load puzzle for colorPuzzle - can remove later for optimization and only load stuff when needed
+        // --- Initialize Puzzles ---
         const colorPuzzle = new ColorPuzzle();
         await colorPuzzle.loadLevels();
         
+        const wirePuzzle = new WirePuzzle();
+        await wirePuzzle.loadLevels();
+        
         // --- UI Manager loading --- 
-        // show welcome screen
         uiManager.showWelcomeScreen(async () => {
+            // Load saved quality settings first
+            const savedSettings = localStorage.getItem('gameSettings');
+            const settings = savedSettings ? JSON.parse(savedSettings) : { quality: 'medium' };
+
             uiManager.updateLoadingText("Preparing atmosphere...");
-            const atmosphere = new SimpleAtmosphere(scene, camera);
-            
+            const atmosphere = new SimpleAtmosphere(scene, camera, settings.quality || 'medium');
+
             uiManager.updateLoadingText("Setting up physics...");
             const physicsManager = new CannonPhysicsManager(camera);
 
             uiManager.updateLoadingText("Loading mansion model...");
-            const mansionLoader = new MansionLoader(scene, physicsManager);
+            const mansionLoader = new MansionLoader(scene, physicsManager, settings.quality || 'medium');
             await mansionLoader.loadMansion('/blender/Mansion.glb');
             
             // --- NEW: Load the navigation mesh ---
@@ -57,19 +65,26 @@ async function main() {
             await mansionLoader.loadNavMesh(`/blender/NavMesh.glb?v=${Date.now()}`);
 
 
-            // Find entrance room and spawn player
-            const entranceRoom = mansionLoader.getEntranceRoom();
-            
-            if (entranceRoom && isFinite(entranceRoom.center.x)) {
-                const spawnY = 4; 
-                const spawnPos = new THREE.Vector3(entranceRoom.center.x, spawnY, entranceRoom.center.z);
-                camera.position.copy(spawnPos);
-                physicsManager.teleportTo(spawnPos);
-                console.log(`桃 Spawned at entrance: ${entranceRoom.name} at Y=${spawnY.toFixed(2)}`);
+            // Set initial camera position (will teleport properly after loop starts)
+            const doorSpawnPoint = mansionLoader.getEntranceDoorSpawnPoint();
+            let spawnPosition;
+
+            if (doorSpawnPoint) {
+                spawnPosition = doorSpawnPoint;
+                camera.position.copy(doorSpawnPoint);
+                console.log(`📍 Will spawn at entrance door`);
             } else {
-                console.warn("Could not find a valid entrance room. Using default spawn position.");
-                camera.position.set(0, 10, 5);
-                physicsManager.teleportTo(new THREE.Vector3(0, 10, 5));
+                // Fallback to entrance room
+                const entranceRoom = mansionLoader.getEntranceRoom();
+                if (entranceRoom) {
+                    const spawnY = entranceRoom.bounds.max.y + 2.5;
+                    spawnPosition = new THREE.Vector3(entranceRoom.center.x, spawnY, entranceRoom.center.z);
+                    camera.position.copy(spawnPosition);
+                    console.log(`📍 Will spawn at entrance: ${entranceRoom.name} at Y=${spawnY.toFixed(2)}`);
+                } else {
+                    spawnPosition = new THREE.Vector3(0, 10, 5);
+                    camera.position.copy(spawnPosition);
+                }
             }
             scene.add(camera);
 
@@ -83,7 +98,7 @@ async function main() {
             monsterAI.spawn();
             // --- Initialize Player Components ---
             uiManager.updateLoadingText("Preparing your escape...");
-            const controls = new FirstPersonControls(camera, renderer.domElement, physicsManager, { colorPuzzle }, monsterAI);
+            const controls = new FirstPersonControls(camera, renderer.domElement, physicsManager, { colorPuzzle, wirePuzzle }, monsterAI, mansionLoader);
             const flashlight = new ImprovedFlashlight(camera, scene);
             const pauseMenu = new PauseMenu(renderer, controls);
             
@@ -92,9 +107,14 @@ async function main() {
             const puzzleSystem = new PuzzleSystem(scene, gameManager);
             const interactionSystem = new InteractionSystem(camera, scene, gameManager, uiManager);
             
-            controls.puzzles = { colorPuzzle };
+            // Set controls for BOTH puzzles
+            controls.puzzles = { colorPuzzle, wirePuzzle };
             colorPuzzle.setControls(controls);
+            wirePuzzle.setControls(controls);
+
+            // Register BOTH puzzles
             puzzleSystem.registerPuzzle('colorPuzzle', colorPuzzle);
+            puzzleSystem.registerPuzzle('wirePuzzle', wirePuzzle);
 
             // --- Final Setup & Start Loop ---
             new Resizer(camera, renderer);
@@ -113,7 +133,8 @@ async function main() {
             // --- Global Debug ---
            window.gameControls = {
                 camera, scene, flashlight, physicsManager, mansionLoader, gameManager,
-                interactionSystem, puzzleSystem, atmosphere, colorPuzzle, monsterAI,
+                interactionSystem, puzzleSystem, atmosphere, colorPuzzle, wirePuzzle,
+                audioManager, monsterAI,
                 toggleNavMesh: () => {
                     mansionLoader.toggleNavMeshVisualizer();
                 },
@@ -124,17 +145,32 @@ async function main() {
                     mansionLoader.toggleNavMeshNodesVisualizer();
                 }
             };
-            console.log('肌 Debug controls available in `window.gameControls`.');
+            console.log('🔧 Debug controls available in `window.gameControls`.');
             console.log("庁 To toggle the navigation mesh visualizer, type `gameControls.toggleNavMesh()` in the console.");
 
+            uiManager.updateLoadingText("Preparing spawn point...");
 
-            uiManager.updateLoadingText("Ready to play!");
+            // Start the loop but keep loading screen visible
+            loop.start();
+
+            // Wait a moment for the loop to start, then teleport
             setTimeout(() => {
-                uiManager.hideLoadingScreen();
-                document.body.classList.add('game-active');
-                loop.start();
-                controls.lock();
-            }, 1000);
+                physicsManager.teleportTo(spawnPosition);
+                console.log(`📍 Teleported and stabilizing...`);
+
+                // Wait for physics stabilization to complete (100ms total)
+                setTimeout(() => {
+                    uiManager.updateLoadingText("Ready to play!");
+
+                    // Small final delay before revealing the game
+                    setTimeout(() => {
+                        uiManager.hideLoadingScreen();
+                        document.body.classList.add('game-active');
+                        controls.lock();
+                        console.log('✅ Game ready!');
+                    }, 500);
+                }, 100);
+            }, 50);
         });
 
     } catch (error) {

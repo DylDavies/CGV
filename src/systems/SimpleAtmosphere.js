@@ -3,19 +3,56 @@
 import * as THREE from 'https://unpkg.com/three@0.127.0/build/three.module.js';
 
 class SimpleAtmosphere {
-    constructor(scene, camera) {
+    constructor(scene, camera, qualityPreset = 'medium') {
         this.scene = scene;
         this.camera = camera;
         this.dustParticles = null;
 
+        // Set quality preset
+        this.setQualityPreset(qualityPreset);
+
         this.createParticleSystem();
-        console.log('✨ Simple atmosphere initialized (dust particles only)');
+
+        // Listen for quality changes
+        window.addEventListener('qualitychange', (e) => {
+            this.setQualityPreset(e.detail.quality);
+            this.recreateParticleSystem();
+        });
+
+        console.log(`✨ Simple atmosphere initialized (${qualityPreset} quality)`);
+    }
+
+    setQualityPreset(preset) {
+        const presets = {
+            low: { dustParticles: 150 },
+            medium: { dustParticles: 250 },
+            high: { dustParticles: 500 },
+            ultra: { dustParticles: 1000 }
+        };
+
+        const settings = presets[preset] || presets.medium;
+        this.dustParticleCount = settings.dustParticles;
+
+        console.log(`🎨 Quality preset "${preset}" applied to Atmosphere`);
+    }
+
+    recreateParticleSystem() {
+        // Remove old particles
+        if (this.dustParticles) {
+            this.scene.remove(this.dustParticles);
+            this.dustParticles.geometry.dispose();
+            this.dustParticles.material.dispose();
+        }
+
+        // Create new with updated settings
+        this.createParticleSystem();
+        console.log('🔄 Particle system recreated with new quality settings');
     }
 
     createParticleSystem() {
-        // Dust particles floating in the air
+        // Dust particles floating in the air - count based on quality setting
         const dustGeometry = new THREE.BufferGeometry();
-        const dustCount = 1000;
+        const dustCount = this.dustParticleCount;
         const dustPositions = new Float32Array(dustCount * 3);
         const dustVelocities = new Float32Array(dustCount * 3);
 
@@ -37,11 +74,15 @@ class SimpleAtmosphere {
             size: 0.1,
             transparent: true,
             opacity: 0.3,
-            fog: true
+            fog: true,
+            sizeAttenuation: true
         });
 
         this.dustParticles = new THREE.Points(dustGeometry, dustMaterial);
         this.scene.add(this.dustParticles);
+
+        // Performance: Set static draw usage hint
+        dustGeometry.attributes.position.setUsage(THREE.DynamicDrawUsage);
     }
 
     tick(delta) {

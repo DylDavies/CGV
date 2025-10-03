@@ -1,8 +1,13 @@
 export class PuzzleResult {
-    constructor() {
-        this.resultOverlay = document.getElementById('puzzle-result-overlay');
-        this.resultTitle = document.getElementById('result-title');
-        this.resultSubtitle = document.getElementById('result-subtitle');
+    // Allow passing custom IDs for the elements
+    constructor(
+        overlayId = 'puzzle-result-overlay', 
+        titleId = 'result-title', 
+        subtitleId = 'result-subtitle'
+    ) {
+        this.resultOverlay = document.getElementById(overlayId);
+        this.resultTitle = document.getElementById(titleId);
+        this.resultSubtitle = document.getElementById(subtitleId);
     }
 
     show(isSuccess, onComplete) {
@@ -11,7 +16,7 @@ export class PuzzleResult {
         if (isSuccess){
             this.resultOverlay.className = 'success';
             this.resultTitle.textContent = 'Success';
-            this.resultSubtitle.textContent = 'The mechanism clicks open.'; // Placeholder or success
+            this.resultSubtitle.textContent = 'The mechanism clicks open.';
         } 
         else{
             const failureMessages = [

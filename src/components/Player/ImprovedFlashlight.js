@@ -24,20 +24,15 @@ class ImprovedFlashlight {
         // Main spotlight with better settings
         this.light = new THREE.SpotLight(
             0xffffff,    // color
-            2,           // intensity  
+            2,           // intensity
             30,          // distance
             Math.PI / 6, // angle (30 degrees)
             0.2,         // penumbra (softer edges)
             1            // decay
         );
-        
-        // Enable shadows for atmospheric effect
-        this.light.castShadow = true;
-        this.light.shadow.mapSize.width = 1024;
-        this.light.shadow.mapSize.height = 1024;
-        this.light.shadow.camera.near = 0.5;
-        this.light.shadow.camera.far = 30;
-        this.light.shadow.camera.fov = 30;
+
+        // Disable shadows for performance (prevents lag spikes when toggling)
+        this.light.castShadow = false;
         
         // IMPORTANT: Add light to scene, not camera
         this.scene.add(this.light);
@@ -77,13 +72,16 @@ class ImprovedFlashlight {
     }
     
     updateVisibility() {
-        if (this.isOn && this.currentBattery > 0) {
-            this.light.visible = true;
-            this.ambientBoost.visible = true;
+        const shouldBeOn = this.isOn && this.currentBattery > 0;
+
+        // Only update if state changed to avoid unnecessary updates
+        if (this.light.visible !== shouldBeOn) {
+            this.light.visible = shouldBeOn;
+            this.ambientBoost.visible = shouldBeOn;
+        }
+
+        if (shouldBeOn) {
             this.updateIntensity();
-        } else {
-            this.light.visible = false;
-            this.ambientBoost.visible = false;
         }
     }
     
