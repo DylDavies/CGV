@@ -12,12 +12,12 @@ function createScene() {
     scene.fog = new THREE.Fog(0x000510, 5, 25); // Dark fog, starts at 5 units, fully opaque at 25 units
 
     // Add moonlight - very dim ambient light with blue tint
-    const moonAmbient = new THREE.AmbientLight(0x1a1a2e, 0.02); // Very dim blue ambient
+    const moonAmbient = new THREE.AmbientLight(0x1a1a2e, 0.01); // Very dim blue ambient
     moonAmbient.name = 'moonlight_ambient';
     scene.add(moonAmbient);
 
     // Add directional moonlight from above
-    const moonLight = new THREE.DirectionalLight(0x4a6fa5, 0.08); // Pale blue moonlight
+    const moonLight = new THREE.DirectionalLight(0x4a6fa5, 0.04); // Pale blue moonlight
     moonLight.position.set(-20, 50, 30); // Coming from upper left
     moonLight.castShadow = false; // Disable shadows for performance
     moonLight.name = 'moonlight_directional';

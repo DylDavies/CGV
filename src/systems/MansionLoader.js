@@ -432,19 +432,19 @@ processModel() {
 
                 if (nodeName.includes('chandelier')) {
                     lightColor = 0xffaa55;
-                    lightIntensity = 3.0;
-                    lightDistance = 6;
+                    lightIntensity = 2.0;
+                    lightDistance = 4;
                 } else if (nodeName.includes('walllamp')) {
                     lightColor = 0xffbb66;
-                    lightIntensity = 2.5;
-                    lightDistance = 4;
+                    lightIntensity = 1.5;
+                    lightDistance = 3;
                 } else {
                     lightColor = 0xffcc77;
-                    lightIntensity = 2.0;
-                    lightDistance = 5;
+                    lightIntensity = 1.5;
+                    lightDistance = 4;
                 }
 
-                const lampLight = new THREE.PointLight(lightColor, lightIntensity, lightDistance, 2);
+                const lampLight = new THREE.PointLight(lightColor, lightIntensity, lightDistance, 3);
 
                 if (nodeName.includes('walllamp')) {
                     const worldQuaternion = new THREE.Quaternion();
