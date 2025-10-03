@@ -17,7 +17,7 @@ class AudioManager {
         };
 
         this.globalVolume = {
-            music: 0.3,
+            music: 0.9,
             sfx: 0.8,
             ambience: 0.5,
         };
