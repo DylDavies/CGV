@@ -17,6 +17,7 @@ export class UIManager {
         await this._loadHTML('src/ui/creditsScreen/credits-screen.html', 'credits-screen-container');
         await this._loadHTML('src/ui/settingsScreen/settings-screen.html', 'settings-screen-container');
         await this._loadHTML('src/ui/narrative/narrative-elements.html', 'narrative-container');
+        await this._loadHTML('src/ui/objectiveTracker/objective-tracker.html', 'objective-tracker-container');
 
 
         // Now that the HTML is loaded, cache the elements inside it
@@ -37,6 +38,11 @@ export class UIManager {
             closeCreditsButton: document.getElementById('close-credits-btn'),
             settingsScreen: document.getElementById('settings-screen'),
             closeSettingsButton: document.getElementById('close-settings-btn'),
+
+            // Objective Stuff
+            objectiveTracker: document.getElementById('objective-tracker'),
+            objectiveTitle: document.getElementById('objective-title'),
+            objectiveDescription: document.getElementById('objective-description'),
         };
         
         if (!this.uiElements.welcomeScreen || !this.uiElements.playButton) {
@@ -137,6 +143,50 @@ export class UIManager {
         }
         if (text) {
             this.updateLoadingText(text);
+        }
+    }
+
+ /**
+     * The single function responsible for displaying an objective.
+     * It will automatically hide any currently visible objective first.
+     */
+    displayObjective(objectiveData) {
+        const tracker = this.uiElements.objectiveTracker;
+        if (!tracker) return;
+
+        const showNewObjective = () => {
+            // Update the text content
+            tracker.setAttribute('data-objective-id', objectiveData.id); // Store ID for completion check
+            this.uiElements.objectiveTitle.textContent = objectiveData.id.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+            this.uiElements.objectiveDescription.textContent = objectiveData.description;
+
+            // Reset all classes and slide the new objective into view
+            tracker.className = 'new-objective'; // Removes 'hidden' and 'completed'
+            
+            // Remove the 'new-objective' class after the banner animation
+            setTimeout(() => {
+                tracker.classList.remove('new-objective');
+            }, 2500);
+        };
+
+        // If an objective is already visible, hide it first, then show the new one.
+        if (!tracker.classList.contains('hidden')) {
+            tracker.classList.add('hidden');
+            setTimeout(showNewObjective, 600); // Wait for slide-out animation
+        } else {
+            showNewObjective(); // Otherwise, show it immediately
+        }
+    }
+
+    /**
+     * Marks the currently visible objective as complete by adding a line-through.
+     * It no longer hides the objective.
+     */
+    markObjectiveComplete(objectiveId) {
+        const tracker = this.uiElements.objectiveTracker;
+        // Only mark it complete if it's the correct objective currently on screen
+        if (tracker && tracker.getAttribute('data-objective-id') === objectiveId) {
+            tracker.classList.add('completed');
         }
     }
 }

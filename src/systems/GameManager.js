@@ -25,7 +25,9 @@ class GameManager {
         this.currentRoom = null;
         this.previousRoom = null;
         this.gameState = 'playing'; // 'playing', 'won', 'lost', 'paused'
+
         this.objectives = [];
+
         this.gameStats = {
             startTime: Date.now(),
             roomsVisited: new Set(),
@@ -46,8 +48,7 @@ class GameManager {
     }
 
     getRandomAmbientTime() {
-        // Returns a random time between 30 and 90 seconds
-        return Math.random() * 60 + 10;
+        return Math.random() * 60 + 10; // generate random time interval used for ambient sounds
     }
 
     initializeGame() {
@@ -56,51 +57,49 @@ class GameManager {
         setTimeout(() => {
             this.startPhoneRingEvent();
         }, 30000); // 30 seconds
-        
-        // Set up main objective: escape the mansion
-        this.objectives.push({
-            id: 'escape',
-            description: 'Find a way to escape the mansion',
-            completed: false,
-            type: 'main',
-            priority: 1
-        });
-
-        this.objectives.push({
-            id: 'collect_pages',
-            description: 'Find and collect the 6 scattered pages.',
-            completed: false,
-            type: 'puzzle',
-            priority: 2
-        });
-        
-        this.objectives.push({
-            id: 'place_pages',
-            description: 'Place the pages in the correct order on the wall.',
-            completed: false,
-            type: 'puzzle',
-            priority: 1
-        });
-
-        this.objectives.push({
-            id: 'explore_mansion',
-            description: 'Explore the mansion and discover its secrets',
-            completed: false,
-            type: 'secondary',
-            priority: 2
-        });
-
-        this.objectives.push({
-            id: 'survive_horrors',
-            description: 'Survive the supernatural forces in the mansion',
-            completed: false,
-            type: 'secondary',
-            priority: 2
-        });
 
         this.updateUI();
         this.showWelcomeMessage();
     }
+
+    startPhoneRingEvent() {
+        console.log("☎️ Starting phone ring event...");
+        
+        // Trigger narrative events
+        window.gameControls.narrativeManager.triggerEvent('intro.speech_bubble_2');
+        window.gameControls.narrativeManager.triggerEvent('intro.objective_1');
+
+        const soundSourceMesh = this.mansion.getProp('telephone');
+        if (soundSourceMesh) {
+            this.audioManager.playLoopingPositionalSound('phone_ringing', this.audioManager.soundPaths.rotaryPhone, soundSourceMesh, 10);
+        } 
+    }
+    
+    async answerTelephone() {
+        console.log("📞 Answering the telephone...");
+
+        this.audioManager.stopSound('phone_ringing', 500);
+        this.completeObjective('answer_telephone');
+
+        await window.gameControls.narrativeManager.triggerEvent('stage1.phone_ring_speech');
+        await window.gameControls.narrativeManager.triggerEvent('stage1.phone_call_black_screen');
+        
+        // Trigger new objective
+        await window.gameControls.narrativeManager.triggerEvent('stage1.objective_2_explore');
+    }
+    
+    completeObjective(objectiveId) {
+        console.log(`[GameManager] Objective '${objectiveId}' reported as complete.`);
+        // Mark obj as complted
+        this.uiManager.markObjectiveComplete(objectiveId);
+        
+        // You can still have logic that runs after an objective is completed
+        if (objectiveId === 'answer_telephone') {
+            // For example, trigger the next narrative event here.
+            // window.gameControls.narrativeManager.triggerEvent('stage1.next_objective');
+        }
+    }
+
     
     // MODIFIED: This now shows a message when a page is collected
     collectPage(pageId) {
@@ -186,39 +185,6 @@ class GameManager {
         }
     }
 
-    startPhoneRingEvent() {
-        console.log("☎️ Starting phone ring event...");
-        
-        const soundSourceMesh = this.mansion.getProp('study_desk');
-
-        if (soundSourceMesh) {
-            // The rest of the code is the same
-            this.audioManager.playLoopingPositionalSound(
-                'phone_ringing', 
-                this.audioManager.soundPaths.rotaryPhone, 
-                soundSourceMesh, 
-                10 
-            );
-        } 
-        else {
-            console.error("Could not start sound event: 'study_desk' prop not found.");
-        }
-
-        //const phoneMesh = this.mansion.getProp('study_telephone');
-        // if (phoneMesh) {
-        //     // The refDistance of 10 means the sound will be at full volume within 10 units,
-        //     // and then start to fade. Adjust this number to make the falloff faster or slower.
-        //     this.audioManager.playLoopingPositionalSound(
-        //         'phone_ringing', 
-        //         this.audioManager.soundPaths.rotaryPhone, 
-        //         phoneMesh, 
-        //         10 
-        //     );
-        // } else {
-        //     console.error("Could not start phone ring event: 'study_telephone' prop not found in MansionLoader.");
-        // }
-    }
-
     createUI() {
         const ui = {
             container: document.createElement('div'),
@@ -253,7 +219,7 @@ class GameManager {
             border-radius: 8px;
             backdrop-filter: blur(5px);
             max-width: 250px;
-            display: none;
+            display: block;
         `;
 
         // Objectives UI - HIDDEN (per user request)
@@ -537,7 +503,7 @@ class GameManager {
 
     updateUI() {
         this.updateInventoryUI();
-        this.updateObjectivesUI();
+        //this.updateObjectivesUI();
         this.updateStatusUI();
     }
 

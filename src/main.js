@@ -128,8 +128,7 @@ async function main() {
             window.gameControls = {
                 camera, scene, flashlight, physicsManager, mansionLoader, gameManager,
                 interactionSystem, puzzleSystem, atmosphere, colorPuzzle, wirePuzzle,
-                audioManager, monsterAI, narrativeManager,
-                toggleNavMesh: () => mansionLoader.toggleNavMeshVisualizer(),
+                audioManager, monsterAI, narrativeManager, uiManager, 
                 toggleMansion: () => mansionLoader.toggleMansionVisibility(),
                 toggleNavMeshNodes: () => mansionLoader.toggleNavMeshNodesVisualizer()
             };

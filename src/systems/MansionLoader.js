@@ -148,8 +148,9 @@ class MansionLoader {
 
         this.model.traverse((node) => {
             // Find and store specific, named props
-            if (node.name === 'S_Desk003') { // Change this to the telephone 
-                this.props.set('study_desk', node); 
+            if (node.name === 'S_Telephone001') { 
+                this.props.set('telephone', node); 
+                node.userData = { type: 'telephone', interactable: 'true' };
                 console.log(`📞 Found prop: ${node.name}`);
             }
             

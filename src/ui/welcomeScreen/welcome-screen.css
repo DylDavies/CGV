@@ -24,7 +24,13 @@ canvas {
   flex-direction: column;
   justify-content: center;
   align-items: center;
-  background: #000;
+  background-color: #000; /* Fallback color */
+  background-image:
+    linear-gradient(rgba(0, 0, 0, 0.6), rgba(0, 0, 0, 0.6)), 
+    url('/public/images/main-menu-background.PNG'); 
+  background-size: cover;
+  background-position: center;
+  
   text-align: center;
   z-index: 10;
   overflow: hidden;
@@ -116,9 +122,9 @@ body.game-active::after {
 .glitch {
   font-family: 'Creepster', cursive;
   font-size: 6em;
-  color: #f00;
+  color: rgb(255, 255, 255);
   position: relative;
-  text-shadow: 2px 2px #0ff, -2px -2px #f0f;
+  text-shadow: 2px 2px rgb(0, 0, 0), -2px -2px rgb(0, 0, 0);
   animation: glitch 1s infinite;
   z-index: 12;
 }
@@ -139,13 +145,13 @@ body.game-active::after {
 
 .glitch:before {
   left: 2px;
-  text-shadow: -2px 0 #f0f;
+  text-shadow: -2px 0 rgb(0, 0, 0);
   animation: glitch-anim-1 2s infinite linear alternate-reverse;
 }
 
 .glitch:after {
   left: -2px;
-  text-shadow: -2px 0 #0ff;
+  text-shadow: -2px 0 rgb(0, 0, 0);
   animation: glitch-anim-2 3s infinite linear alternate-reverse;
 }
 

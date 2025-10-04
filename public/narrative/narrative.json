@@ -11,20 +11,26 @@
     },
     "speech_bubble_1": {
       "type": "speechBubble",
-      "title": "Inner Monologue",
+      "title": "You",
       "text": "Ugh... my head. Where am I? What happened?",
+      "duration": 5000
+    },
+    "speech_bubble_2": {
+      "type": "speechBubble",
+      "title": "You",
+      "text": "Is that a telephone ringing? Sounds like its coming from the study, maybe I should go check it out",
       "duration": 5000
     },
     "objective_1": {
       "type": "objective",
-      "id": "explore_house",
-      "description": "Explore the house. Find out why you are here."
+      "id": "answer_telephone",
+      "description": "Find the study and answer the telephone"
     }
   },
   "stage1": {
     "phone_ring_speech": {
       "type": "speechBubble",
-      "title": "Inner Monologue",
+      "title": "You",
       "text": "Who… who could that be in a place like this?",
       "duration": 4000
     },
@@ -32,6 +38,23 @@
       "type": "blackScreen",
       "text": "I hope you enjoy the truth you’ve stumbled upon. You wanted a story… now live it.",
       "duration": 5000
+    },
+        "phone_dead_line_1": {
+      "type": "speechBubble",
+      "title": "Anonymous",
+      "text": "...",
+      "duration": 2000
+    },
+    "phone_dead_line_2": {
+      "type": "speechBubble",
+      "title": "You",
+      "text": "Hmmm, the line was cut.",
+      "duration": 4000
+    },
+    "objective_2_explore": {
+      "type": "objective",
+      "id": "explore_mansion",
+      "description": "Explore the mansion and find any clues or information."
     },
     "collect_pages_speech": {
       "type": "speechBubble",
