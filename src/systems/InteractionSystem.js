@@ -132,6 +132,11 @@ class InteractionSystem {
                 prompt: "Place a page",
                 handler: this.handlePageSlotInteraction.bind(this)
             },
+            telephone: {
+                prompt: "[E] Answer Phone",
+                handler: this.handleTelephoneInteraction.bind(this)
+            }
+            ,
             door: {
                 prompt: "Press E to open door",
                 lockedPrompt: "Door is locked - need key",
@@ -344,11 +349,18 @@ class InteractionSystem {
     }
 
     handleTelephoneInteraction(phone, userData) {
+        if (userData.interacted) {
+            // Trigger the new "dead line" dialogue sequence
+            window.gameControls.narrativeManager.triggerEvent('stage1.phone_dead_line_1').then(() => {
+                window.gameControls.narrativeManager.triggerEvent('stage1.phone_dead_line_2');
+            });
+            return;
+        }
         // Stop the ringing sound
-        this.gameManager.audioManager.stopSound('phone_ringing', 500); // 500ms fade out
+        this.gameManager.answerTelephone();
 
-        // Trigger a narrative event
-        window.gameControls.narrativeManager.triggerEvent('stage1.phone_call_black_screen');
+        // Mark the object as interacted to prevent re-triggering
+        userData.interacted = true;
     }
 
     handleDoorInteraction(door, userData) {

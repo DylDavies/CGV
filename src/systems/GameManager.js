@@ -62,19 +62,30 @@ class GameManager {
         this.showWelcomeMessage();
     }
 
-
-
     startPhoneRingEvent() {
         console.log("☎️ Starting phone ring event...");
         
         // Trigger narrative events
-        window.gameControls.narrativeManager.triggerEvent('intro.objective_1');
         window.gameControls.narrativeManager.triggerEvent('intro.speech_bubble_2');
+        window.gameControls.narrativeManager.triggerEvent('intro.objective_1');
 
         const soundSourceMesh = this.mansion.getProp('telephone');
         if (soundSourceMesh) {
             this.audioManager.playLoopingPositionalSound('phone_ringing', this.audioManager.soundPaths.rotaryPhone, soundSourceMesh, 10);
         } 
+    }
+    
+    async answerTelephone() {
+        console.log("📞 Answering the telephone...");
+
+        this.audioManager.stopSound('phone_ringing', 500);
+        this.completeObjective('answer_telephone');
+
+        await window.gameControls.narrativeManager.triggerEvent('stage1.phone_ring_speech');
+        await window.gameControls.narrativeManager.triggerEvent('stage1.phone_call_black_screen');
+        
+        // Trigger new objective
+        await window.gameControls.narrativeManager.triggerEvent('stage1.objective_2_explore');
     }
     
     completeObjective(objectiveId) {

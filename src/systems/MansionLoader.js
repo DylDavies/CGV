@@ -150,6 +150,7 @@ class MansionLoader {
             // Find and store specific, named props
             if (node.name === 'S_Telephone001') { 
                 this.props.set('telephone', node); 
+                node.userData = { type: 'telephone', interactable: 'true' };
                 console.log(`📞 Found prop: ${node.name}`);
             }
             
