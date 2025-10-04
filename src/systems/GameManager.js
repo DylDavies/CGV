@@ -1,15 +1,27 @@
-// src/systems/GameManager.js
+import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.127.0/build/three.module.js';
 
-import * as THREE from 'https://unpkg.com/three@0.127.0/build/three.module.js';
+// Define the data for each page
+const PAGE_DATA = {
+    'S_Page1': { symbol: 'sun', message: 'The first light reveals the path.' },
+    'S_Page2': { symbol: 'moon', message: 'But the second shadow conceals it.' },
+    'S_Page3': { symbol: 'star', message: 'The third star guides the lost.' },
+    'S_Page4': { symbol: 'hand', message: 'A fourth hand offers a false choice.' },
+    'S_Page5': { symbol: 'eye', message: 'The fifth eye sees the truth.' },
+    'S_Page6': { symbol: 'spiral', message: 'And the sixth spiral unwinds destiny.' }
+};
 
 class GameManager {
-    constructor(mansion, camera, scene, uiManager, audioManager) {
+    constructor(mansion, camera, scene, uiManager, audioManager, controls) {
         this.mansion = mansion;
         this.camera = camera;
         this.scene = scene;
         this.uiManager = uiManager;
         this.audioManager = audioManager;
+        this.controls = controls;   // NEW: Store the controls object
         this.inventory = [];
+        this.collectedPages = [];
+        this.placedPages = new Array(6).fill(null); // Tracks pages placed on the wall
+        this.pageSolution = ['S_Page1', 'S_Page3', 'S_Page5', 'S_Page4', 'S_Page6', 'S_Page2'];
         this.currentRoom = null;
         this.previousRoom = null;
         this.gameState = 'playing'; // 'playing', 'won', 'lost', 'paused'
@@ -21,8 +33,11 @@ class GameManager {
             itemsCollected: 0,
             hintsUsed: 0
         };
+
+        this.hintQueue = []; // NEW: A queue to hold pending hints.
+        this.isHintVisible = false; // NEW: A flag to check if a hint is on screen.
+
         
-        // UI elements
         this.ui = this.createUI();
         this.audioEnabled = true;
         this.nextAmbientSoundTime = this.getRandomAmbientTime();
@@ -37,8 +52,7 @@ class GameManager {
 
     initializeGame() {
         console.log("🎮 Initializing game...");
-
-        // Make phone start ringing 30 seconds into the game
+         // Make phone start ringing 30 seconds into the game
         setTimeout(() => {
             this.startPhoneRingEvent();
         }, 30000); // 30 seconds
@@ -52,7 +66,22 @@ class GameManager {
             priority: 1
         });
 
-        // Add exploration objectives
+        this.objectives.push({
+            id: 'collect_pages',
+            description: 'Find and collect the 6 scattered pages.',
+            completed: false,
+            type: 'puzzle',
+            priority: 2
+        });
+        
+        this.objectives.push({
+            id: 'place_pages',
+            description: 'Place the pages in the correct order on the wall.',
+            completed: false,
+            type: 'puzzle',
+            priority: 1
+        });
+
         this.objectives.push({
             id: 'explore_mansion',
             description: 'Explore the mansion and discover its secrets',
@@ -61,10 +90,6 @@ class GameManager {
             priority: 2
         });
 
-        // Note: Puzzles can be added later via addObjective() when discovered
-        // The mansion loader doesn't automatically generate puzzles like the procedural system did
-
-        // Add survival objectives
         this.objectives.push({
             id: 'survive_horrors',
             description: 'Survive the supernatural forces in the mansion',
@@ -75,6 +100,90 @@ class GameManager {
 
         this.updateUI();
         this.showWelcomeMessage();
+    }
+    
+    // MODIFIED: This now shows a message when a page is collected
+    collectPage(pageId) {
+
+        const slotIndex = this.placedPages.indexOf(pageId);
+        if (slotIndex !== -1) {
+            // If it is, call the remove function instead and exit.
+            this.removePageFromSlot(slotIndex);
+            return;
+        }
+
+        if (this.collectedPages.includes(pageId)) {
+            return; 
+        }
+
+        this.collectedPages.push(pageId);
+        const pageData = PAGE_DATA[pageId];
+
+        this.addToInventory({
+            name: `Page (${pageData.symbol})`,
+            type: 'scroll',
+            description: 'A strange page with a unique symbol.',
+            stackable: false,
+            pageId: pageId, // Store the ID for placing it later
+            symbol: pageData.symbol
+        });
+
+        // Show the message on the page
+        this.showHint(pageData.message, 5000);
+
+        if (this.collectedPages.length >= 6) {
+            this.completeObjective('collect_pages');
+            this.showHint("You have all the pages. You should find where they belong.");
+        }
+        this.updateUI();
+    }
+
+    // NEW: Handles placing a page on a wall slot
+    placePage(slotIndex, pageItem) {
+        // Remove the page from inventory
+        this.removeFromInventory(pageItem.name);
+
+        // Record the placement
+        this.placedPages[slotIndex] = pageItem.pageId;
+
+        // Tell MansionLoader to create the visual
+        if (this.mansion) {
+            this.mansion.displayPageOnSlot(slotIndex, pageItem.pageId);
+        }
+
+        this.showHint(`You placed the ${pageItem.symbol} page.`);
+        this.checkPageOrder();
+    }
+
+    // NEW: Checks if the placed pages match the solution
+    checkPageOrder() {
+        if (this.placedPages.includes(null)) {
+            return; // Not all slots are filled yet
+        }
+
+        let isCorrect = true;
+        // for (let i = 0; i < this.pageSolution.length; i++) {
+        //     if (this.placedPages[i] !== this.pageSolution[i]) {
+        //         isCorrect = false;
+        //         break;
+        //     }
+        // }
+
+        if (isCorrect) {
+            this.completeObjective('place_pages');
+            this.showHint("The pages glow in unison... a hidden passage has been revealed!", 8000);
+            
+            // NEW: Loop through the solution and activate the glow on each symbol.
+            if (this.mansion) {
+                this.pageSolution.forEach(pageId => {
+                    this.mansion.activatePageSymbolGlow(pageId);
+                });
+            }
+            
+            // Trigger an event here, like opening a door
+        } else {
+            this.showHint("Nothing happens... the order must be wrong.", 4000);
+        }
     }
 
     startPhoneRingEvent() {
@@ -199,10 +308,14 @@ class GameManager {
             border-radius: 10px;
             display: none;
             pointer-events: auto;
-            z-index: 1001;
+            z-index: 1600;
             backdrop-filter: blur(10px);
             box-shadow: 0 0 30px rgba(0,0,0,0.8);
         `;
+
+        ui.interaction.addEventListener('click', (event) => {
+            event.stopPropagation();
+        });
 
         // Game menu UI
         ui.gameMenu.style.cssText = `
@@ -272,7 +385,7 @@ class GameManager {
         return ui;
     }
 
-    createInventoryPopup() {
+     createInventoryPopup() {
         const popup = document.createElement('div');
         popup.id = 'inventory-popup';
         popup.style.cssText = `
@@ -297,6 +410,12 @@ class GameManager {
             font-family: 'Courier New', monospace;
         `;
 
+        // NEW: Add this event listener to stop clicks from passing through.
+        popup.addEventListener('click', (event) => {
+            event.stopPropagation();
+        });
+
+
         // Set up key listener for 'I' key
         document.addEventListener('keydown', (e) => {
             if (e.code === 'KeyI' && this.gameState === 'playing') {
@@ -313,11 +432,14 @@ class GameManager {
 
         if (isVisible) {
             this.ui.inventoryPopup.style.display = 'none';
+            if (this.controls) this.controls.unfreeze(); // NEW: Unfreeze controls when closing
         } else {
             this.updateInventoryPopup();
             this.ui.inventoryPopup.style.display = 'block';
+            if (this.controls) this.controls.freeze(); // NEW: Freeze controls when opening
         }
     }
+
 
     updateInventoryPopup() {
         const inventoryHTML = `
@@ -330,7 +452,7 @@ class GameManager {
                 '<p style="color: #888; font-style: italic; text-align: center; padding: 40px 20px;">Your inventory is empty</p>' :
                 '<div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 15px;">' +
                 this.inventory.map((item, index) =>
-                    `<div class="inventory-item-card" onclick="window.gameManager?.useItem?.(${index})" style="
+                    `<div class="inventory-item-card" onclick="window.gameControls?.gameManager?.useItem?.(${index})" style="
                         background: rgba(255,255,255,0.05);
                         padding: 15px;
                         border: 2px solid #${this.getItemColor(item.type)};
@@ -349,7 +471,7 @@ class GameManager {
             }
             <hr style="border-color: #444; margin: 20px 0;">
             <div style="text-align: center;">
-                <button onclick="window.gameManager?.toggleInventoryPopup?.()" style="
+                <button onclick="window.gameControls?.gameManager?.toggleInventoryPopup?.()" style="
                     background: linear-gradient(45deg, #444, #666);
                     color: white;
                     border: 1px solid #888;
@@ -378,6 +500,39 @@ class GameManager {
             'book': '📖'
         };
         return icons[itemType] || '📦';
+    }
+     // NEW: Add this function to handle removing a page from a slot.
+    removePageFromSlot(slotIndex) {
+        const pageId = this.placedPages[slotIndex];
+        if (!pageId) return;
+
+        // Find the page item in the inventory to add it back. We don't call collectPage
+        // as it might have unintended side effects like re-completing objectives.
+        const pageData = PAGE_DATA[pageId];
+        this.addToInventory({
+            name: `Page (${pageData.symbol})`,
+            type: 'scroll',
+            description: 'A strange page with a unique symbol.',
+            stackable: false,
+            pageId: pageId,
+            symbol: pageData.symbol
+        });
+
+        // Clear the page from the placed pages array.
+        this.placedPages[slotIndex] = null;
+
+        // Tell the MansionLoader to visually hide the page from the slot.
+        if (this.mansion) {
+            this.mansion.hidePageOnSlot(slotIndex);
+        }
+
+        this.showHint(`You took back the page with the ${this.getPageSymbol(pageId)} symbol.`);
+        this.checkPageOrder(); // Re-check the solution.
+    }
+
+    // NEW: Add this utility function to get a page's symbol for UI prompts.
+    getPageSymbol(pageId) {
+        return PAGE_DATA[pageId] ? PAGE_DATA[pageId].symbol : 'unknown';
     }
 
     updateUI() {
@@ -514,19 +669,37 @@ class GameManager {
         this.showHint("Welcome to the mansion. Find a way to escape... if you can. Press TAB to highlight nearby objects.", 8000);
     }
 
-    showHint(text, duration = 5000) {
-        this.ui.hint.innerHTML = `<p style="margin: 0;">💡 ${text}</p>`;
-        this.ui.hint.style.display = 'block';
-        
-        // Auto-hide after duration
-        setTimeout(() => {
-            this.ui.hint.style.display = 'none';
-        }, duration);
-        
+   showHint(text, duration = 5000) {
+        this.hintQueue.push({ text, duration });
+        if (!this.isHintVisible) {
+            this.processHintQueue();
+        }
         this.gameStats.hintsUsed++;
     }
 
+     processHintQueue() {
+        if (this.hintQueue.length === 0) {
+            this.isHintVisible = false;
+            return;
+        }
+
+        this.isHintVisible = true;
+        const hint = this.hintQueue.shift(); // Get the next hint from the queue
+
+        this.ui.hint.innerHTML = `<p style="margin: 0;">💡 ${hint.text}</p>`;
+        this.ui.hint.style.display = 'block';
+        
+        // After the duration, hide the hint and process the next one.
+        setTimeout(() => {
+            this.ui.hint.style.display = 'none';
+            this.processHintQueue();
+        }, hint.duration);
+    }
+
+
     showInteraction(title, text, options, callback) {
+        if (this.controls) this.controls.freeze();
+
         const optionButtons = options.map((option, index) => 
             `<button onclick="window.gameInteractionCallback(${index})" style="
                 background: linear-gradient(45deg, #444, #666);
@@ -549,6 +722,19 @@ class GameManager {
         `;
         
         this.ui.interaction.style.display = 'block';
+
+        this.ui.interaction.querySelectorAll('.interaction-button').forEach(button => {
+            button.addEventListener('click', () => {
+                const index = parseInt(button.dataset.index);
+
+                // Hide the UI and unfreeze controls BEFORE calling the original function.
+                this.ui.interaction.style.display = 'none';
+                if (this.controls) this.controls.unfreeze();
+
+                // Run the original callback.
+                if (callback) callback(index);
+            });
+        });
 
         // Store callback globally for button access
         window.gameInteractionCallback = (index) => {

@@ -100,9 +100,10 @@ async function main() {
             const flashlight = new ImprovedFlashlight(camera, scene);
             const pauseMenu = new PauseMenu(renderer, controls);
             
-            const gameManager = new GameManager(mansionLoader, camera, scene, uiManager, audioManager);
+            // --- Initialize Game Logic & Puzzle Systems ---
+            const gameManager = new GameManager(mansionLoader, camera, scene, uiManager, audioManager, controls);
             const puzzleSystem = new PuzzleSystem(scene, gameManager);
-            const interactionSystem = new InteractionSystem(camera, scene, gameManager, uiManager);
+            const interactionSystem = new InteractionSystem(camera, scene, gameManager, uiManager, controls);
             
             controls.puzzles = { colorPuzzle, wirePuzzle };
             colorPuzzle.setControls(controls);
