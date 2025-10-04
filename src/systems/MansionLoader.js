@@ -10,6 +10,7 @@ class MansionLoader {
         this.physicsManager = physicsManager;
         this.model = null;
         this.rooms = new Map();
+        this.props = new Map();
         this.physicsBodies = [];
         this.pages = [];
         this.pageSlots = []; // Array to store the puzzle slot objects
@@ -135,6 +136,10 @@ class MansionLoader {
         });
     }
 
+    getProp(propName) {
+        return this.props.get(propName);
+    }
+
     processModel() {
         console.log('🔍 Processing mansion model - optimizing Blender materials...');
         let totalMeshes = 0;
@@ -142,7 +147,14 @@ class MansionLoader {
         const materialMap = new Map();
 
         this.model.traverse((node) => {
+            // Find and store specific, named props
+            if (node.name === 'S_Desk003') { // Change this to the telephone 
+                this.props.set('study_desk', node); 
+                console.log(`📞 Found prop: ${node.name}`);
+            }
+            
             if (node.isMesh) {
+
                 totalMeshes++;
                 node.castShadow = false;
                 node.receiveShadow = false;

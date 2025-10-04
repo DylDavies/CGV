@@ -343,6 +343,14 @@ class InteractionSystem {
         );
     }
 
+    handleTelephoneInteraction(phone, userData) {
+        // Stop the ringing sound
+        this.gameManager.audioManager.stopSound('phone_ringing', 500); // 500ms fade out
+
+        // Trigger a narrative event
+        window.gameControls.narrativeManager.triggerEvent('stage1.phone_call_black_screen');
+    }
+
     handleDoorInteraction(door, userData) {
         const doorData = this.gameManager.mansion.doors.find(d => 
             d.mesh === door || d.mesh === door.parent

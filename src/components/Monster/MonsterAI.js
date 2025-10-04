@@ -3,11 +3,13 @@
 import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.127.0/build/three.module.js';
 
 class MonsterAI {
-    constructor(monsterMesh, playerCamera, pathfinding, scene) {
+    constructor(monsterMesh, playerCamera, pathfinding, scene, audioManager) {
         this.monster = monsterMesh;
         this.player = playerCamera;
         this.pathfinding = pathfinding;
         this.scene = scene;
+        this.audioManager = audioManager;
+        this.audioManager.playHeartbeat();
         
         this.speed = 3; // Adjusted for delta-time based movement
         this.path = [];
@@ -222,6 +224,11 @@ class MonsterAI {
         this.speed = currentState.speed;
         const now = Date.now();
         const distanceToPlayer = this.monster.position.distanceTo(this.player.position);
+
+        // update heartbeat based on the distance to the player
+        if(this.audioManager){
+            this.audioManager.updateHeartbeat(distanceToPlayer, 25);
+        }
 
         switch (this.aggressionLevel) {
             case 1: // Docile
