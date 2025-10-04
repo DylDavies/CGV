@@ -63,6 +63,6 @@ export class NarrativeManager {
         this.showBlackout();
         await this.showNarrativeScreen('You are a journalist. You came here chasing a story… Now the story has you.', 5000);
         await this.playWakeUpEffect(8000);
-        await this.showSpeechBubble('Inner Monologue', 'Ugh... my head. Where am I? What happened?\n(click to look around)', 5000);
+        await this.showSpeechBubble('You', 'Ugh... my head. Where am I? What happened?\n(click to look around)', 5000);
     }
 }
