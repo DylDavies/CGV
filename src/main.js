@@ -38,6 +38,7 @@ async function main() {
         await uiManager.initialize();
 
         const narrativeManager = new NarrativeManager();
+        await narrativeManager.loadNarrative('public/narrative/narrative.json');
 
         // --- Initialize Puzzles ---
         const colorPuzzle = new ColorPuzzle();
