@@ -57,5 +57,21 @@
     50% { opacity: 1.0; }
 }
 
+#blackout-screen {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    background-color: #000;
+    z-index: 9997; 
+    opacity: 1;
+    transition: opacity 0.5s ease-in-out;
+}
+
+#blackout-screen.hidden {
+    opacity: 0;
+    pointer-events: none;
+}
 
 

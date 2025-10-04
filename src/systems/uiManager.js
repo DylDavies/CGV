@@ -16,6 +16,8 @@ export class UIManager {
         await this._loadHTML('src/ui/wirePuzzle/wire-puzzle.html', 'wire-puzzle-container');
         await this._loadHTML('src/ui/creditsScreen/credits-screen.html', 'credits-screen-container');
         await this._loadHTML('src/ui/settingsScreen/settings-screen.html', 'settings-screen-container');
+        await this._loadHTML('src/ui/narrative/narrative-elements.html', 'narrative-container');
+
 
         // Now that the HTML is loaded, cache the elements inside it
         this.uiElements = {
@@ -24,7 +26,6 @@ export class UIManager {
             creditsButton: document.getElementById('credits-btn'),
             settingsButton: document.getElementById('settings-btn'),
             loadingScreen: document.getElementById('loading-screen'),
-            loadingContainer: document.getElementById('loading-container'),
             loadingBar: document.getElementById('loading-bar'),
             monsterIcon: document.getElementById('monster-icon'), 
             loadingText: document.getElementById('loading-text'),
@@ -39,15 +40,15 @@ export class UIManager {
         };
         
         if (!this.uiElements.welcomeScreen || !this.uiElements.playButton) {
-            console.error("UIManager Critical Error: Welcome screen elements (#welcome-screen or #play-btn) not found after loading. Check file paths and the HTML content.");
-            return; // Stop execution to prevent further errors
+            console.error("UIManager Critical Error: Welcome screen elements not found after loading.");
+            return;
         }
         
         this._addMenuEventListeners();
         console.log('✅ UI Manager Initialized');
         this.isInitialized = true;
     }
-
+    
     async _loadHTML(url, targetId) {
         const targetElement = document.getElementById(targetId);
         if (!targetElement) {
@@ -87,20 +88,16 @@ export class UIManager {
         };
     }
 
-    // --- Loading and Welcome Screen Methods ---
     showWelcomeScreen(onPlayCallback) {
         if (this.uiElements.welcomeScreen && this.uiElements.playButton) {
             this.uiElements.welcomeScreen.style.display = 'flex';
             
-            // Play main menu music
             if (this.audioManager) {
-                // *** CHANGED THIS LINE ***
                 this.audioManager.playMainMenuMusic();
             }
 
             this.uiElements.playButton.onclick = () => {
                 if (this.audioManager) {
-                    // *** AND CHANGED THIS LINE ***
                     this.audioManager.stopMainMenuMusic(); 
                 }
 
@@ -140,43 +137,6 @@ export class UIManager {
         }
         if (text) {
             this.updateLoadingText(text);
-        }
-    }
-
-    updateObjectives(objectives) {
-        if (this.uiElements.objectivesContainer) {
-            this.uiElements.objectivesContainer.innerHTML = `<h3>Objectives</h3><p>${objectives.length} active</p>`;
-        }
-    }
-    
-    updateInventory(inventory) {
-        if (this.uiElements.inventoryContainer) {
-            this.uiElements.inventoryContainer.innerHTML = `<h3>Inventory</h3><p>${inventory.length} items</p>`;
-        }
-    }
-
-    showInteractionPrompt(text) {
-        if (this.uiElements.interactionPrompt) {
-            this.uiElements.interactionPrompt.textContent = text;
-            this.uiElements.interactionPrompt.style.display = 'block';
-        }
-    }
-
-    hideInteractionPrompt() {
-        if (this.uiElements.interactionPrompt) {
-            this.uiElements.interactionPrompt.style.display = 'none';
-        }
-    }
-    
-    showPuzzle() {
-        if (this.uiElements.puzzleContainer) {
-            this.uiElements.puzzleContainer.style.display = 'flex';
-        }
-    }
-
-    hidePuzzle() {
-        if (this.uiElements.puzzleContainer) {
-            this.uiElements.puzzleContainer.style.display = 'none';
         }
     }
 }
