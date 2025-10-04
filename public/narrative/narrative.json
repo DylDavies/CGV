@@ -11,14 +11,20 @@
     },
     "speech_bubble_1": {
       "type": "speechBubble",
-      "title": "Inner Monologue",
+      "title": "You",
       "text": "Ugh... my head. Where am I? What happened?",
+      "duration": 5000
+    },
+    "speech_bubble_2": {
+      "type": "speechBubble",
+      "title": "You",
+      "text": "Is that a telephone ringing? Sounds like its coming from the study, maybe I should go check it out",
       "duration": 5000
     },
     "objective_1": {
       "type": "objective",
-      "id": "explore_house",
-      "description": "Explore the house. Find out why you are here."
+      "id": "answer_telephone",
+      "description": "Find the study and answer the telephone"
     }
   },
   "stage1": {

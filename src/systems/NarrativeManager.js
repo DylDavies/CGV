@@ -11,14 +11,10 @@ export class NarrativeManager {
             narrativeText: document.getElementById('narrative-text'),
             blackoutScreen: document.getElementById('blackout-screen'),
         };
-        // This will hold all our story data from the JSON file
         this.narrativeData = null; 
         console.log('📖 NarrativeManager Initialized');
     }
 
-    /**
-     * Loads the narrative data from a JSON file.
-     */
     async loadNarrative(path) {
         try {
             const response = await fetch(path);
@@ -29,13 +25,9 @@ export class NarrativeManager {
         }
     }
 
-    /**
-     * A generic function to trigger any narrative event by its ID from the JSON file.
-     */
     async triggerEvent(eventId) {
         if (!this.narrativeData) return;
 
-        // Find the event data by splitting the ID (e.g., "intro.black_screen_1")
         const keys = eventId.split('.');
         let eventData = this.narrativeData;
         for (const key of keys) {
@@ -46,7 +38,6 @@ export class NarrativeManager {
             }
         }
 
-        // Call the correct function based on the event's "type"
         switch (eventData.type) {
             case 'blackScreen':
                 return this.showNarrativeScreen(eventData.text, eventData.duration);
@@ -54,22 +45,21 @@ export class NarrativeManager {
                 return this.showSpeechBubble(eventData.title, eventData.text, eventData.duration);
             case 'wakeUp':
                 return this.playWakeUpEffect(eventData.duration);
-            
-            // You can add more types here later (e.g., for objectives, warnings)
             case 'objective':
-                // Example: window.gameControls.gameManager.addObjective(eventData);
-                console.log('Triggering objective:', eventData.description);
+                // Directly call the UIManager to display the objective
+                if (window.gameControls && window.gameControls.uiManager) {
+                    console.log('📜 NarrativeManager: Directly telling UIManager to display objective ->', eventData.id);
+                    window.gameControls.uiManager.displayObjective(eventData);
+                } else {
+                    console.error('UIManager not available to display objective.');
+                }
                 break;
             case 'warning':
-                // Example: window.gameControls.uiManager.showWarning(eventData.text);
                  console.log('Triggering warning:', eventData.text);
                 break;
         }
     }
     
-    /**
-     * The intro sequence now just calls events from the JSON data.
-     */
     async playIntroSequence() {
         this.showBlackout();
         await this.triggerEvent('intro.black_screen_1');
@@ -77,8 +67,7 @@ export class NarrativeManager {
         await this.triggerEvent('intro.speech_bubble_1');
     }
 
-    // --- (Keep all your other methods like showBlackout, showNarrativeScreen, etc.) ---
-
+    // (The rest of the file remains the same)
     showBlackout() { this.elements.blackoutScreen.classList.remove('hidden'); }
     hideBlackout() { this.elements.blackoutScreen.classList.add('hidden'); }
 
