@@ -301,6 +301,12 @@ class MonsterAI {
                         this.path = []; 
                     }
                 }
+
+                // If the path is empty, the monster should not be walking.
+                if (this.path.length === 0 && this.animations.walk && this.animations.walk.isRunning()) {
+                    this.animations.walk.stop();
+                }
+                
                 this.followPath(delta);
                 break;
             case 5: // Hostile
