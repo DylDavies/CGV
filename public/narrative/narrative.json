@@ -1,0 +1,65 @@
+{
+  "intro": {
+    "black_screen_1": {
+      "type": "blackScreen",
+      "text": "You are a journalist. You came here chasing a story… Now the story has you.",
+      "duration": 5000
+    },
+    "wake_up": {
+      "type": "wakeUp",
+      "duration": 8000
+    },
+    "speech_bubble_1": {
+      "type": "speechBubble",
+      "title": "Inner Monologue",
+      "text": "Ugh... my head. Where am I? What happened?",
+      "duration": 5000
+    },
+    "objective_1": {
+      "type": "objective",
+      "id": "explore_house",
+      "description": "Explore the house. Find out why you are here."
+    }
+  },
+  "stage1": {
+    "phone_ring_speech": {
+      "type": "speechBubble",
+      "title": "Inner Monologue",
+      "text": "Who… who could that be in a place like this?",
+      "duration": 4000
+    },
+    "phone_call_black_screen": {
+      "type": "blackScreen",
+      "text": "I hope you enjoy the truth you’ve stumbled upon. You wanted a story… now live it.",
+      "duration": 5000
+    },
+    "collect_pages_speech": {
+      "type": "speechBubble",
+      "title": "Inner Monologue",
+      "text": "These… look like research notes. But the symbols don’t make sense.",
+      "duration": 4000
+    },
+    "laptop_puzzle_speech": {
+      "type": "speechBubble",
+      "title": "Inner Monologue",
+      "text": "Maybe this can decode the symbols…",
+      "duration": 4000
+    },
+    "monster_awaken_warning": {
+      "type": "warning",
+      "text": "The creature is now active."
+    }
+  },
+  "endings": {
+    "escape": {
+      "type": "blackScreen",
+      "text": "You came looking for a story. Now you’ve survived one. But the house… waits for the next curious soul.",
+      "duration": 8000
+    },
+    "death": {
+      "type": "blackScreen",
+      "text": "The story ends here. The house claims another victim.",
+      "duration": 8000
+    }
+  }
+}

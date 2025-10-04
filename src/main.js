@@ -18,7 +18,8 @@ import { MonsterAI } from './components/Monster/MonsterAI.js';
 import { ColorPuzzle } from './puzzles/colorPuzzle/ColorPuzzle.js';
 import { WirePuzzle } from './puzzles/wirePuzzle/WirePuzzle.js';
 import { PauseMenu } from './systems/PauseMenu.js';
-import { AudioManager } from './systems/AudioManager.js'; // <-- IMPORT aUDIO MANAGER
+import { AudioManager } from './systems/AudioManager.js';
+import { NarrativeManager } from './systems/NarrativeManager.js';
 
 async function main() {
     try {
@@ -27,15 +28,17 @@ async function main() {
 
         // --- Initialize Core & UI Systems ---
         const scene = createScene();
-        // Camera far plane set to just beyond fog end (25) for better performance
         const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 50);
         const renderer = createRenderer(canvas);
         const stats = createStats();
         const loop = new Loop(camera, scene, renderer, stats);
         
-        const audioManager = new AudioManager(camera); // <-- INITIALIZE AUDIO MANAGER
-        const uiManager = new UIManager(audioManager); // <-- PASS TO UI MANAGER
+        const audioManager = new AudioManager(camera);
+        const uiManager = new UIManager(audioManager);
         await uiManager.initialize();
+
+        const narrativeManager = new NarrativeManager();
+        await narrativeManager.loadNarrative('public/narrative/narrative.json');
 
         // --- Initialize Puzzles ---
         const colorPuzzle = new ColorPuzzle();
@@ -46,26 +49,24 @@ async function main() {
         
         // --- UI Manager loading --- 
         uiManager.showWelcomeScreen(async () => {
-            // Load saved quality settings first
+            
             const savedSettings = localStorage.getItem('gameSettings');
             const settings = savedSettings ? JSON.parse(savedSettings) : { quality: 'medium' };
 
-            uiManager.updateLoadingText("Preparing atmosphere...");
+            uiManager.showLoadingScreen();
+            uiManager.updateLoadingProgress(10, "Preparing atmosphere...");
             const atmosphere = new SimpleAtmosphere(scene, camera, settings.quality || 'medium');
 
-            uiManager.updateLoadingText("Setting up physics...");
+            uiManager.updateLoadingProgress(25, "Setting up physics...");
             const physicsManager = new CannonPhysicsManager(camera);
 
-            uiManager.updateLoadingText("Loading mansion model...");
+            uiManager.updateLoadingProgress(40, "Loading mansion model...");
             const mansionLoader = new MansionLoader(scene, physicsManager, settings.quality || 'medium');
             await mansionLoader.loadMansion('/blender/Mansion.glb');
             
-            // --- NEW: Load the navigation mesh ---
-            uiManager.updateLoadingText("Analyzing walkable areas...");
+            uiManager.updateLoadingProgress(60, "Analyzing walkable areas...");
             await mansionLoader.loadNavMesh(`/blender/NavMesh.glb?v=${Date.now()}`);
 
-
-            // Set initial camera position (will teleport properly after loop starts)
             const doorSpawnPoint = mansionLoader.getEntranceDoorSpawnPoint();
             let spawnPosition;
 
@@ -74,7 +75,6 @@ async function main() {
                 camera.position.copy(doorSpawnPoint);
                 console.log(`📍 Will spawn at entrance door`);
             } else {
-                // Fallback to entrance room
                 const entranceRoom = mansionLoader.getEntranceRoom();
                 if (entranceRoom) {
                     const spawnY = entranceRoom.bounds.max.y + 2.5;
@@ -88,35 +88,29 @@ async function main() {
             }
             scene.add(camera);
 
-            // --- Initialize Monster ---
-            uiManager.updateLoadingText("Waking the beast...");
+            uiManager.updateLoadingProgress(75, "Waking the beast...");
             const monster = await createMonster('/blender/monster.glb');
             scene.add(monster);
 
-            // --- UPDATED: Pass the pathfinding instance to the AI ---
-            const monsterAI = new MonsterAI(monster, camera, mansionLoader.pathfinding, scene);
+            const monsterAI = new MonsterAI(monster, camera, mansionLoader.pathfinding, scene, audioManager);
             monsterAI.spawn();
-            // --- Initialize Player Components ---
-            uiManager.updateLoadingText("Preparing your escape...");
+            
+            uiManager.updateLoadingProgress(85, "Preparing your escape...");
             const controls = new FirstPersonControls(camera, renderer.domElement, physicsManager, { colorPuzzle, wirePuzzle }, monsterAI, mansionLoader);
             const flashlight = new ImprovedFlashlight(camera, scene);
             const pauseMenu = new PauseMenu(renderer, controls);
             
-            // --- Initialize Game Logic & Puzzle Systems ---
-            const gameManager = new GameManager(mansionLoader, camera, scene, uiManager);
+            const gameManager = new GameManager(mansionLoader, camera, scene, uiManager, audioManager);
             const puzzleSystem = new PuzzleSystem(scene, gameManager);
             const interactionSystem = new InteractionSystem(camera, scene, gameManager, uiManager);
             
-            // Set controls for BOTH puzzles
             controls.puzzles = { colorPuzzle, wirePuzzle };
             colorPuzzle.setControls(controls);
             wirePuzzle.setControls(controls);
 
-            // Register BOTH puzzles
             puzzleSystem.registerPuzzle('colorPuzzle', colorPuzzle);
             puzzleSystem.registerPuzzle('wirePuzzle', wirePuzzle);
 
-            // --- Final Setup & Start Loop ---
             new Resizer(camera, renderer);
             loop.updatables.push(
                 controls,
@@ -130,44 +124,36 @@ async function main() {
                 monsterAI 
             );
 
-            // --- Global Debug ---
-           window.gameControls = {
+            window.gameControls = {
                 camera, scene, flashlight, physicsManager, mansionLoader, gameManager,
                 interactionSystem, puzzleSystem, atmosphere, colorPuzzle, wirePuzzle,
-                audioManager, monsterAI,
-                toggleNavMesh: () => {
-                    mansionLoader.toggleNavMeshVisualizer();
-                },
-                toggleMansion: () => {
-                    mansionLoader.toggleMansionVisibility();
-                },
-                toggleNavMeshNodes: () => {
-                    mansionLoader.toggleNavMeshNodesVisualizer();
-                }
+                audioManager, monsterAI, narrativeManager,
+                toggleNavMesh: () => mansionLoader.toggleNavMeshVisualizer(),
+                toggleMansion: () => mansionLoader.toggleMansionVisibility(),
+                toggleNavMeshNodes: () => mansionLoader.toggleNavMeshNodesVisualizer()
             };
             console.log('🔧 Debug controls available in `window.gameControls`.');
             console.log("庁 To toggle the navigation mesh visualizer, type `gameControls.toggleNavMesh()` in the console.");
 
-            uiManager.updateLoadingText("Preparing spawn point...");
+            uiManager.updateLoadingProgress(95, "Preparing spawn point...");
 
-            // Start the loop but keep loading screen visible
             loop.start();
 
-            // Wait a moment for the loop to start, then teleport
             setTimeout(() => {
                 physicsManager.teleportTo(spawnPosition);
                 console.log(`📍 Teleported and stabilizing...`);
 
-                // Wait for physics stabilization to complete (100ms total)
                 setTimeout(() => {
-                    uiManager.updateLoadingText("Ready to play!");
+                     uiManager.updateLoadingProgress(100, "Ready to play!");
 
-                    // Small final delay before revealing the game
-                    setTimeout(() => {
+                    setTimeout(async () => { 
                         uiManager.hideLoadingScreen();
                         document.body.classList.add('game-active');
-                        controls.lock();
-                        console.log('✅ Game ready!');
+
+                        // play narrative sequence
+                        await narrativeManager.playIntroSequence();
+                        
+                        console.log('✅ Game ready! Click to begin.');
                     }, 500);
                 }, 100);
             }, 50);
@@ -184,4 +170,3 @@ async function main() {
 }
 
 main();
-
