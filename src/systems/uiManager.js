@@ -25,6 +25,8 @@ export class UIManager {
             settingsButton: document.getElementById('settings-btn'),
             loadingScreen: document.getElementById('loading-screen'),
             loadingContainer: document.getElementById('loading-container'),
+            loadingBar: document.getElementById('loading-bar'),
+            monsterIcon: document.getElementById('monster-icon'), 
             loadingText: document.getElementById('loading-text'),
             puzzleContainer: document.getElementById('puzzle-container'),
             wirePuzzleContainer: document.getElementById('wire-puzzle-container'), 
@@ -127,6 +129,17 @@ export class UIManager {
     updateLoadingText(text) {
         if (this.uiElements.loadingText) {
             this.uiElements.loadingText.textContent = text;
+        }
+    }
+
+    updateLoadingProgress(percentage, text) {
+        if (this.uiElements.loadingBar && this.uiElements.monsterIcon) {
+            const percent = Math.max(0, Math.min(100, percentage));
+            this.uiElements.loadingBar.style.width = `${percent}%`;
+            this.uiElements.monsterIcon.style.left = `${percent}%`;
+        }
+        if (text) {
+            this.updateLoadingText(text);
         }
     }
 

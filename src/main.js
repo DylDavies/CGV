@@ -50,18 +50,19 @@ async function main() {
             const savedSettings = localStorage.getItem('gameSettings');
             const settings = savedSettings ? JSON.parse(savedSettings) : { quality: 'medium' };
 
-            uiManager.updateLoadingText("Preparing atmosphere...");
+            uiManager.showLoadingScreen();
+            uiManager.updateLoadingProgress(10, "Preparing atmosphere...");
             const atmosphere = new SimpleAtmosphere(scene, camera, settings.quality || 'medium');
 
-            uiManager.updateLoadingText("Setting up physics...");
+            uiManager.updateLoadingProgress(25, "Setting up physics...");
             const physicsManager = new CannonPhysicsManager(camera);
 
-            uiManager.updateLoadingText("Loading mansion model...");
+            uiManager.updateLoadingProgress(40, "Loading mansion model...");
             const mansionLoader = new MansionLoader(scene, physicsManager, settings.quality || 'medium');
             await mansionLoader.loadMansion('/blender/Mansion.glb');
             
             // --- NEW: Load the navigation mesh ---
-            uiManager.updateLoadingText("Analyzing walkable areas...");
+            uiManager.updateLoadingProgress(60, "Analyzing walkable areas...");
             await mansionLoader.loadNavMesh(`/blender/NavMesh.glb?v=${Date.now()}`);
 
 
@@ -89,7 +90,7 @@ async function main() {
             scene.add(camera);
 
             // --- Initialize Monster ---
-            uiManager.updateLoadingText("Waking the beast...");
+            uiManager.updateLoadingProgress(75, "Waking the beast...");
             const monster = await createMonster('/blender/monster.glb');
             scene.add(monster);
 
@@ -97,7 +98,7 @@ async function main() {
             const monsterAI = new MonsterAI(monster, camera, mansionLoader.pathfinding, scene, audioManager);
             monsterAI.spawn();
             // --- Initialize Player Components ---
-            uiManager.updateLoadingText("Preparing your escape...");
+            uiManager.updateLoadingProgress(85, "Preparing your escape...");
             const controls = new FirstPersonControls(camera, renderer.domElement, physicsManager, { colorPuzzle, wirePuzzle }, monsterAI, mansionLoader);
             const flashlight = new ImprovedFlashlight(camera, scene);
             const pauseMenu = new PauseMenu(renderer, controls);
@@ -148,7 +149,7 @@ async function main() {
             console.log('🔧 Debug controls available in `window.gameControls`.');
             console.log("庁 To toggle the navigation mesh visualizer, type `gameControls.toggleNavMesh()` in the console.");
 
-            uiManager.updateLoadingText("Preparing spawn point...");
+            uiManager.updateLoadingProgress(95, "Preparing spawn point...");
 
             // Start the loop but keep loading screen visible
             loop.start();
@@ -160,7 +161,7 @@ async function main() {
 
                 // Wait for physics stabilization to complete (100ms total)
                 setTimeout(() => {
-                    uiManager.updateLoadingText("Ready to play!");
+                     uiManager.updateLoadingProgress(100, "Ready to play!");
 
                     // Small final delay before revealing the game
                     setTimeout(() => {
