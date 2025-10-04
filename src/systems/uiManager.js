@@ -1,3 +1,5 @@
+// src/systems/uiManager.js
+
 export class UIManager {
     constructor(audioManager) { 
         this.uiElements = {};
@@ -90,12 +92,14 @@ export class UIManager {
             
             // Play main menu music
             if (this.audioManager) {
-                this.audioManager.playMusic('public/audio/music/main_menu_audio.mp3');
+                // *** CHANGED THIS LINE ***
+                this.audioManager.playMainMenuMusic();
             }
 
             this.uiElements.playButton.onclick = () => {
                 if (this.audioManager) {
-                    this.audioManager.stopMusic(); // Fade out the music
+                    // *** AND CHANGED THIS LINE ***
+                    this.audioManager.stopMainMenuMusic(); 
                 }
 
                 this.uiElements.welcomeScreen.style.display = 'none';

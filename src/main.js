@@ -94,7 +94,7 @@ async function main() {
             scene.add(monster);
 
             // --- UPDATED: Pass the pathfinding instance to the AI ---
-            const monsterAI = new MonsterAI(monster, camera, mansionLoader.pathfinding, scene);
+            const monsterAI = new MonsterAI(monster, camera, mansionLoader.pathfinding, scene, audioManager);
             monsterAI.spawn();
             // --- Initialize Player Components ---
             uiManager.updateLoadingText("Preparing your escape...");
@@ -103,7 +103,7 @@ async function main() {
             const pauseMenu = new PauseMenu(renderer, controls);
             
             // --- Initialize Game Logic & Puzzle Systems ---
-            const gameManager = new GameManager(mansionLoader, camera, scene, uiManager);
+            const gameManager = new GameManager(mansionLoader, camera, scene, uiManager, audioManager);
             const puzzleSystem = new PuzzleSystem(scene, gameManager);
             const interactionSystem = new InteractionSystem(camera, scene, gameManager, uiManager);
             

@@ -3,10 +3,12 @@
 import * as THREE from 'https://unpkg.com/three@0.127.0/build/three.module.js';
 
 class GameManager {
-    constructor(mansion, camera, scene) {
+    constructor(mansion, camera, scene, uiManager, audioManager) {
         this.mansion = mansion;
         this.camera = camera;
         this.scene = scene;
+        this.uiManager = uiManager;
+        this.audioManager = audioManager;
         this.inventory = [];
         this.currentRoom = null;
         this.previousRoom = null;
@@ -23,8 +25,14 @@ class GameManager {
         // UI elements
         this.ui = this.createUI();
         this.audioEnabled = true;
+        this.nextAmbientSoundTime = this.getRandomAmbientTime();
         
         this.initializeGame();
+    }
+
+    getRandomAmbientTime() {
+        // Returns a random time between 30 and 90 seconds
+        return Math.random() * 60 + 10;
     }
 
     initializeGame() {
@@ -907,6 +915,15 @@ class GameManager {
             this.currentRoom = currentRoom;
             this.gameStats.roomsVisited.add(currentRoom.name);
             this.updateUI();
+        }
+
+        this.nextAmbientSoundTime -= delta;
+        if (this.nextAmbientSoundTime <= 0) {
+            if (this.audioManager) {
+                this.audioManager.playRandomAmbientSound();
+            }
+            // Reset the timer for the next sound
+            this.nextAmbientSoundTime = this.getRandomAmbientTime();
         }
 
         // Update exploration objective
