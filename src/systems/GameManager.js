@@ -37,6 +37,11 @@ class GameManager {
 
     initializeGame() {
         console.log("🎮 Initializing game...");
+
+        // Make phone start ringing 30 seconds into the game
+        setTimeout(() => {
+            this.startPhoneRingEvent();
+        }, 30000); // 30 seconds
         
         // Set up main objective: escape the mansion
         this.objectives.push({
@@ -70,6 +75,39 @@ class GameManager {
 
         this.updateUI();
         this.showWelcomeMessage();
+    }
+
+    startPhoneRingEvent() {
+        console.log("☎️ Starting phone ring event...");
+        
+        const soundSourceMesh = this.mansion.getProp('study_desk');
+
+        if (soundSourceMesh) {
+            // The rest of the code is the same
+            this.audioManager.playLoopingPositionalSound(
+                'phone_ringing', 
+                this.audioManager.soundPaths.rotaryPhone, 
+                soundSourceMesh, 
+                10 
+            );
+        } 
+        else {
+            console.error("Could not start sound event: 'study_desk' prop not found.");
+        }
+
+        //const phoneMesh = this.mansion.getProp('study_telephone');
+        // if (phoneMesh) {
+        //     // The refDistance of 10 means the sound will be at full volume within 10 units,
+        //     // and then start to fade. Adjust this number to make the falloff faster or slower.
+        //     this.audioManager.playLoopingPositionalSound(
+        //         'phone_ringing', 
+        //         this.audioManager.soundPaths.rotaryPhone, 
+        //         phoneMesh, 
+        //         10 
+        //     );
+        // } else {
+        //     console.error("Could not start phone ring event: 'study_telephone' prop not found in MansionLoader.");
+        // }
     }
 
     createUI() {

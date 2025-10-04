@@ -15,6 +15,7 @@ class AudioManager {
         this.soundPaths = {
             mainMenuMusic: 'public/audio/music/main_menu_audio.mp3',
             heartbeat: 'public/audio/sfx/heartbeat.mp3',
+            rotaryPhone: 'public/audio/sfx/rotary-phone-ring.mp3',
             whispering: 'public/audio/ambience/creepy-whispering.mp3', 
             violentDoorSlam: 'public/audio/ambience/violent-door-slam.mp3',
 
@@ -91,6 +92,37 @@ class AudioManager {
     }
 
     // --- Sound Effects ---
+/**
+     * Plays a looping sound attached to a specific 3D object in the scene.
+     * @param {string} soundId - A unique name for this sound instance (e.g., 'phone_ringing').
+     * @param {string} path - The path to the audio file.
+     * @param {THREE.Object3D} mesh - The 3D object to attach the sound to.
+     * @param {number} refDistance - How quickly the sound fades. A larger number means it can be heard from further away.
+     */
+    async playLoopingPositionalSound(soundId, path, mesh, refDistance = 10) {
+        if (this.activeSounds.has(soundId)) {
+            this.stopSound(soundId);
+        }
+
+        try {
+            const sound = await this._loadSound(path, 'sfx', true);
+            
+            const positionalSound = new THREE.PositionalAudio(this.listener);
+            positionalSound.setBuffer(sound.buffer);
+            positionalSound.setLoop(true);
+            positionalSound.setRefDistance(refDistance);
+            positionalSound.setVolume(this.globalVolume.sfx);
+
+            mesh.add(positionalSound);
+            positionalSound.play();
+
+            this.activeSounds.set(soundId, positionalSound);
+            console.log(`🔊 Playing looping positional sound '${soundId}' on object '${mesh.name}'`);
+        } catch (error) {
+            console.error(`Could not play positional sound '${soundId}':`, error);
+        }
+    }
+
 
     async playHeartbeat() {
         if (this.activeSounds.has('heartbeat')) return;
