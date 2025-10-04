@@ -103,9 +103,9 @@ async function main() {
             const pauseMenu = new PauseMenu(renderer, controls);
             
             // --- Initialize Game Logic & Puzzle Systems ---
-            const gameManager = new GameManager(mansionLoader, camera, scene, uiManager);
+            const gameManager = new GameManager(mansionLoader, camera, scene, uiManager, controls);
             const puzzleSystem = new PuzzleSystem(scene, gameManager);
-            const interactionSystem = new InteractionSystem(camera, scene, gameManager, uiManager);
+            const interactionSystem = new InteractionSystem(camera, scene, gameManager, uiManager, controls);
             
             // Set controls for BOTH puzzles
             controls.puzzles = { colorPuzzle, wirePuzzle };

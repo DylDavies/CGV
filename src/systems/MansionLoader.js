@@ -11,6 +11,9 @@ class MansionLoader {
         this.model = null;
         this.rooms = new Map();
         this.physicsBodies = [];
+        this.pages = [];
+        this.pageSlots = []; // Array to store the puzzle slot objects
+        this.glowingSymbols = []; // NEW: An array to hold symbols that need to animate.
 
         // --- NEW: Pathfinding Properties ---
         this.pathfinding = new Pathfinding();
@@ -103,24 +106,18 @@ class MansionLoader {
                     console.log('✅ Mansion model loaded successfully');
                     this.model = gltf.scene;
 
-                    // Process the model (includes material sharing)
                     this.processModel();
+                    this.setupPageEffects();
+                    this.setupPuzzleSlots(); // Find and prepare the puzzle slots on the wall
 
-                    // Add to scene
                     this.scene.add(this.model);
-
-                    // Hide debug/helper objects
                     this.hideDebugObjects();
 
-                    // Generate physics
                     if (this.physicsManager) {
                         this.generatePhysics();
                     }
 
-                    // Setup lamps (WallLamp, Chandelier, etc.)
                     this.setupLamps();
-
-                    // Setup occlusion culling
                     this.setupOcclusionCulling();
 
                     console.log(`🏠 Mansion ready with ${this.rooms.size} rooms and ${this.lamps.length} lamps`);
@@ -138,39 +135,27 @@ class MansionLoader {
         });
     }
 
-processModel() {
+    processModel() {
         console.log('🔍 Processing mansion model - optimizing Blender materials...');
-
         let totalMeshes = 0;
         let sharedMaterials = 0;
-        const materialMap = new Map(); // Track materials by their properties
+        const materialMap = new Map();
 
-        // Performance optimizations while keeping Blender materials
         this.model.traverse((node) => {
             if (node.isMesh) {
                 totalMeshes++;
-
-                // Disable shadows for most objects
                 node.castShadow = false;
                 node.receiveShadow = false;
-
-                // Enable frustum culling
                 node.frustumCulled = true;
 
-                // Optimize existing Blender materials
                 if (node.material) {
                     const materials = Array.isArray(node.material) ? node.material : [node.material];
-                    
                     materials.forEach((material, index) => {
-                        // Create a key based on material properties (color, type, etc.)
                         const key = this.getMaterialKey(material);
-                        
                         if (!materialMap.has(key)) {
-                            // First time seeing this material - optimize it
                             this.optimizeMaterial(material);
                             materialMap.set(key, material);
                         } else {
-                            // We've seen this material before - reuse it!
                             const existingMaterial = materialMap.get(key);
                             if (Array.isArray(node.material)) {
                                 node.material[index] = existingMaterial;
@@ -181,18 +166,10 @@ processModel() {
                         }
                     });
                 }
-
-                // Optimize geometry
                 if (node.geometry) {
                     node.geometry.computeBoundingSphere();
-                    
-                    // Remove unused attributes to save memory
-                    if (node.geometry.attributes.uv2) {
-                        node.geometry.deleteAttribute('uv2');
-                    }
-                    if (node.geometry.attributes.tangent) {
-                        node.geometry.deleteAttribute('tangent');
-                    }
+                    if (node.geometry.attributes.uv2) node.geometry.deleteAttribute('uv2');
+                    if (node.geometry.attributes.tangent) node.geometry.deleteAttribute('tangent');
                 }
             }
         });
@@ -201,56 +178,167 @@ processModel() {
         console.log(`   Total meshes: ${totalMeshes}`);
         console.log(`   Unique materials: ${materialMap.size}`);
         console.log(`   Materials shared: ${sharedMaterials}`);
-        console.log(`   Memory saved: ~${Math.round((sharedMaterials / totalMeshes) * 100)}%`);
 
-        // Store the material map for later use
         this.materialCache = materialMap;
-
-        // Organize meshes by room collections
         this.organizeByRooms();
     }
 
-    optimizeMaterial(material) {
-        // Optimize the material without changing its appearance
-        
-        // Set precision to medium for better performance
-        material.precision = 'mediump';
-        
-        // Disable features that hurt performance if not needed
-        material.flatShading = false;
-        
-        // For MeshStandardMaterial or MeshPhysicalMaterial, reduce expensive features
-        if (material.isMeshStandardMaterial || material.isMeshPhysicalMaterial) {
-            // Reduce roughness/metalness if very high (won't be noticeable)
-            if (material.roughness !== undefined && material.roughness > 0.95) {
-                material.roughness = 1;
+    setupPageEffects() {
+        console.log('✨ Searching for pages to apply glow effect...');
+        this.model.traverse((node) => {
+            if (node.isMesh && node.userData.type === 'page') {
+                console.log(`✨ Found page: ${node.name}. Applying glow effect.`);
+                node.material = node.material.clone();
+                node.material.emissive = new THREE.Color(0xff0000);
+                node.material.emissiveIntensity = 0;
+                this.pages.push(node);
             }
-            if (material.metalness !== undefined && material.metalness < 0.05) {
-                material.metalness = 0;
+        });
+    }
+
+    setupPuzzleSlots() {
+        console.log('🔍 Searching for page puzzle slots...');
+        const slotMaterial = new THREE.MeshBasicMaterial({
+            color: 0x111111,
+            transparent: true,
+            opacity: 0.3,
+            side: THREE.DoubleSide
+        });
+
+        this.model.traverse((node) => {
+            if (node.userData.type === 'page_slot') {
+                console.log(`🔍 Found page slot: ${node.name}`);
+                // Make the placeholder slot visible with a subtle material
+                node.visible = true;
+                node.material = slotMaterial;
+                this.pageSlots[node.userData.slotIndex] = node;
             }
-            
-            // Disable expensive features if not being used
-            if (!material.envMap) {
-                material.envMapIntensity = 0;
-            }
+        });
+    }
+
+    displayPageOnSlot(slotIndex, pageId) {
+        const slotObject = this.pageSlots[slotIndex];
+        if (!slotObject) {
+            console.error(`Could not find page slot with index ${slotIndex}`);
+            return;
+        }
+
+        const pageIndex = this.pages.findIndex(p => p.name === pageId);
+        if (pageIndex === -1) {
+            console.error(`Could not find page object with ID ${pageId} to place. It might have already been placed.`);
+            return;
         }
         
+        const pageObject = this.pages[pageIndex];
+
+        // The page was removed from the scene, re-add it
+        this.scene.add(pageObject);
+
+        // Get the world position and rotation of the slot
+        const worldPosition = new THREE.Vector3();
+        const worldQuaternion = new THREE.Quaternion();
+        slotObject.getWorldPosition(worldPosition);
+        slotObject.getWorldQuaternion(worldQuaternion);
+        
+        // Apply the world coordinates to the page
+        pageObject.position.copy(worldPosition);
+        pageObject.quaternion.copy(worldQuaternion);
+        
+        // Add a small offset along the object's normal to prevent z-fighting with the wall
+        const normal = new THREE.Vector3(0, 0, 1).applyQuaternion(pageObject.quaternion);
+        pageObject.position.add(normal.multiplyScalar(0.01));
+
+        // Make the page visible again and stop its glow
+        pageObject.visible = true;
+        pageObject.material.emissiveIntensity = 0;
+
+        // Remove the page from the animation array so it no longer pulses
+        this.pages.splice(pageIndex, 1);
+
+         // NEW: Add this line to create a reference between the slot and the page object.
+        slotObject.userData.placedPage = pageObject;
+    }
+
+    activatePageSymbolGlow(pageId) {
+        const pageObject = this.scene.getObjectByName(pageId);
+        if (!pageObject) {
+            console.warn(`Could not find page ${pageId} to activate symbol glow.`);
+            return;
+        }
+
+        // Find the symbol mesh using the naming convention (e.g., "S_Page1_Symbol").
+        const symbolName = `${pageId}_Symbol`;
+        const symbolMesh = pageObject.getObjectByName(symbolName);
+
+        if (symbolMesh) {
+            console.log(`✨ Activating glow for symbol: ${symbolName}`);
+            // Clone the material to ensure we're not affecting other objects.
+            symbolMesh.material = symbolMesh.material.clone();
+            
+            // Set the emissive (glow) color to red.
+            symbolMesh.material.emissive.setHex(0xff0000);
+            
+            // Add it to our array for animation in the tick method.
+            this.glowingSymbols.push(symbolMesh);
+        } else {
+            console.warn(`Could not find a symbol mesh named "${symbolName}" inside ${pageId}.`);
+        }
+    }
+
+    tick(delta, cameraPosition) {
+        if (cameraPosition) this.updateOcclusionCulling(cameraPosition);
+        if (this.lampsEnabled) this.updateLampFlickering(delta);
+        if (this.fireplacesEnabled) this.updateFireplaces(delta);
+        this.updatePageGlow();
+
+        // NEW: Add this loop to animate the glowing symbols.
+        // This creates a pulsing effect.
+        if (this.glowingSymbols.length > 0) {
+            const time = Date.now() * 0.005;
+            const pulse = (Math.sin(time) + 1) / 2; // oscillates between 0 and 1
+            this.glowingSymbols.forEach(symbol => {
+                symbol.material.emissiveIntensity = 1 + pulse * 1.5; // Pulse between 1 and 2.5
+            });
+        }
+    }
+
+    hidePageOnSlot(slotIndex) {
+        const slotObject = this.pageSlots[slotIndex];
+        if (slotObject && slotObject.userData.placedPage) {
+            const pageObject = slotObject.userData.placedPage;
+
+            // Make the page object invisible.
+            pageObject.visible = false;
+            
+            // Add it back to the main `pages` array so it can be animated/interacted with again.
+            this.pages.push(pageObject);
+            
+            // Clear the reference from the slot.
+            slotObject.userData.placedPage = null;
+        }
+    }
+
+    optimizeMaterial(material) {
+        material.precision = 'mediump';
+        material.flatShading = false;
+        if (material.isMeshStandardMaterial || material.isMeshPhysicalMaterial) {
+            if (material.roughness !== undefined && material.roughness > 0.95) material.roughness = 1;
+            if (material.metalness !== undefined && material.metalness < 0.05) material.metalness = 0;
+            if (!material.envMap) material.envMapIntensity = 0;
+        }
         material.needsUpdate = true;
     }
 
     getMaterialKey(material) {
-        // Create a unique key for material caching based on its properties
         const props = {
             type: material.type,
             color: material.color ? material.color.getHex() : 0,
             opacity: material.opacity || 1,
             transparent: material.transparent || false,
-            // Include texture references if they exist
             map: material.map ? material.map.uuid : 'none',
             roughness: material.roughness || 0,
             metalness: material.metalness || 0
         };
-        
         return JSON.stringify(props);
     }
 
@@ -296,7 +384,6 @@ processModel() {
             if (node.isMesh) {
                 const nodeName = node.name.toLowerCase();
 
-                // Check parent hierarchy for excluded keywords
                 let shouldSkipByHierarchy = false;
                 let currentNode = node;
                 while (currentNode) {
@@ -344,44 +431,22 @@ processModel() {
 
     hideDebugObjects() {
         console.log('🔍 Scanning for debug/leftover objects and portraits...');
-
         let hiddenCount = 0;
-
         this.model.traverse((node) => {
             if (node.isMesh) {
                 const nodeName = node.name.toLowerCase();
-
-                const isDebugObject =
-                    nodeName.includes('helper') ||
-                    nodeName.includes('debug') ||
-                    nodeName.includes('marker') ||
-                    nodeName.includes('guide') ||
-                    nodeName.includes('gizmo') ||
-                    nodeName.includes('temp');
-
-                const isPortrait =
-                    nodeName.includes('portrait') ||
-                    nodeName.includes('painting') ||
-                    nodeName.includes('picture') ||
-                    nodeName.includes('frame');
-
+                const isDebugObject = nodeName.includes('helper') || nodeName.includes('debug') || nodeName.includes('marker') || nodeName.includes('guide') || nodeName.includes('gizmo') || nodeName.includes('temp');
+                const isPortrait = nodeName.includes('portrait') || nodeName.includes('painting') || nodeName.includes('picture') || nodeName.includes('frame');
                 let hasDebugMaterial = false;
                 if (node.material) {
                     const material = Array.isArray(node.material) ? node.material[0] : node.material;
                     if (material.color) {
                         const color = material.color;
-                        if (color.r > 0.9 && color.g < 0.1 && color.b < 0.1) {
-                            hasDebugMaterial = true;
-                        }
-                        if (color.g > 0.9 && color.r < 0.1 && color.b < 0.1) {
-                            hasDebugMaterial = true;
-                        }
-                        if (color.b > 0.9 && color.r < 0.1 && color.g < 0.1) {
-                            hasDebugMaterial = true;
-                        }
+                        if (color.r > 0.9 && color.g < 0.1 && color.b < 0.1) hasDebugMaterial = true;
+                        if (color.g > 0.9 && color.r < 0.1 && color.b < 0.1) hasDebugMaterial = true;
+                        if (color.b > 0.9 && color.r < 0.1 && color.g < 0.1) hasDebugMaterial = true;
                     }
                 }
-
                 if (isDebugObject || hasDebugMaterial) {
                     node.visible = false;
                     hiddenCount++;
@@ -391,37 +456,23 @@ processModel() {
                 }
             }
         });
-
         console.log(`✅ Hidden ${hiddenCount} debug/helper objects and portraits`);
     }
 
     createPhysicsBodyFromMesh(mesh) {
         mesh.updateMatrixWorld(true);
         const box = new THREE.Box3().setFromObject(mesh);
-
-        if (box.isEmpty()) {
-            return null;
-        }
-
+        if (box.isEmpty()) return null;
         const center = new THREE.Vector3();
         box.getCenter(center);
-
         const size = new THREE.Vector3();
         box.getSize(size);
-
-        if (isNaN(center.x) || isNaN(center.y) || isNaN(center.z)) {
-            return null;
-        }
-
-        if (isNaN(size.x) || isNaN(size.y) || isNaN(size.z)) {
-            return null;
-        }
-
+        if (isNaN(center.x) || isNaN(center.y) || isNaN(center.z)) return null;
+        if (isNaN(size.x) || isNaN(size.y) || isNaN(size.z)) return null;
         const body = this.physicsManager.createBoxBody(center, size);
         return body;
     }
 
-    // --- NEW: Method to load and process the NavMesh ---
     async loadNavMesh(path) {
         return new Promise((resolve, reject) => {
             const loader = new GLTFLoader();
@@ -431,20 +482,15 @@ processModel() {
                     console.error('NavMesh GLB must contain a single mesh.');
                     return reject();
                 }
-
                 this.navMesh = navMeshNode;
-                // Hide the original navmesh model
-                this.navMesh.visible = false; 
-
+                this.navMesh.visible = false;
                 console.log('🧠 Building navigation zone...');
                 const zone = Pathfinding.createZone(navMeshNode.geometry);
                 this.pathfinding.setZoneData(this.ZONE, zone);
                 console.log('✅ Navigation mesh created successfully.');
-
                 this.createNavMeshVisualizer();
                 this.createNavMeshNodesVisualizer();
                 resolve();
-
             }, undefined, (error) => {
                 console.error(`❌ Error loading navigation mesh from ${path}:`, error);
                 reject(error);
@@ -452,61 +498,52 @@ processModel() {
         });
     }
 
-    // --- NEW: Method to visualize the generated NavMesh ---
     createNavMeshVisualizer() {
-        // Note: getNavMesh() is not a standard part of three-pathfinding,
-        // we are creating a visual representation from the source geometry.
         const geometry = this.navMesh.geometry;
         const material = new THREE.MeshBasicMaterial({
-            color: 0xff00ff, // A bright, obvious magenta color
-            wireframe: false, // Turn off wireframe to make it solid
-            transparent: true, // Allow transparency
-            opacity: 0.5 // Make it 50% transparent to see the floor below
+            color: 0xff00ff,
+            wireframe: false,
+            transparent: true,
+            opacity: 0.5
         });
         const visualMesh = new THREE.Mesh(geometry, material);
-        
         this.navMeshVisualizer = visualMesh;
-        this.navMeshVisualizer.visible = false; // Initially hidden
+        this.navMeshVisualizer.visible = false;
         this.scene.add(this.navMeshVisualizer);
         console.log("✅ Navigation mesh visualizer created. Toggle with gameControls.toggleNavMeshVisualizer()");
     }
 
     createNavMeshNodesVisualizer() {
-    const zone = this.pathfinding.zones[this.ZONE];
-    console.log("Inspecting the navigation zone object:", zone); 
-    if (!zone) {
-        console.warn("Could not create node visualizer: Zone not found.");
-        return;
+        const zone = this.pathfinding.zones[this.ZONE];
+        console.log("Inspecting the navigation zone object:", zone);
+        if (!zone) {
+            console.warn("Could not create node visualizer: Zone not found.");
+            return;
+        }
+        const group = new THREE.Group();
+        const nodeMaterial = new THREE.MeshBasicMaterial({
+            color: 0x00aaff
+        });
+        const nodeGeometry = new THREE.SphereGeometry(0.1);
+        const navMeshNodes = zone.groups[0];
+        for (const node of navMeshNodes) {
+            const nodeMesh = new THREE.Mesh(nodeGeometry, nodeMaterial);
+            nodeMesh.position.copy(node.centroid);
+            group.add(nodeMesh);
+        }
+        this.navMeshNodesVisualizer = group;
+        this.navMeshNodesVisualizer.visible = false;
+        this.scene.add(this.navMeshNodesVisualizer);
+        console.log(`✅ Navigation mesh node visualizer created with ${navMeshNodes.length} nodes.`);
     }
 
-    const group = new THREE.Group();
-    const nodeMaterial = new THREE.MeshBasicMaterial({ color: 0x00aaff }); // A bright blue color
-    const nodeGeometry = new THREE.SphereGeometry(0.1); // Small spheres for each node
-
-    // The pathfinding library stores nodes in zone.groups[GROUP_ID].nodes
-    // We'll assume a single group (groupID = 0) for this NavMesh.
-    const navMeshNodes = zone.groups[0];
-
-    for (const node of navMeshNodes) {
-        const nodeMesh = new THREE.Mesh(nodeGeometry, nodeMaterial);
-        nodeMesh.position.copy(node.centroid);
-        group.add(nodeMesh);
+    toggleNavMeshNodesVisualizer() {
+        if (this.navMeshNodesVisualizer) {
+            this.navMeshNodesVisualizer.visible = !this.navMeshNodesVisualizer.visible;
+            console.log(`NavMesh nodes visualizer ${this.navMeshNodesVisualizer.visible ? 'ON' : 'OFF'}`);
+        }
     }
 
-    this.navMeshNodesVisualizer = group;
-    this.navMeshNodesVisualizer.visible = false; // Initially hidden
-    this.scene.add(this.navMeshNodesVisualizer);
-    console.log(`✅ Navigation mesh node visualizer created with ${navMeshNodes.length} nodes.`);
-}
-
-toggleNavMeshNodesVisualizer() {
-    if (this.navMeshNodesVisualizer) {
-        this.navMeshNodesVisualizer.visible = !this.navMeshNodesVisualizer.visible;
-        console.log(`NavMesh nodes visualizer ${this.navMeshNodesVisualizer.visible ? 'ON' : 'OFF'}`);
-    }
-}
-    
-    // --- NEW: Helper to toggle the visualizer ---
     toggleNavMeshVisualizer() {
         if (this.navMeshVisualizer) {
             this.navMeshVisualizer.visible = !this.navMeshVisualizer.visible;
@@ -515,30 +552,22 @@ toggleNavMeshNodesVisualizer() {
     }
 
     toggleMansionVisibility() {
-    if (this.model) {
-        this.model.visible = !this.model.visible;
-        console.log(`Mansion model visibility ${this.model.visible ? 'ON' : 'OFF'}`);
+        if (this.model) {
+            this.model.visible = !this.model.visible;
+            console.log(`Mansion model visibility ${this.model.visible ? 'ON' : 'OFF'}`);
+        }
     }
-}
-
 
     setupLamps() {
         console.log('💡 Setting up automatic lamp lighting...');
-
         let lampCount = 0;
-
         this.model.traverse((node) => {
             const nodeName = node.name.toLowerCase();
-
-            if (nodeName.includes('walllamp') || nodeName.includes('chandelier') ||
-                nodeName.includes('lamp') || nodeName.includes('light')) {
-
+            if (nodeName.includes('walllamp') || nodeName.includes('chandelier') || nodeName.includes('lamp') || nodeName.includes('light')) {
                 node.updateMatrixWorld(true);
                 const lampPosition = new THREE.Vector3();
                 node.getWorldPosition(lampPosition);
-
                 let lightColor, lightIntensity, lightDistance;
-
                 if (nodeName.includes('chandelier')) {
                     lightColor = 0xffaa55;
                     lightIntensity = 2.0;
@@ -552,75 +581,57 @@ toggleNavMeshNodesVisualizer() {
                     lightIntensity = 1.5;
                     lightDistance = 4;
                 }
-
                 const lampLight = new THREE.PointLight(lightColor, lightIntensity, lightDistance, 3);
-
                 if (nodeName.includes('walllamp')) {
                     const worldQuaternion = new THREE.Quaternion();
                     node.getWorldQuaternion(worldQuaternion);
-
                     const forward = new THREE.Vector3(0.5, 0, 0);
                     forward.applyQuaternion(worldQuaternion);
                     forward.normalize();
-
                     lampLight.position.copy(lampPosition);
                     lampLight.position.add(forward.multiplyScalar(0.4));
                     lampLight.position.y += 0.1;
                 } else {
                     lampLight.position.copy(lampPosition);
                 }
-
                 lampLight.castShadow = false;
-                
-                // CRITICAL FIX: Start with light visible!
                 lampLight.visible = true;
-
                 this.scene.add(lampLight);
-
                 if (lampCount < 3) {
                     console.log(`💡 ${node.name}: pos=${lampLight.position.x.toFixed(1)},${lampLight.position.y.toFixed(1)},${lampLight.position.z.toFixed(1)}`);
                 }
-
                 const lampData = {
                     mesh: node,
                     light: lampLight,
                     baseIntensity: lightIntensity,
                     flickerPhase: Math.random() * Math.PI * 2,
                     flickerSpeed: 0.5 + Math.random() * 0.5,
-                    type: nodeName.includes('chandelier') ? 'chandelier' :
-                          nodeName.includes('walllamp') ? 'walllamp' : 'lamp'
+                    type: nodeName.includes('chandelier') ? 'chandelier' : nodeName.includes('walllamp') ? 'walllamp' : 'lamp'
                 };
-
                 this.lamps.push(lampData);
                 lampCount++;
             }
-
             if (nodeName.includes('fire') && !nodeName.includes('fireplace')) {
                 this.setupFireplace(node);
             }
         });
-
         console.log(`💡 Added ${lampCount} automatic lights to lamps`);
         console.log(`🔥 Found ${this.fireplaces.length} fireplaces`);
     }
 
     recreateFireplaces() {
         console.log('🔄 Recreating fireplaces with new quality settings...');
-
         for (const fireplace of this.fireplaces) {
             this.scene.remove(fireplace.particles);
             this.scene.remove(fireplace.light);
             fireplace.particles.geometry.dispose();
             fireplace.particles.material.dispose();
         }
-
         const fireNodes = this.fireplaces.map(f => f.mesh);
         this.fireplaces = [];
-
         for (const fireNode of fireNodes) {
             this.setupFireplace(fireNode);
         }
-
         console.log(`✅ Recreated ${this.fireplaces.length} fireplaces`);
     }
 
@@ -628,26 +639,21 @@ toggleNavMeshNodesVisualizer() {
         fireNode.updateMatrixWorld(true);
         const firePosition = new THREE.Vector3();
         fireNode.getWorldPosition(firePosition);
-
         const particleCount = this.fireParticleCount;
         const geometry = new THREE.BufferGeometry();
         const positions = new Float32Array(particleCount * 3);
         const velocities = new Float32Array(particleCount * 3);
-
         for (let i = 0; i < particleCount * 3; i += 3) {
             positions[i] = (Math.random() - 0.5) * 0.5;
             positions[i + 1] = Math.random() * 0.2;
             positions[i + 2] = (Math.random() - 0.5) * 0.5;
-
             velocities[i] = (Math.random() - 0.5) * 0.02;
             velocities[i + 1] = 0.5 + Math.random() * 0.5;
             velocities[i + 2] = (Math.random() - 0.5) * 0.02;
         }
-
         geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
         geometry.setAttribute('velocity', new THREE.BufferAttribute(velocities, 3));
         geometry.attributes.position.setUsage(THREE.DynamicDrawUsage);
-
         const material = new THREE.PointsMaterial({
             color: 0xff6600,
             size: 0.15,
@@ -656,15 +662,12 @@ toggleNavMeshNodesVisualizer() {
             blending: THREE.AdditiveBlending,
             sizeAttenuation: true
         });
-
         const fireParticles = new THREE.Points(geometry, material);
         fireParticles.position.copy(firePosition);
         this.scene.add(fireParticles);
-
         const fireLight = new THREE.PointLight(0xff6600, 4.0, 6, 2);
         fireLight.position.copy(firePosition);
         this.scene.add(fireLight);
-
         const fireplaceData = {
             mesh: fireNode,
             particles: fireParticles,
@@ -672,20 +675,15 @@ toggleNavMeshNodesVisualizer() {
             baseIntensity: 3.0,
             flickerPhase: Math.random() * Math.PI * 2
         };
-
         this.fireplaces.push(fireplaceData);
     }
 
     setupOcclusionCulling() {
         console.log('👁️ Setting up occlusion culling system...');
-
         let meshCount = 0;
         this.model.traverse((node) => {
             if (node.isMesh) {
-                // Enable frustum culling to skip rendering objects outside camera view
                 node.frustumCulled = true;
-
-                // Set material side to reduce overdraw
                 if (node.material) {
                     if (Array.isArray(node.material)) {
                         node.material.forEach(mat => mat.side = THREE.FrontSide);
@@ -693,13 +691,10 @@ toggleNavMeshNodesVisualizer() {
                         node.material.side = THREE.FrontSide;
                     }
                 }
-
                 meshCount++;
             }
         });
-
         console.log(`👁️ Frustum culling enabled on ${meshCount} meshes`);
-
         for (const roomData of this.rooms.values()) {
             this.visibleRooms.add(roomData.name);
         }
@@ -707,17 +702,13 @@ toggleNavMeshNodesVisualizer() {
 
     updateOcclusionCulling(cameraPosition) {
         if (!this.occlusionCulling) return;
-
         this.playerPosition.copy(cameraPosition);
-
         for (const [roomName, roomData] of this.rooms) {
             const distance = this.playerPosition.distanceTo(roomData.center);
             const shouldBeVisible = distance <= this.maxVisibleDistance;
-
             if (roomData.visible !== shouldBeVisible) {
                 roomData.visible = shouldBeVisible;
                 roomData.group.visible = shouldBeVisible;
-
                 if (shouldBeVisible) {
                     this.visibleRooms.add(roomName);
                 } else {
@@ -728,7 +719,7 @@ toggleNavMeshNodesVisualizer() {
     }
 
     getCurrentRoom(position) {
-        for (const [roomName, roomData] of this.rooms) {
+        for (const [, roomData] of this.rooms) {
             if (roomData.bounds.containsPoint(position)) {
                 return roomData;
             }
@@ -739,75 +730,53 @@ toggleNavMeshNodesVisualizer() {
     getRoomByName(name) {
         return this.rooms.get(name);
     }
-
     getAllRooms() {
         return Array.from(this.rooms.values());
     }
-
     getEntranceRoom() {
         const entranceNames = ['entrance', 'Entrance', 'Entry', 'entry', 'Foyer', 'foyer'];
-
         for (const name of entranceNames) {
             const room = this.rooms.get(name);
-            if (room) {
-                return room;
-            }
+            if (room) return room;
         }
-
         return this.rooms.values().next().value;
     }
 
     getEntranceDoorSpawnPoint() {
         let entranceDoor = null;
-
         this.model.traverse((node) => {
             if (node.name.toLowerCase() === 's_entrance001') {
                 entranceDoor = node;
             }
         });
-
         if (entranceDoor) {
             entranceDoor.updateMatrixWorld(true);
             const doorPosition = new THREE.Vector3();
             entranceDoor.getWorldPosition(doorPosition);
-
-            if (isNaN(doorPosition.x) || isNaN(doorPosition.y) || isNaN(doorPosition.z)) {
-                return null;
-            }
-
+            if (isNaN(doorPosition.x) || isNaN(doorPosition.y) || isNaN(doorPosition.z)) return null;
             const worldQuaternion = new THREE.Quaternion();
             entranceDoor.getWorldQuaternion(worldQuaternion);
-
             const forward = new THREE.Vector3(-1, 2, -2);
             forward.applyQuaternion(worldQuaternion);
             forward.normalize();
-
             const spawnPoint = doorPosition.clone();
             spawnPoint.add(forward.multiplyScalar(2.0));
             spawnPoint.y += 0.5;
             spawnPoint.x += 0.5;
-
-            if (isNaN(spawnPoint.x) || isNaN(spawnPoint.y) || isNaN(spawnPoint.z)) {
-                return null;
-            }
-
+            if (isNaN(spawnPoint.x) || isNaN(spawnPoint.y) || isNaN(spawnPoint.z)) return null;
             return spawnPoint;
         }
-
         return null;
     }
 
     setOcclusionCulling(enabled) {
         this.occlusionCulling = enabled;
-
         if (!enabled) {
-            // Show all rooms
             for (const roomData of this.rooms.values()) {
                 roomData.group.visible = true;
                 roomData.visible = true;
             }
         }
-
         console.log(`👁️ Occlusion culling: ${enabled ? 'ON' : 'OFF'}`);
     }
 
@@ -816,61 +785,46 @@ toggleNavMeshNodesVisualizer() {
         console.log(`👁️ Max visible distance set to: ${distance}`);
     }
 
-    tick(delta, cameraPosition) {
-        if (cameraPosition) {
-            this.updateOcclusionCulling(cameraPosition);
-        }
 
-        if (this.lampsEnabled) {
-            this.updateLampFlickering(delta);
-        }
-
-        if (this.fireplacesEnabled) {
-            this.updateFireplaces(delta);
+    updatePageGlow() {
+        const time = Date.now() * 0.005;
+        const pulseIntensity = (Math.sin(time) + 1) / 2;
+        for (const page of this.pages) {
+            if (page.material) {
+                page.material.emissiveIntensity = 0.5 + pulseIntensity;
+            }
         }
     }
 
     updateLampFlickering(delta) {
         const time = Date.now() * 0.001;
         const playerPos = this.playerPosition;
-
         this.lampUpdateCounter = (this.lampUpdateCounter || 0) + 1;
         if (this.lampUpdateCounter % this.lampUpdateRate !== 0) return;
-
-        // FIXED: Only cull if player position is set (not at 0,0,0)
         const playerPosSet = playerPos.length() > 0.1;
-        
         if (playerPosSet) {
-            // Distance-based light culling
             let activeLights = 0;
-            
             const lampDistances = this.lamps.map(lamp => ({
                 lamp,
                 distance: lamp.light.position.distanceTo(playerPos)
             }));
-            
             lampDistances.sort((a, b) => a.distance - b.distance);
-
-            for (const { lamp, distance } of lampDistances) {
-                // More generous distance check
+            for (const {
+                    lamp,
+                    distance
+                } of lampDistances) {
                 if (distance < lamp.light.distance * 2.5 && activeLights < this.maxActiveLights) {
                     lamp.light.visible = true;
-                    
                     const flicker = Math.sin(time * lamp.flickerSpeed * this.lampFlickerSpeed + lamp.flickerPhase);
                     const noise = Math.random() * 0.1 - 0.05;
                     lamp.light.intensity = lamp.baseIntensity * (0.9 + flicker * 0.05 + noise);
-                    
                     activeLights++;
                 } else if (activeLights >= this.maxActiveLights) {
-                    // Gradually fade out distant lights instead of instantly hiding
                     lamp.light.intensity *= 0.95;
-                    if (lamp.light.intensity < 0.1) {
-                        lamp.light.visible = false;
-                    }
+                    if (lamp.light.intensity < 0.1) lamp.light.visible = false;
                 }
             }
         } else {
-            // Player position not set yet, show all lights
             for (const lamp of this.lamps) {
                 lamp.light.visible = true;
                 const flicker = Math.sin(time * lamp.flickerSpeed * this.lampFlickerSpeed + lamp.flickerPhase);
@@ -882,49 +836,37 @@ toggleNavMeshNodesVisualizer() {
 
     updateFireplaces(delta) {
         const time = Date.now() * 0.001;
-
         this.fireplaceUpdateCounter = (this.fireplaceUpdateCounter || 0) + 1;
         const shouldUpdateParticles = this.fireplaceUpdateCounter % this.fireplaceUpdateRate === 0;
-
         for (const fireplace of this.fireplaces) {
             if (shouldUpdateParticles) {
                 const positions = fireplace.particles.geometry.attributes.position.array;
                 const velocities = fireplace.particles.geometry.attributes.velocity.array;
-
                 for (let i = 0; i < positions.length; i += 3) {
                     positions[i] += velocities[i] * delta * 2;
                     positions[i + 1] += velocities[i + 1] * delta * 2;
                     positions[i + 2] += velocities[i + 2] * delta * 2;
-
                     if (positions[i + 1] > 0.7) {
                         positions[i] = (Math.random() - 0.5) * 0.5;
                         positions[i + 1] = 0;
                         positions[i + 2] = (Math.random() - 0.5) * 0.5;
                     }
                 }
-
                 fireplace.particles.geometry.attributes.position.needsUpdate = true;
             }
-
             const flicker = Math.sin(time * 10 + fireplace.flickerPhase);
             const noise = Math.random() * 0.3;
             fireplace.light.intensity = fireplace.baseIntensity * (0.8 + flicker * 0.2 + noise);
         }
     }
 
-    // Lamp control API
     setLampsEnabled(enabled) {
         this.lampsEnabled = enabled;
-        for (const lamp of this.lamps) {
-            lamp.light.visible = enabled;
-        }
+        for (const lamp of this.lamps) lamp.light.visible = enabled;
         console.log(`💡 Lamps ${enabled ? 'enabled' : 'disabled'}`);
     }
-
-    // Debug: Show light helpers
     showLightHelpers() {
         console.log('💡 Adding light helpers...');
-
         for (const lamp of this.lamps) {
             if (!lamp.helper) {
                 const helper = new THREE.PointLightHelper(lamp.light, 0.2);
@@ -934,58 +876,40 @@ toggleNavMeshNodesVisualizer() {
                 lamp.helper.visible = true;
             }
         }
-
         console.log(`✅ Showing helpers for ${this.lamps.length} lights`);
     }
-
     hideLightHelpers() {
-        for (const lamp of this.lamps) {
-            if (lamp.helper) {
-                lamp.helper.visible = false;
-            }
-        }
+        for (const lamp of this.lamps)
+            if (lamp.helper) lamp.helper.visible = false;
         console.log('💡 Light helpers hidden');
     }
-
     toggleLamps() {
         this.setLampsEnabled(!this.lampsEnabled);
         return this.lampsEnabled;
     }
-
     setLampIntensity(intensity) {
-        // Update base intensity for all lamps
-        for (const lamp of this.lamps) {
-            lamp.baseIntensity = intensity;
-        }
+        for (const lamp of this.lamps) lamp.baseIntensity = intensity;
         console.log(`💡 Lamp intensity set to: ${intensity}`);
     }
-
     setLampFlickerSpeed(speed) {
         this.lampFlickerSpeed = speed;
         console.log(`💡 Lamp flicker speed set to: ${speed}`);
     }
-
     getLampsByType(type) {
         return this.lamps.filter(lamp => lamp.type === type);
     }
-
-    // Fireplace control API
     setFireplacesEnabled(enabled) {
         this.fireplacesEnabled = enabled;
-
         for (const fireplace of this.fireplaces) {
             fireplace.particles.visible = enabled;
             fireplace.light.visible = enabled;
         }
-
         console.log(`🔥 Fireplaces ${enabled ? 'enabled' : 'disabled'}`);
     }
-
     toggleFireplaces() {
         this.setFireplacesEnabled(!this.fireplacesEnabled);
         return this.fireplacesEnabled;
     }
-
     getDebugInfo() {
         const activeLamps = this.lamps.filter(l => l.light.visible).length;
         return {
@@ -1001,46 +925,34 @@ toggleNavMeshNodesVisualizer() {
             cachedMaterials: this.materialCache.size
         };
     }
-
-    // Debug: List all objects in the model
     listAllObjects(filter = '') {
         console.log('📋 Listing all objects in mansion model:');
         const objects = [];
-
         this.model.traverse((node) => {
             if (node.isMesh) {
                 const name = node.name;
-                if (!filter || name.toLowerCase().includes(filter.toLowerCase())) {
-                    objects.push({
-                        name: name,
-                        type: node.type,
-                        visible: node.visible,
-                        hasPhysics: this.physicsBodies.some(pb => pb.mesh === node)
-                    });
-                }
+                if (!filter || name.toLowerCase().includes(filter.toLowerCase())) objects.push({
+                    name: name,
+                    type: node.type,
+                    visible: node.visible,
+                    hasPhysics: this.physicsBodies.some(pb => pb.mesh === node)
+                });
             }
         });
-
         console.table(objects);
         console.log(`📊 Total: ${objects.length} objects${filter ? ` (filtered by "${filter}")` : ''}`);
         return objects;
     }
-
-    // Debug: Search for objects by name
     findObjects(searchTerm) {
         console.log(`🔍 Searching for objects containing "${searchTerm}":`);
         return this.listAllObjects(searchTerm);
     }
-
-    // Debug: Show parent hierarchy of an object
     showObjectHierarchy(objectName) {
         console.log(`🌳 Showing hierarchy for "${objectName}":`);
-
         this.model.traverse((node) => {
             if (node.name.toLowerCase().includes(objectName.toLowerCase())) {
                 console.log(`\n📍 Found: ${node.name}`);
                 console.log('Hierarchy (from root to object):');
-
                 const hierarchy = [];
                 let current = node;
                 while (current) {
@@ -1051,73 +963,50 @@ toggleNavMeshNodesVisualizer() {
                     });
                     current = current.parent;
                 }
-
                 console.table(hierarchy);
-
-                // Check if any parent has "door" in name
-                const hassDoorParent = hierarchy.some(item =>
-                    item.name.toLowerCase().includes('door')
-                );
-
+                const hassDoorParent = hierarchy.some(item => item.name.toLowerCase().includes('door'));
                 console.log(`Has "door" in parent hierarchy: ${hassDoorParent ? '✅ YES' : '❌ NO'}`);
             }
         });
     }
-
-    // Debug: List all groups/collections
     listCollections() {
         console.log('📁 Listing all groups/collections:');
         const collections = [];
-
         this.model.traverse((node) => {
-            if (node.type === 'Group' && node.children.length > 0) {
-                collections.push({
-                    name: node.name,
-                    childCount: node.children.length
-                });
-            }
+            if (node.type === 'Group' && node.children.length > 0) collections.push({
+                name: node.name,
+                childCount: node.children.length
+            });
         });
-
         console.table(collections);
         return collections;
     }
-
     dispose() {
         console.log('🧹 Disposing mansion loader...');
-
-        for (const { body } of this.physicsBodies) {
-            this.physicsManager.removeBody(body);
-        }
+        for (const {
+                body
+            } of this.physicsBodies) this.physicsManager.removeBody(body);
         this.physicsBodies = [];
-
-        for (const lamp of this.lamps) {
+        for (const lamp of this.lamps)
             if (lamp.light) {
                 this.scene.remove(lamp.light);
                 if (lamp.light.dispose) lamp.light.dispose();
             }
-        }
         this.lamps = [];
-
         if (this.model) {
             this.scene.remove(this.model);
-
             this.model.traverse((node) => {
                 if (node.isMesh) {
                     if (node.geometry) node.geometry.dispose();
                     if (node.material) {
-                        if (Array.isArray(node.material)) {
-                            node.material.forEach(mat => mat.dispose());
-                        } else {
-                            node.material.dispose();
-                        }
+                        if (Array.isArray(node.material)) node.material.forEach(mat => mat.dispose());
+                        else node.material.dispose();
                     }
                 }
             });
         }
-
         this.rooms.clear();
         this.visibleRooms.clear();
-
         console.log('✅ Mansion loader disposed');
     }
 }
