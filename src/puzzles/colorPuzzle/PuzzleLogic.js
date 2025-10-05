@@ -56,6 +56,7 @@ export class PuzzleLogic{
      * Applies the changes to the grid after the animation is complete.
      */
     applyGridChanges(steps) {
+        //console.log(this.grid);
         for (const wave of steps) {
             for (const { row, col } of wave) {
                 this.grid[row][col] = this.selectedColor;
