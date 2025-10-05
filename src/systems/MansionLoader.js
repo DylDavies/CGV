@@ -153,6 +153,11 @@ class MansionLoader {
                 node.userData = { type: 'telephone', interactable: 'true' };
                 console.log(`📞 Found prop: ${node.name}`);
             }
+            if (node.name === 'S_Laptop001') {
+                this.props.set('laptop', node);
+                node.userData = { type: 'laptop', interactable: true };
+                console.log(`💻 Found prop: ${node.name}`);
+            }
             
             if (node.isMesh) {
 
@@ -1025,4 +1030,3 @@ class MansionLoader {
 }
 
 export { MansionLoader };
-
