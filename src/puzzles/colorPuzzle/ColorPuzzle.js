@@ -11,18 +11,20 @@ export class ColorPuzzle {
         this.puzzleContainer = document.getElementById('puzzle-container');
         this.isAnimating = false;
         
+        this.onManualCloseCallback = null; // For when the user clicks the "Close" button
+
         this.ui = new PuzzleUI({
             onTileClick: (row, col) => this.handleTileClick(row, col),
             onColorSelect: (color) => this.handleColorSelect(color),
             onReset: () => this.startCurrentLevel(),
-            onClose: () => this.hide()
+            onClose: () => {
+                if (this.onManualCloseCallback) this.onManualCloseCallback();
+            }
         });
 
         this.result = new PuzzleResult();
         this.onSolveCallback = null;
-        this.onCloseCallback = null;
         this.successMessage = 'The mechanism clicks open.';
-        this.clue = null;
     }
     
     setControls(controls) { this.controls = controls; }
@@ -35,9 +37,6 @@ export class ColorPuzzle {
         //console.log(`Loaded ${this.allLevels.length} solvable color puzzle levels.`);
     }
 
-    /**
-     * Starts a NEW random puzzle that matches the moveCount.
-     */
     start(moveCount) {
         this.lastMoveCount = moveCount;
         const suitableLevels = this.allLevels.filter(level => level.levelData.turns === moveCount);
@@ -56,13 +55,9 @@ export class ColorPuzzle {
 
         this.currentLevelData = randomLevel.levelData;
         
-        // This is the first time the level is loaded, so we start the timer.
         this.startCurrentLevel(true); 
     }
     
-    /**
-     * Resets the puzzle state. If isFirstLoad is true, it also starts a new timer.
-     */
     startCurrentLevel(isFirstLoad = false) {
         if (!this.currentLevelData) {
             console.error("Cannot reset, no level data is currently loaded.");
@@ -84,14 +79,13 @@ export class ColorPuzzle {
 
         this.ui.render(this.logic);
         
-        // for puzzle reset
         if (isFirstLoad) {
             this.startTimer();
         }
     }
 
-    show(moveCount) {
-        if (this.controls) this.controls.freeze();
+    show(moveCount, onManualClose) {
+        this.onManualCloseCallback = onManualClose; // Store the callback from InteractionSystem
         this.puzzleContainer.style.display = 'flex';
         this.start(moveCount);
     }
@@ -112,9 +106,13 @@ export class ColorPuzzle {
             if (gameState !== 'continue') {
                 if (this.timer) this.timer.stop();
                 this.result.show(gameState === 'win', () => {
-                    this.hide(); // Hide the puzzle UI
-                    if (gameState === 'win' && this.onSolveCallback) {
-                        this.onSolveCallback(); // Trigger the callback (which shows the clue)
+                    // This onComplete runs after the result overlay disappears
+                    this.hide(); // First, always hide the puzzle
+                    if (gameState === 'win') {
+                        if (this.onSolveCallback) this.onSolveCallback();
+                    } else {
+                        // This handles a loss (timer running out)
+                        if (this.onManualCloseCallback) this.onManualCloseCallback();
                     }
                 }, 
                 this.successMessage);
@@ -145,18 +143,21 @@ export class ColorPuzzle {
         if (this.timer) this.timer.stop();
         this.timer = new PuzzleTimer(60, 
             (time) => {},
-            () => {
-                this.result.show(false, () => this.hide());
+            () => { // onEnd callback for the timer
+                this.result.show(false, () => {
+                    this.hide();
+                    if (this.onManualCloseCallback) this.onManualCloseCallback();
+                });
             }
         );
         this.timer.start();
     }
 
-     onSolve(callback, successMessage) { 
+    onSolve(callback, successMessage) { 
         this.onSolveCallback = callback;
         if (successMessage) {
             this.successMessage = successMessage;
         }
      }
-    onClose(callback) { this.onCloseCallback = callback; }
+    onClose(callback) { this.onManualCloseCallback = callback; }
 }

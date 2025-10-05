@@ -111,14 +111,19 @@ export class UIManager {
         };
 
        if (this.uiElements.closeClueButton) {
+
             this.uiElements.closeClueButton.onclick = () => {
-                if (this.uiElements.clueScreen) {
-                    this.uiElements.clueScreen.style.display = 'none';
-                }
-                if (this.controls) {
-                    this.controls.unfreeze();
-                }
+                window.gameControls.interactionSystem.closePuzzleUI();
             };
+
+            // this.uiElements.closeClueButton.onclick = () => {
+            //     if (this.uiElements.clueScreen) {
+            //         this.uiElements.clueScreen.style.display = 'none';
+            //     }
+            //     if (this.controls) {
+            //         this.controls.unfreeze();
+            //     }
+            // };
         }
 
         // This listener stops clicks from passing through to the game
