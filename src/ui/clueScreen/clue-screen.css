@@ -1,0 +1,81 @@
+#clue-screen {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100vh;
+    background: rgba(10, 20, 10, 0.85);
+    backdrop-filter: blur(5px) grayscale(0.5);
+    color: #00ff41;
+    font-family: 'Courier New', monospace;
+    display: flex; 
+    justify-content: center;
+    align-items: center;
+    flex-direction: column;
+    text-align: center;
+    z-index: 10002;
+    text-shadow: 0 0 5px #00ff41, 0 0 10px #00ff41;
+    border: 3px solid #00ff41;
+    box-shadow: 0 0 20px #00ff41, inset 0 0 20px #00ff41;
+    animation: flicker 1.5s infinite;
+}
+
+#clue-screen::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(0,0,0,0.5) 3px);
+    pointer-events: none;
+    z-index: 1;
+}
+
+.clue-content h1 {
+    font-size: 4em;
+    letter-spacing: 5px;
+    text-transform: uppercase;
+}
+
+.clue-content .clue-text {
+    font-size: 1.5em;
+    color: #9affab;
+    max-width: 600px;
+    margin: 20px auto;
+    line-height: 1.6;
+}
+
+.clue-content .cursor {
+    font-size: 1.5em;
+    animation: blink 1s step-end infinite;
+}
+
+#close-clue-btn {
+  background: transparent;
+  border: 2px solid #00ff41;
+  color: #00ff41;
+  font-size: 1.2em;
+  padding: 10px 30px;
+  margin-top: 40px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  text-transform: uppercase;
+}
+
+#close-clue-btn:hover {
+  background: #00ff41;
+  color: #000;
+  box-shadow: 0 0 20px #00ff41;
+}
+
+@keyframes blink {
+  from, to { color: transparent }
+  50% { color: #00ff41; }
+}
+
+@keyframes flicker {
+  0%, 19%, 21%, 100% { opacity: 1; }
+  20% { opacity: 0.8; }
+  50% { opacity: 0.9; }
+}

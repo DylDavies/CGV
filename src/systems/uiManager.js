@@ -5,6 +5,11 @@ export class UIManager {
         this.uiElements = {};
         this.isInitialized = false;
         this.audioManager = audioManager; 
+        this.controls = null;
+    }
+
+    setControls(controls) {
+        this.controls = controls;
     }
 
     async initialize() {
@@ -18,6 +23,8 @@ export class UIManager {
         await this._loadHTML('src/ui/settingsScreen/settings-screen.html', 'settings-screen-container');
         await this._loadHTML('src/ui/narrative/narrative-elements.html', 'narrative-container');
         await this._loadHTML('src/ui/objectiveTracker/objective-tracker.html', 'objective-tracker-container');
+        await this._loadHTML('src/ui/clueScreen/clue-screen.html', 'clue-screen-container');
+        await this._loadHTML('src/ui/resultScreen/result-screen.html', 'result-screen-container');
 
 
         // Now that the HTML is loaded, cache the elements inside it
@@ -43,16 +50,26 @@ export class UIManager {
             objectiveTracker: document.getElementById('objective-tracker'),
             objectiveTitle: document.getElementById('objective-title'),
             objectiveDescription: document.getElementById('objective-description'),
+
+            // Clue Screen
+            clueScreen: document.getElementById('clue-screen'),
+            closeClueButton: document.getElementById('close-clue-btn'),
+
+            resultOverlay: document.getElementById('result-overlay'),
         };
         
         if (!this.uiElements.welcomeScreen || !this.uiElements.playButton) {
             console.error("UIManager Critical Error: Welcome screen elements not found after loading.");
             return;
         }
+
+        if (this.uiElements.clueScreen) this.uiElements.clueScreen.style.display = 'none';
         
         this._addMenuEventListeners();
         console.log('✅ UI Manager Initialized');
         this.isInitialized = true;
+
+
     }
     
     async _loadHTML(url, targetId) {
@@ -92,6 +109,25 @@ export class UIManager {
             this.uiElements.creditsScreen.classList.add('hidden');
             this.uiElements.welcomeScreen.style.display = 'flex';
         };
+
+       if (this.uiElements.closeClueButton) {
+            this.uiElements.closeClueButton.onclick = () => {
+                if (this.uiElements.clueScreen) {
+                    this.uiElements.clueScreen.style.display = 'none';
+                }
+                if (this.controls) {
+                    this.controls.unfreeze();
+                }
+            };
+        }
+
+        // This listener stops clicks from passing through to the game
+        if (this.uiElements.clueScreen) {
+            this.uiElements.clueScreen.addEventListener('click', (event) => {
+                event.stopPropagation();
+            });
+        }
+
     }
 
     showWelcomeScreen(onPlayCallback) {
@@ -189,4 +225,24 @@ export class UIManager {
             tracker.classList.add('completed');
         }
     }
+
+    showClueScreen(clueText) {
+        if (this.uiElements.clueScreen) {
+            const clueTextElement = this.uiElements.clueScreen.querySelector('.clue-text');
+            if (clueTextElement) {
+                clueTextElement.textContent = clueText;
+            }
+            this.uiElements.clueScreen.style.display = 'flex';
+            
+            // This tiny delay gives the browser time to render the element before focusing
+            setTimeout(() => {
+                this.uiElements.clueScreen.focus();
+            }, 50); // 50ms is a safe, imperceptible delay
+
+            if (this.controls) {
+                this.controls.freeze();
+            }
+        }
+    }
 }
+

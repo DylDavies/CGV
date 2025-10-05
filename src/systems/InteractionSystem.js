@@ -135,8 +135,11 @@ class InteractionSystem {
             telephone: {
                 prompt: "[E] Answer Phone",
                 handler: this.handleTelephoneInteraction.bind(this)
-            }
-            ,
+            },
+            laptop: {
+                prompt: "Press E to use laptop",
+                handler: this.handleLaptopInteraction.bind(this)
+            },
             door: {
                 prompt: "Press E to open door",
                 lockedPrompt: "Door is locked - need key",
@@ -199,7 +202,12 @@ class InteractionSystem {
     }
 
     onMouseClick(event) {
-        if (this.currentInteraction) return; // Don't process if puzzle UI is open
+         // If controls are frozen for a puzzle, do nothing.
+        if (this.controls && this.controls.isFrozen) {
+            return;
+        }
+        
+        if (this.currentInteraction) return;
         
         this.checkInteraction();
     }
@@ -213,6 +221,9 @@ class InteractionSystem {
     onKeyDown(event) {
         switch (event.code) {
             case 'KeyE':
+                if (this.controls && this.controls.isFrozen) {
+                return;
+                }
                 if (!this.currentInteraction) {
                     this.checkInteraction();
                 }
@@ -363,6 +374,39 @@ class InteractionSystem {
         userData.interacted = true;
     }
 
+    handleLaptopInteraction(laptopObject, userData) {
+        console.log("Interacting with laptop");
+        const colorPuzzle = window.gameControls.colorPuzzle;
+        if (colorPuzzle) {
+            colorPuzzle.show(4); 
+
+            const clue = "> The clocks are wrong, find the two that are the same. The time they display is the key.";
+
+            colorPuzzle.onSolve(() => {
+                console.log("Color puzzle solved! Showing clue.");
+                this.showClueScreenDialog(clue); 
+            }, 'ACCESS GRANTED');
+        } else {
+            this.showMessage("The laptop screen is dark.");
+        }
+    }
+
+    showClueScreenDialog(clueText) {
+        if (this.controls) this.controls.freeze();
+        this.currentInteraction = 'clue';
+
+        const clueScreen = this.uiManager.uiElements.clueScreen;
+        if (clueScreen) {
+            const clueTextElement = clueScreen.querySelector('.clue-text');
+            if (clueTextElement) {
+                clueTextElement.textContent = clueText;
+            }
+            clueScreen.style.display = 'flex';
+            setTimeout(() => {
+                clueScreen.focus();
+            }, 50);
+        }
+    }
     handleDoorInteraction(door, userData) {
         const doorData = this.gameManager.mansion.doors.find(d => 
             d.mesh === door || d.mesh === door.parent
@@ -838,6 +882,12 @@ class InteractionSystem {
         if (this.controls) this.controls.unfreeze();
         this.puzzleUI.style.display = 'none';
         this.currentInteraction = null;
+        
+        // Also ensure the clue screen is hidden if Escape is pressed
+        const clueScreen = this.uiManager.uiElements.clueScreen;
+        if (clueScreen && clueScreen.style.display === 'flex') {
+            clueScreen.style.display = 'none';
+        }
         
         if (window.puzzleChoiceCallback) {
             delete window.puzzleChoiceCallback;

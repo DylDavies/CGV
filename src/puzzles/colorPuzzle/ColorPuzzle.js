@@ -21,6 +21,8 @@ export class ColorPuzzle {
         this.result = new PuzzleResult();
         this.onSolveCallback = null;
         this.onCloseCallback = null;
+        this.successMessage = 'The mechanism clicks open.';
+        this.clue = null;
     }
     
     setControls(controls) { this.controls = controls; }
@@ -110,13 +112,12 @@ export class ColorPuzzle {
             if (gameState !== 'continue') {
                 if (this.timer) this.timer.stop();
                 this.result.show(gameState === 'win', () => {
-                    if (gameState === 'win') {
-                        if (this.onSolveCallback) this.onSolveCallback();
-                        this.hide();
-                    } else {
-                        this.hide();
+                    this.hide(); // Hide the puzzle UI
+                    if (gameState === 'win' && this.onSolveCallback) {
+                        this.onSolveCallback(); // Trigger the callback (which shows the clue)
                     }
-                });
+                }, 
+                this.successMessage);
             }
             this.isAnimating = false;
         }
@@ -126,7 +127,7 @@ export class ColorPuzzle {
         this.logic.selectedColor = color;
 
         // Debug current selected color
-        //console.log(`Color change. New selected color: ${color}`);
+        console.log(`Color change. New selected color: ${color}`);
 
         this.ui.renderPalette(this.logic);
     }
@@ -151,6 +152,11 @@ export class ColorPuzzle {
         this.timer.start();
     }
 
-    onSolve(callback) { this.onSolveCallback = callback; }
+     onSolve(callback, successMessage) { 
+        this.onSolveCallback = callback;
+        if (successMessage) {
+            this.successMessage = successMessage;
+        }
+     }
     onClose(callback) { this.onCloseCallback = callback; }
 }

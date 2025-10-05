@@ -97,6 +97,7 @@ async function main() {
             
             uiManager.updateLoadingProgress(85, "Preparing your escape...");
             const controls = new FirstPersonControls(camera, renderer.domElement, physicsManager, { colorPuzzle, wirePuzzle }, monsterAI, mansionLoader);
+            uiManager.setControls(controls);
             const flashlight = new ImprovedFlashlight(camera, scene);
             const pauseMenu = new PauseMenu(renderer, controls);
             
