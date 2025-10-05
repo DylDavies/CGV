@@ -18,6 +18,7 @@ class InteractionSystem {
 
         this.messageQueue = []; // NEW: A queue for interaction messages.
         this.isMessageVisible = false; // NEW: A flag to check visibility.
+        this.isColorPuzzleSolved = false;
         
         // UI Elements
         this.crosshair = null;
@@ -375,21 +376,33 @@ class InteractionSystem {
     }
 
     handleLaptopInteraction(laptopObject, userData) {
-        console.log("Interacting with laptop");
-        const colorPuzzle = window.gameControls.colorPuzzle;
-        if (colorPuzzle) {
-            colorPuzzle.show(4); 
+    console.log("Interacting with laptop");
+    const clue = "> The clocks are wrong, find the two that are the same. The time they display is the key.";
 
-            const clue = "> The clocks are wrong, find the two that are the same. The time they display is the key.";
-
-            colorPuzzle.onSolve(() => {
-                console.log("Color puzzle solved! Showing clue.");
-                this.showClueScreenDialog(clue); 
-            }, 'ACCESS GRANTED');
-        } else {
-            this.showMessage("The laptop screen is dark.");
-        }
+    if (this.isColorPuzzleSolved) {
+        console.log("Puzzle already solved. Showing clue directly.");
+        this.showClueScreenDialog(clue);
+        return;
     }
+
+    const colorPuzzle = window.gameControls.colorPuzzle;
+    if (colorPuzzle) {
+        if (this.controls) this.controls.freeze();
+        this.currentInteraction = 'color_puzzle';
+
+        // Show the puzzle and give it the function to call when it needs to be closed.
+        colorPuzzle.show(4, () => this.closePuzzleUI());
+
+        colorPuzzle.onSolve(() => {
+            this.isColorPuzzleSolved = true;
+            // The puzzle is hidden by the time this is called. Now show the clue.
+            this.showClueScreenDialog(clue);
+        }, 'ACCESS GRANTED');
+
+    } else {
+        this.showMessage("The laptop screen is dark.");
+    }
+}
 
     showClueScreenDialog(clueText) {
         if (this.controls) this.controls.freeze();
@@ -879,19 +892,24 @@ class InteractionSystem {
     }
 
     closePuzzleUI() {
-        if (this.controls) this.controls.unfreeze();
-        this.puzzleUI.style.display = 'none';
-        this.currentInteraction = null;
-        
-        // Also ensure the clue screen is hidden if Escape is pressed
+        // Hide the color puzzle if it's open
+        const colorPuzzle = window.gameControls?.colorPuzzle;
+        if (colorPuzzle && colorPuzzle.puzzleContainer.style.display !== 'none') {
+            colorPuzzle.hide();
+        }
+    
+        // Hide the clue screen if it's open
         const clueScreen = this.uiManager.uiElements.clueScreen;
         if (clueScreen && clueScreen.style.display === 'flex') {
             clueScreen.style.display = 'none';
         }
-        
-        if (window.puzzleChoiceCallback) {
-            delete window.puzzleChoiceCallback;
-        }
+    
+        // Hide the generic dialog used by other puzzles
+        this.puzzleUI.style.display = 'none';
+    
+        // This is now the single, authoritative place where controls are unfrozen.
+        if (this.controls) this.controls.unfreeze();
+        this.currentInteraction = null; // This is the line that fixes the interaction lock.
     }
 
     updateCrosshair() {
