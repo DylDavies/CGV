@@ -30,6 +30,9 @@ export class ColorPuzzle {
     async loadLevels() {
         const response = await fetch('public/puzzles/colorPuzzle/levels.json');
         this.allLevels = await response.json();
+
+        this.allLevels = this.allLevels.filter(level => !level.levelData.board.flat().includes(-1));
+        //console.log(`Loaded ${this.allLevels.length} solvable color puzzle levels.`);
     }
 
     /**
@@ -44,6 +47,13 @@ export class ColorPuzzle {
         }
         
         const randomLevel = suitableLevels[Math.floor(Math.random() * suitableLevels.length)];
+
+        // Debug weird puzzle issues
+        // console.log("🧩 New Puzzle Selected");
+        // console.log(`   - Level ID: ${randomLevel.id}`);
+        // console.log("   - Level Data:", randomLevel.levelData);
+
+
         this.currentLevelData = randomLevel.levelData;
         
         // This is the first time the level is loaded, so we start the timer.
@@ -60,9 +70,17 @@ export class ColorPuzzle {
         }
 
         this.logic = new PuzzleLogic(this.currentLevelData, this.colorMap);
-        this.logic.selectedColor = [...new Set(this.logic.originalLevelData.board.flat())]
+        const availableColors = [...new Set(this.logic.originalLevelData.board.flat())]
             .map(index => this.logic.colorMap[index])
-            .filter(Boolean)[0];
+            .filter(Boolean);
+
+        // --- DEBUG LOG ---
+        //console.log("   - Available Colors (Palette):", availableColors);
+
+        this.logic.selectedColor = availableColors[0];
+
+        //console.log(`   - Initially Selected Color: ${this.logic.selectedColor}`);
+        // --- END DEBUG LOG ---
 
         this.ui.render(this.logic);
         
@@ -105,18 +123,22 @@ export class ColorPuzzle {
         }
     }
 
-     hide() {
+    handleColorSelect(color) {
+        this.logic.selectedColor = color;
+
+        // Debug current selected color
+        console.log(`Color change. New selected color: ${color}`);
+
+        this.ui.renderPalette(this.logic);
+    }
+    
+    hide() {
         if (this.timer) {
             this.timer.stop();
         }
-        // This no longer needs to manage freezing/unfreezing.
+        if (this.controls) this.controls.unfreeze();
         this.puzzleContainer.style.display = 'none';
         if (this.onCloseCallback) this.onCloseCallback();
-    }
-
-    handleColorSelect(color) {
-        this.logic.selectedColor = color;
-        this.ui.renderPalette(this.logic);
     }
 
     startTimer() {
