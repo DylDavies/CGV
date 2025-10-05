@@ -25,13 +25,23 @@ async function createMonster(path) {
     monsterModel.animations = {}; // Create a place to store animation actions
 
     // Find the 'walk' animation from the GLB file's animations array
-    const walkClip = gltf.animations.find(clip => clip.name === 'Walk');
+    const walkClip = gltf.animations.find(clip => clip.name === 'walk');
     if (walkClip) {
         const walkAction = mixer.clipAction(walkClip);
         monsterModel.animations.walk = walkAction; // Store the walk action
         console.log('✅ "walk" animation found and configured.');
     } else {
         console.warn('⚠️ "walk" animation not found in the model.');
+    }
+    // --- END NEW ---
+    // Find the 'run' animation from the GLB file's animations array
+    const runClip = gltf.animations.find(clip => clip.name === 'run');
+    if (runClip) {
+        const runAction = mixer.clipAction(runClip);
+        monsterModel.animations.run = runAction; // Store the run action
+        console.log('✅ "run" animation found and configured.');
+    } else {
+        console.warn('⚠️ "run" animation not found in the model.');
     }
     // --- END NEW ---
 

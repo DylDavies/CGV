@@ -4,8 +4,9 @@ import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.127.0/build/three.m
 import { PointerLockControls } from 'https://cdn.jsdelivr.net/npm/three@0.127.0/examples/jsm/controls/PointerLockControls.js';
 
 class FirstPersonControls {
-   constructor(camera, domElement, physicsManager = null, puzzles = {}, monsterAI = null, mansionLoader = null) {
+   constructor(camera, domElement, physicsManager = null,character = null, puzzles = {}, monsterAI = null, mansionLoader = null) {
         this.camera = camera;
+        this.character = character;
         this.monsterAI = monsterAI; 
         this.controls = new PointerLockControls(camera, domElement);
         this.domElement = domElement;
@@ -14,6 +15,8 @@ class FirstPersonControls {
 
         // Testing puzzle works with new system
         this.puzzles = puzzles;
+
+        this.activeAnimation = null;
 
         // used for tracking if player contols are frozen, e.g if they are interacting with an html puzzle
         this.isFrozen = false;
@@ -262,9 +265,33 @@ class FirstPersonControls {
             this.hasShownHint = true;
         }
     }
+    setAnimation(animationName) {
+        if (this.activeAnimation === animationName || !this.character || !this.character.animations) {
+            return;
+        }
+
+        // Stop the current animation
+        if (this.activeAnimation && this.character.animations[this.activeAnimation]) {
+            this.character.animations[this.activeAnimation].fadeOut(0.2);
+        }
+
+        // Start the new one
+        if (animationName && this.character.animations[animationName]) {
+            this.character.animations[animationName].reset().fadeIn(0.2).play();
+        }
+
+        this.activeAnimation = animationName;
+    }
 
     tick(delta) {
         if (!this.controls.isLocked || this.isFrozen) return;
+
+        if (this.character) {
+            this.character.rotation.y = this.camera.rotation.y;
+            if (this.character.mixer) {
+                this.character.mixer.update(delta);
+            }
+        }
 
         if (this.physicsManager) {
             // Use physics-based movement
@@ -282,6 +309,25 @@ class FirstPersonControls {
 
             // Let physics manager handle movement
             this.physicsManager.tick(delta, inputs);
+            const isMoving = this.moveForward || this.moveBackward || this.moveLeft || this.moveRight;
+            let animationToPlay = null;
+
+            if (isMoving) {
+                animationToPlay = 'walk';
+            }
+            this.setAnimation(animationToPlay);
+
+            // Now, adjust the *speed* of the walk animation if running.
+            if (this.character && this.character.animations && this.character.animations.walk) {
+                const walkAction = this.character.animations.walk;
+                // If moving and running, speed up the animation. Otherwise, set it to normal speed.
+                if (isMoving && this.isRunning) {
+                    walkAction.timeScale = 1.5; // Play animation 50% faster. You can adjust this value!
+                } else {
+                    walkAction.timeScale = 1; // Normal speed
+                }
+            }
+            
 
             // Update stats display
             this.updateStats();

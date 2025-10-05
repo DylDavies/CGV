@@ -50,6 +50,7 @@ class MonsterAI {
 
         this.mixer = monsterMesh.mixer;
         this.animations = monsterMesh.animations;
+        this.activeAnimation = null;
         // --- END REVISED ---
 
         console.log("👾 Monster AI Initialized with NavMesh pathfinding.");
@@ -332,16 +333,38 @@ class MonsterAI {
                 break;
         }
 
-        if (this.animations.walk) {
-            const isMoving = this.path.length > 0 || this.directPursuit;
-            if (isMoving && !this.animations.walk.isRunning()) {
-                this.animations.walk.play();
-            } else if (!isMoving && this.animations.walk.isRunning()) {
-                this.animations.walk.stop();
+        const isMoving = this.path.length > 0 || this.directPursuit;
+        let animationToPlay = null;
+
+        if (isMoving) {
+            if (this.aggressionLevel === 5) {
+                animationToPlay = 'run';
+            } else {
+                animationToPlay = 'walk';
             }
         }
+
+        this.setAnimation(animationToPlay);
     }
     
+    setAnimation(animationName) {
+        if (this.activeAnimation === animationName) {
+            return;
+        }
+
+        // Stop the current animation if it's playing
+        if (this.activeAnimation && this.animations[this.activeAnimation]) {
+            this.animations[this.activeAnimation].stop();
+        }
+
+        // Start the new animation
+        if (animationName && this.animations[animationName]) {
+            this.animations[animationName].play();
+        }
+
+        this.activeAnimation = animationName;
+    }
+
     moveDirectlyToPlayer(delta) {
        const direction = this.player.position.clone().sub(this.monster.position).normalize();
         direction.y = 0; 
@@ -525,4 +548,3 @@ class MonsterAI {
 }
 
 export { MonsterAI };
-

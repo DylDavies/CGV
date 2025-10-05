@@ -20,6 +20,7 @@ import { WirePuzzle } from './puzzles/wirePuzzle/WirePuzzle.js';
 import { PauseMenu } from './systems/PauseMenu.js';
 import { AudioManager } from './systems/AudioManager.js';
 import { NarrativeManager } from './systems/NarrativeManager.js';
+import { createCharacter, PLAYER_LAYER } from './components/Player/Character.js'; // <-- FIX: This line was missing
 
 async function main() {
     try {
@@ -29,9 +30,14 @@ async function main() {
         // --- Initialize Core & UI Systems ---
         const scene = createScene();
         const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 50);
+        camera.layers.enableAll(); // Start by enabling all layers
+        camera.layers.toggle(PLAYER_LAYER);
+        
         const renderer = createRenderer(canvas);
         const stats = createStats();
         const loop = new Loop(camera, scene, renderer, stats);
+
+        
         
         const audioManager = new AudioManager(camera);
         const uiManager = new UIManager(audioManager);
@@ -57,8 +63,13 @@ async function main() {
             uiManager.updateLoadingProgress(10, "Preparing atmosphere...");
             const atmosphere = new SimpleAtmosphere(scene, camera, settings.quality || 'medium');
 
+            // --- FIX: Create character before physics ---
+            const character = await createCharacter('/blender/character.glb');
+            scene.add(character);
+            
             uiManager.updateLoadingProgress(25, "Setting up physics...");
-            const physicsManager = new CannonPhysicsManager(camera);
+            // --- FIX: Pass character AND camera to physics ---
+            const physicsManager = new CannonPhysicsManager(character, camera);
 
             uiManager.updateLoadingProgress(40, "Loading mansion model...");
             const mansionLoader = new MansionLoader(scene, physicsManager, settings.quality || 'medium');
@@ -72,31 +83,29 @@ async function main() {
 
             if (doorSpawnPoint) {
                 spawnPosition = doorSpawnPoint;
-                camera.position.copy(doorSpawnPoint);
-                console.log(`📍 Will spawn at entrance door`);
             } else {
                 const entranceRoom = mansionLoader.getEntranceRoom();
                 if (entranceRoom) {
                     const spawnY = entranceRoom.bounds.max.y + 2.5;
                     spawnPosition = new THREE.Vector3(entranceRoom.center.x, spawnY, entranceRoom.center.z);
-                    camera.position.copy(spawnPosition);
-                    console.log(`📍 Will spawn at entrance: ${entranceRoom.name} at Y=${spawnY.toFixed(2)}`);
                 } else {
                     spawnPosition = new THREE.Vector3(0, 10, 5);
-                    camera.position.copy(spawnPosition);
                 }
             }
-            scene.add(camera);
+            // --- FIX: Position the character, not the camera ---
+            character.position.copy(spawnPosition);
 
             uiManager.updateLoadingProgress(75, "Waking the beast...");
             const monster = await createMonster('/blender/monster.glb');
             scene.add(monster);
 
-            const monsterAI = new MonsterAI(monster, camera, mansionLoader.pathfinding, scene, audioManager);
+            // --- FIX: Pass character to MonsterAI as the player ---
+            const monsterAI = new MonsterAI(monster, character, mansionLoader.pathfinding, scene, audioManager);
             monsterAI.spawn();
             
             uiManager.updateLoadingProgress(85, "Preparing your escape...");
-            const controls = new FirstPersonControls(camera, renderer.domElement, physicsManager, { colorPuzzle, wirePuzzle }, monsterAI, mansionLoader);
+            // --- FIX: Pass the character model to the controls ---
+            const controls = new FirstPersonControls(camera, renderer.domElement, physicsManager, character, { colorPuzzle, wirePuzzle }, monsterAI, mansionLoader);
             const flashlight = new ImprovedFlashlight(camera, scene);
             const pauseMenu = new PauseMenu(renderer, controls);
             
