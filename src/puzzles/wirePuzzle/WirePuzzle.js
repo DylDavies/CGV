@@ -64,6 +64,7 @@ export class WirePuzzle {
     startCurrentLevel(isFirstLoad = false) {
         if (!this.currentLevel) return;
 
+        //console.log(this.currentLevel);
         this.logic = new WirePuzzleLogic(this.currentLevel.levelData);
         this.ui.render(this.logic);
         
