@@ -76,24 +76,10 @@ class MonsterAI {
 
 
     createVisuals() {
-        this.sightLine = null; 
+        this.sightLine = null;
 
-        this.statusElement = document.createElement('div');
-        this.statusElement.style.cssText = `
-            position: fixed;
-            bottom: 20px;
-            left: 50%;
-            transform: translateX(-50%);
-            padding: 10px 20px;
-            background: rgba(0,0,0,0.7);
-            color: white;
-            font-family: 'Courier New', monospace;
-            font-size: 16px;
-            border: 1px solid #fff;
-            border-radius: 5px;
-            z-index: 1001;
-        `;
-        document.body.appendChild(this.statusElement);
+        // Status element removed - no longer displaying aggro level
+        this.statusElement = null;
     }
 
     updateVisuals() {
@@ -106,19 +92,16 @@ class MonsterAI {
         const startPoint = this.monster.position;
         const endPoint = this.player.position;
         const sightPath = new THREE.LineCurve3(startPoint, endPoint);
-        
+
         const sightGeometry = new THREE.TubeGeometry(sightPath, 1, 0.02, 8, false);
-        const sightMaterial = new THREE.MeshBasicMaterial({ 
-            color: this.directPursuit ? 0xff0000 : 0x00ffff 
+        const sightMaterial = new THREE.MeshBasicMaterial({
+            color: this.directPursuit ? 0xff0000 : 0x00ffff
         });
-        
+
         this.sightLine = new THREE.Mesh(sightGeometry, sightMaterial);
         this.scene.add(this.sightLine);
 
-        const currentState = this.aggressionLevels[this.aggressionLevel];
-        this.statusElement.textContent = `AGGRESSION: ${currentState.name}`;
-        this.statusElement.style.color = `#${new THREE.Color(currentState.color).getHexString()}`;
-        this.statusElement.style.borderColor = `#${new THREE.Color(currentState.color).getHexString()}`;
+        // Status element update removed - no longer displaying aggro level
     }
 
     spawn() {

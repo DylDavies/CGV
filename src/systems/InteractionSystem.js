@@ -401,7 +401,10 @@ class InteractionSystem {
 
     async handleLaptopInteraction(laptopObject, userData) {
         console.log("Interacting with laptop");
-        const clue = "> The pages must be placed in the order of the cosmos: Sun, Star, Eye, Hand, Spiral, Moon.";
+        const clue = "> The first light reveals the path\n>But the second shadow conceals it.\n> A pin-prick Star follows, a diamond set high,\n>A fourth hand offers a false choice.\n>Only then can we see the truth\n> As the spiral unravels destiny"
+
+        // const clueSourceElement = document.getElementById('clue-text-source');
+        // const clue = clueSourceElement ? clueSourceElement.textContent.trim() : "Error: Clue text not found in HTML.";
 
         await window.gameControls.narrativeManager.triggerEvent('stage1.laptop_puzzle_speech');
 
@@ -420,8 +423,9 @@ class InteractionSystem {
 
             colorPuzzle.onSolve(() => {
                 this.isColorPuzzleSolved = true;
+                this.gameManager.laptopPuzzleCompleted = true; // Mark laptop puzzle as complete
                 this.showClueScreenDialog(clue);
-                
+
                 // After getting the clue, mark deciphering as complete...
                 window.gameControls.gameManager.completeObjective('decipher_pages');
                 // ...and give the new objective to place the pages.
@@ -442,7 +446,7 @@ class InteractionSystem {
         if (clueScreen) {
             const clueTextElement = clueScreen.querySelector('.clue-text');
             if (clueTextElement) {
-                clueTextElement.textContent = clueText;
+               // clueTextElement.textContent = clueText;
             }
             clueScreen.style.display = 'flex';
             setTimeout(() => {
@@ -985,27 +989,43 @@ class InteractionSystem {
 
         let isInteractable = false;
         let interactionPrompt = '';
+        let blockedMessage = '';
 
         if (intersects.length > 0) {
             const distance = intersects[0].distance;
             if (distance <= this.interactionRange) {
                 const interactableData = this.findInteractableData(intersects[0].object);
                 if (interactableData) {
-                    // NEW: Check if this is a page/page_slot and puzzle is completed
+                    const interactionType = this.interactionTypes[interactableData.data.type];
+
+                    // Check if this is a page/page_slot and puzzle is completed
                     const isPagesLocked = this.gameManager.pagesPuzzleCompleted &&
                         (interactableData.data.type === 'page' || interactableData.data.type === 'page_slot');
 
-                    if (!isPagesLocked) {
+                    // Check if page slot is blocked because laptop puzzle not complete
+                    const isPageSlotBlocked = interactableData.data.type === 'page_slot' &&
+                        !this.gameManager.laptopPuzzleCompleted;
+
+                    // Check if phone puzzle not completed (for pages)
+                    const isPagesBlocked = interactableData.data.type === 'page' &&
+                        !this.gameManager.telephoneAnswered;
+
+                    if (isPagesLocked) {
+                        blockedMessage = "The pages are sealed in place by ancient magic";
+                    } else if (isPageSlotBlocked) {
+                        blockedMessage = "These symbols don't make sense yet";
+                    } else if (isPagesBlocked) {
+                        blockedMessage = "I should focus on what's important first";
+                    } else {
                         isInteractable = true;
-                        const interactionType = this.interactionTypes[interactableData.data.type];
                         if (interactionType) {
-                            // NEW: Special handling for page_slot to show different prompt based on whether page is placed
+                            // Special handling for page_slot to show different prompt based on whether page is placed
                             if (interactableData.data.type === 'page_slot') {
                                 const slotIndex = interactableData.data.slotIndex;
                                 const hasPage = this.gameManager.placedPages[slotIndex] !== null;
                                 interactionPrompt = hasPage ? interactionType.promptWithPage : interactionType.prompt;
                             }
-                            // NEW: Special handling for fuse_box to show different prompt if fixed
+                            // Special handling for fuse_box to show different prompt if fixed
                             else if (interactableData.data.type === 'fuse_box') {
                                 interactionPrompt = this.gameManager.fuseBoxFixed ?
                                     interactionType.fixedPrompt :
@@ -1027,6 +1047,14 @@ class InteractionSystem {
             this.crosshair.style.width = '8px';
             this.crosshair.style.height = '8px';
             this.interactionPrompt.textContent = interactionPrompt;
+            this.interactionPrompt.style.display = 'block';
+        } else if (blockedMessage) {
+            // Show blocked message with red crosshair
+            this.crosshair.style.background = '#ff6666';
+            this.crosshair.style.borderColor = '#ff6666';
+            this.crosshair.style.width = '6px';
+            this.crosshair.style.height = '6px';
+            this.interactionPrompt.textContent = blockedMessage;
             this.interactionPrompt.style.display = 'block';
         } else {
             this.crosshair.style.background = 'white';

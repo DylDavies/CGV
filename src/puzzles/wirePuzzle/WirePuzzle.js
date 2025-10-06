@@ -76,7 +76,10 @@ export class WirePuzzle {
         if (this.timer) this.timer.stop();
         if (this.controls) this.controls.unfreeze();
         this.container.style.display = 'none';
-        if (this.onCloseCallback) this.onCloseCallback();
+        // Call close callback after hiding to avoid re-triggering
+        setTimeout(() => {
+            if (this.onCloseCallback) this.onCloseCallback();
+        }, 0);
     }
 
     handlePathStart(x, y) {
