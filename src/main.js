@@ -160,13 +160,6 @@ async function main() {
             logger.log('   logger.clearBuffer()      - Clear log buffer');
             logger.log('   logger.getStats()         - View logger stats');
             logger.log('');
-            logger.log('💡 LIGHTMAP COMMANDS:');
-            logger.log('   window.game.mansionLoader.toggleLightmaps()           - Toggle lights on/off');
-            logger.log('   window.game.mansionLoader.setLightmapIntensity(5.0)   - Adjust brightness');
-            logger.log('   window.game.mansionLoader.showLightmapPreview()       - Show lightmap textures');
-            logger.log('   window.game.mansionLoader.debugUVs()                  - Check UV channels');
-            logger.log('   window.game.mansionLoader.compareUVChannels()         - Compare UV1 vs UV2');
-            logger.log('');
 
             uiManager.updateLoadingText("Preparing spawn point...");
 

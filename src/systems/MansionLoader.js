@@ -38,11 +38,6 @@ class MansionLoader {
         this.fireplacesEnabled = true;
         this.navMeshNodesVisualizer = null;
 
-        // Lightmap system
-        this.lightmapOn = null;  // Lightmap with lights ON
-        this.lightmapOff = null; // Lightmap with lights OFF
-        this.useLightsOn = true;  // Toggle between lights on/off (renamed from lightmapsEnabled)
-
         // Material caching for performance
         this.materialCache = new Map();
 
@@ -100,59 +95,6 @@ class MansionLoader {
     async loadMansion(modelPath) {
         logger.log('📦 Loading mansion model:', modelPath);
 
-        // Load lightmap textures first
-        logger.log('🗺️ Loading lightmap textures...');
-        const textureLoader = new THREE.TextureLoader();
-
-        try {
-            this.lightmapOn = await textureLoader.loadAsync('blender/Mansion_Lightmap_On.png');
-            this.lightmapOff = await textureLoader.loadAsync('blender/Mansion_Lightmap_Off.png');
-
-            // Configure lightmaps - CRITICAL for proper rendering
-            this.lightmapOn.flipY = false;
-            this.lightmapOff.flipY = false;
-            this.lightmapOn.encoding = THREE.sRGBEncoding;
-            this.lightmapOff.encoding = THREE.sRGBEncoding;
-
-            // Enable anisotropic filtering for better quality
-            this.lightmapOn.anisotropy = 16;
-            this.lightmapOff.anisotropy = 16;
-
-            logger.log('✅ Lightmap textures loaded successfully');
-            logger.log(`   Lightmap On size: ${this.lightmapOn.image.width}x${this.lightmapOn.image.height}`);
-            logger.log(`   Lightmap Off size: ${this.lightmapOff.image.width}x${this.lightmapOff.image.height}`);
-
-            // Debug: Check actual pixel data
-            const canvas = document.createElement('canvas');
-            canvas.width = this.lightmapOn.image.width;
-            canvas.height = this.lightmapOn.image.height;
-            const ctx = canvas.getContext('2d');
-            ctx.drawImage(this.lightmapOn.image, 0, 0);
-            const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-            const data = imageData.data;
-
-            // Sample some pixels to verify it's not all black
-            let totalBrightness = 0;
-            const samplePoints = 100;
-            for (let i = 0; i < samplePoints; i++) {
-                const randomIdx = Math.floor(Math.random() * (data.length / 4)) * 4;
-                const r = data[randomIdx];
-                const g = data[randomIdx + 1];
-                const b = data[randomIdx + 2];
-                totalBrightness += (r + g + b) / 3;
-            }
-            const avgBrightness = totalBrightness / samplePoints;
-            logger.log(`   Average pixel brightness: ${avgBrightness.toFixed(2)}/255`);
-
-            if (avgBrightness < 10) {
-                logger.warn('   ⚠️ WARNING: Lightmap appears mostly black! Check Blender bake.');
-            } else {
-                logger.log('   ✅ Lightmap contains visible data');
-            }
-        } catch (error) {
-            logger.error('❌ Failed to load lightmap textures:', error);
-        }
-
         return new Promise((resolve, reject) => {
             const loader = new GLTFLoader();
 
@@ -203,8 +145,6 @@ class MansionLoader {
         logger.log('🔍 Processing mansion model - optimizing Blender materials...');
 
         let totalMeshes = 0;
-        let sharedMaterials = 0;
-        let lightmappedMeshes = 0;
         const materialMap = new Map(); // Track materials by their properties
 
         // Performance optimizations while keeping Blender materials
@@ -224,26 +164,6 @@ class MansionLoader {
                     const materials = Array.isArray(node.material) ? node.material : [node.material];
 
                     materials.forEach((material, index) => {
-                        // CRITICAL: Apply lightmap to material BEFORE material sharing
-                        // Don't share lightmaps across materials - each needs its own
-                        if (this.lightmapOn && this.lightmapOff) {
-                            material.lightMap = this.useLightsOn ? this.lightmapOn : this.lightmapOff;
-                            // INCREASED INTENSITY: Match Blender's brightness
-                            material.lightMapIntensity = 2.5;  // Increased from 1.0 to 2.5
-                            material.needsUpdate = true;
-                            lightmappedMeshes++;
-
-                            // Debug first few materials
-                            if (lightmappedMeshes <= 3) {
-                                logger.log(`  🗺️ Applied lightmap to ${node.name}:`);
-                                logger.log(`     Material: ${material.name}`);
-                                logger.log(`     LightMap: ${material.lightMap ? '✅' : '❌'}`);
-                                logger.log(`     Intensity: ${material.lightMapIntensity}`);
-                            }
-                        }
-
-                        // DON'T share materials if they have lightmaps (each mesh needs its own material instance)
-                        // This prevents lightmap conflicts
                         this.optimizeMaterial(material);
                     });
                 }
@@ -252,9 +172,9 @@ class MansionLoader {
                 if (node.geometry) {
                     node.geometry.computeBoundingSphere();
 
-                    // CRITICAL: Check if uv2 exists for lightmaps
-                    if (!node.geometry.attributes.uv2) {
-                        logger.warn(`  ⚠️ ${node.name} missing uv2! Re-export from Blender with both UV layers.`);
+                    // Remove unused attributes to save memory
+                    if (node.geometry.attributes.uv2) {
+                        node.geometry.deleteAttribute('uv2');
                     }
 
                     // Remove unused attributes to save memory
@@ -267,8 +187,6 @@ class MansionLoader {
 
         logger.log(`♻️ Material optimization complete:`);
         logger.log(`   Total meshes: ${totalMeshes}`);
-        logger.log(`   Lightmapped meshes: ${lightmappedMeshes}`);
-        logger.log(`   Lightmap intensity: 2.5x`);
 
         // Store the material map for later use
         this.materialCache = materialMap;
@@ -628,16 +546,84 @@ toggleNavMeshNodesVisualizer() {
 
 
     setupLamps() {
-        logger.log('🔥 Setting up fireplaces...');
+        logger.log('💡 Setting up automatic lamp lighting...');
+
+        let lampCount = 0;
 
         this.model.traverse((node) => {
             const nodeName = node.name.toLowerCase();
+
+             if (nodeName.includes('walllamp') || nodeName.includes('chandelier') ||
+                nodeName.includes('lamp') || nodeName.includes('light')) {
+
+                node.updateMatrixWorld(true);
+                const lampPosition = new THREE.Vector3();
+                node.getWorldPosition(lampPosition);
+
+                let lightColor, lightIntensity, lightDistance;
+
+                if (nodeName.includes('chandelier')) {
+                    lightColor = 0xffaa55;
+                    lightIntensity = 2.0;
+                    lightDistance = 4;
+                } else if (nodeName.includes('walllamp')) {
+                    lightColor = 0xffbb66;
+                    lightIntensity = 1.5;
+                    lightDistance = 3;
+                } else {
+                    lightColor = 0xffcc77;
+                    lightIntensity = 1.5;
+                    lightDistance = 4;
+                }
+
+                const lampLight = new THREE.PointLight(lightColor, lightIntensity, lightDistance, 3);
+
+                if (nodeName.includes('walllamp')) {
+                    const worldQuaternion = new THREE.Quaternion();
+                    node.getWorldQuaternion(worldQuaternion);
+
+                    const forward = new THREE.Vector3(0.5, 0, 0);
+                    forward.applyQuaternion(worldQuaternion);
+                    forward.normalize();
+
+                    lampLight.position.copy(lampPosition);
+                    lampLight.position.add(forward.multiplyScalar(0.4));
+                    lampLight.position.y += 0.1;
+                } else {
+                    lampLight.position.copy(lampPosition);
+                }
+
+                lampLight.castShadow = false;
+
+                // CRITICAL FIX: Start with light visible!
+                lampLight.visible = true;
+
+                this.scene.add(lampLight);
+
+                if (lampCount < 3) {
+                    console.log(`💡 ${node.name}: pos=${lampLight.position.x.toFixed(1)},${lampLight.position.y.toFixed(1)},${lampLight.position.z.toFixed(1)}`);
+                }
+
+                const lampData = {
+                    mesh: node,
+                    light: lampLight,
+                    baseIntensity: lightIntensity,
+                    flickerPhase: Math.random() * Math.PI * 2,
+                    flickerSpeed: 0.5 + Math.random() * 0.5,
+                    type: nodeName.includes('chandelier') ? 'chandelier' :
+                          nodeName.includes('walllamp') ? 'walllamp' : 'lamp'
+                };
+
+                this.lamps.push(lampData);
+                lampCount++;
+            }
 
             if (nodeName.includes('fire') && !nodeName.includes('fireplace')) {
                 this.setupFireplace(node);
             }
         });
 
+        logger.log(`💡 Added ${lampCount} automatic lights to lamps`);
         logger.log(`🔥 Found ${this.fireplaces.length} fireplaces`);
     }
 
@@ -859,8 +845,62 @@ toggleNavMeshNodesVisualizer() {
             this.updateOcclusionCulling(cameraPosition);
         }
 
+        if (this.lampsEnabled) {
+            this.updateLampFlickering(delta);
+        }
+
         if (this.fireplacesEnabled) {
             this.updateFireplaces(delta);
+        }
+    }
+
+    updateLampFlickering(delta) {
+        const time = Date.now() * 0.001;
+        const playerPos = this.playerPosition;
+
+        this.lampUpdateCounter = (this.lampUpdateCounter || 0) + 1;
+        if (this.lampUpdateCounter % this.lampUpdateRate !== 0) return;
+
+        // FIXED: Only cull if player position is set (not at 0,0,0)
+        const playerPosSet = playerPos.length() > 0.1;
+
+        if (playerPosSet) {
+            // Distance-based light culling
+            let activeLights = 0;
+
+            const lampDistances = this.lamps.map(lamp => ({
+                lamp,
+                distance: lamp.light.position.distanceTo(playerPos)
+            }));
+
+            lampDistances.sort((a, b) => a.distance - b.distance);
+
+            for (const { lamp, distance } of lampDistances) {
+                // More generous distance check
+                if (distance < lamp.light.distance * 2.5 && activeLights < this.maxActiveLights) {
+                    lamp.light.visible = true;
+
+                    const flicker = Math.sin(time * lamp.flickerSpeed * this.lampFlickerSpeed + lamp.flickerPhase);
+                    const noise = Math.random() * 0.1 - 0.05;
+                    lamp.light.intensity = lamp.baseIntensity * (0.9 + flicker * 0.05 + noise);
+
+                    activeLights++;
+                } else if (activeLights >= this.maxActiveLights) {
+                    // Gradually fade out distant lights instead of instantly hiding
+                    lamp.light.intensity *= 0.95;
+                    if (lamp.light.intensity < 0.1) {
+                        lamp.light.visible = false;
+                    }
+                }
+            }
+        } else {
+            // Player position not set yet, show all lights
+            for (const lamp of this.lamps) {
+                lamp.light.visible = true;
+                const flicker = Math.sin(time * lamp.flickerSpeed * this.lampFlickerSpeed + lamp.flickerPhase);
+                const noise = Math.random() * 0.1 - 0.05;
+                lamp.light.intensity = lamp.baseIntensity * (0.9 + flicker * 0.05 + noise);
+            }
         }
     }
 
@@ -870,8 +910,8 @@ toggleNavMeshNodesVisualizer() {
         this.fireplaceUpdateCounter = (this.fireplaceUpdateCounter || 0) + 1;
         const shouldUpdateParticles = this.fireplaceUpdateCounter % this.fireplaceUpdateRate === 0;
 
-        if (shouldUpdateParticles) {  
-            for (const fireplace of this.fireplaces) {
+        for (const fireplace of this.fireplaces) {
+            if (shouldUpdateParticles) {
                 const positions = fireplace.particles.geometry.attributes.position.array;
                 const velocities = fireplace.particles.geometry.attributes.velocity.array;
 
@@ -889,46 +929,68 @@ toggleNavMeshNodesVisualizer() {
 
                 fireplace.particles.geometry.attributes.position.needsUpdate = true;
             }
+
+            const flicker = Math.sin(time * 10 + fireplace.flickerPhase);
+            const noise = Math.random() * 0.3;
+            fireplace.light.intensity = fireplace.baseIntensity * (0.8 + flicker * 0.2 + noise);
         }
     }
 
-    // Lightmap control API
-    toggleLightmaps() {
-        this.useLightsOn = !this.useLightsOn;
-
-        if (!this.lightmapOn || !this.lightmapOff) {
-            logger.warn('⚠️ Lightmap textures not loaded');
-            return this.useLightsOn;
+    // Lamp control API
+    setLampsEnabled(enabled) {
+        this.lampsEnabled = enabled;
+        for (const lamp of this.lamps) {
+            lamp.light.visible = enabled;
         }
-
-        // Update all materials
-        this.model.traverse((node) => {
-            if (node.isMesh && node.material) {
-                const materials = Array.isArray(node.material) ? node.material : [node.material];
-                materials.forEach(material => {
-                    material.lightMap = this.useLightsOn ? this.lightmapOn : this.lightmapOff;
-                    material.needsUpdate = true;
-                });
-            }
-        });
-
-        logger.log(`💡 Mansion lights: ${this.useLightsOn ? 'ON' : 'OFF'}`);
-        return this.useLightsOn;
+        logger.log(`💡 Lamps ${enabled ? 'enabled' : 'disabled'}`);
     }
 
-    setLightmapIntensity(intensity) {
-        this.model.traverse((node) => {
-            if (node.isMesh && node.material) {
-                const materials = Array.isArray(node.material) ? node.material : [node.material];
-                materials.forEach(material => {
-                    if (material.lightMap) {
-                        material.lightMapIntensity = intensity;
-                        material.needsUpdate = true;
-                    }
-                });
+    // Debug: Show light helpers
+    showLightHelpers() {
+        logger.log('💡 Adding light helpers...');
+
+        for (const lamp of this.lamps) {
+            if (!lamp.helper) {
+                const helper = new THREE.PointLightHelper(lamp.light, 0.2);
+                this.scene.add(helper);
+                lamp.helper = helper;
+            } else {
+                lamp.helper.visible = true;
             }
-        });
-        logger.log(`🗺️ Lightmap intensity set to: ${intensity}`);
+        }
+
+        logger.log(`✅ Showing helpers for ${this.lamps.length} lights`);
+    }
+
+    hideLightHelpers() {
+        for (const lamp of this.lamps) {
+            if (lamp.helper) {
+                lamp.helper.visible = false;
+            }
+        }
+        logger.log('💡 Light helpers hidden');
+    }
+
+    toggleLamps() {
+        this.setLampsEnabled(!this.lampsEnabled);
+        return this.lampsEnabled;
+    }
+
+    setLampIntensity(intensity) {
+        // Update base intensity for all lamps
+        for (const lamp of this.lamps) {
+            lamp.baseIntensity = intensity;
+        }
+        logger.log(`💡 Lamp intensity set to: ${intensity}`);
+    }
+
+    setLampFlickerSpeed(speed) {
+        this.lampFlickerSpeed = speed;
+        logger.log(`💡 Lamp flicker speed set to: ${speed}`);
+    }
+
+    getLampsByType(type) {
+        return this.lamps.filter(lamp => lamp.type === type);
     }
 
     // Fireplace control API
@@ -1081,237 +1143,6 @@ toggleNavMeshNodesVisualizer() {
         this.visibleRooms.clear();
 
         logger.log('✅ Mansion loader disposed');
-    }
-
-    // Debug: Check UV channels
-    debugUVs() {
-        logger.log('🔍 UV Channel Debug:');
-        let meshCount = 0;
-        let hasUV1 = 0;
-        let hasUV2 = 0;
-        let bothUVs = 0;
-        let sameArray = 0;
-        const missingUV2Meshes = [];
-
-        this.model.traverse((node) => {
-            if (node.isMesh) {
-                meshCount++;
-                const geom = node.geometry;
-                const uv1 = geom.attributes.uv;
-                const uv2 = geom.attributes.uv2;
-
-                if (uv1) hasUV1++;
-                if (uv2) hasUV2++;
-                if (uv1 && uv2) {
-                    bothUVs++;
-                    // Check if UV1 and UV2 point to the same array (BUG!)
-                    if (uv1.array === uv2.array) {
-                        sameArray++;
-                    }
-                } else if (uv1 && !uv2) {
-                    // Track meshes missing UV2
-                    missingUV2Meshes.push(node.name);
-                }
-
-                // Log first mesh details
-                if (meshCount === 1) {
-                    logger.log(`\nFirst mesh: ${node.name}`);
-                    logger.log(`  UV1: ${uv1 ? `✅ (${uv1.count} coords)` : '❌ Missing'}`);
-                    logger.log(`  UV2: ${uv2 ? `✅ (${uv2.count} coords)` : '❌ Missing'}`);
-
-                    if (uv1 && uv2) {
-                        // Sample first coordinate
-                        logger.log(`  UV1 sample: (${uv1.array[0].toFixed(3)}, ${uv1.array[1].toFixed(3)})`);
-                        logger.log(`  UV2 sample: (${uv2.array[0].toFixed(3)}, ${uv2.array[1].toFixed(3)})`);
-
-                        if (uv1.array === uv2.array) {
-                            logger.error('  ⚠️ UV1 and UV2 are THE SAME ARRAY! This is the bug!');
-                        }
-                    }
-                }
-            }
-        });
-
-        logger.log(`\n📊 UV Statistics:`);
-        logger.log(`  Total meshes: ${meshCount}`);
-        logger.log(`  Has UV1: ${hasUV1}`);
-        logger.log(`  Has UV2: ${hasUV2}`);
-        logger.log(`  Has BOTH: ${bothUVs}`);
-
-        if (missingUV2Meshes.length > 0) {
-            logger.warn(`\n⚠️ Meshes missing UV2 (${missingUV2Meshes.length}):`);
-            missingUV2Meshes.forEach(name => logger.log(`  - ${name}`));
-        }
-
-        if (sameArray > 0) {
-            logger.error(`\n❌ CRITICAL: ${sameArray} meshes have UV1 and UV2 pointing to SAME array!`);
-            logger.log('   This means the Blender export did NOT include separate UV layers.');
-            logger.log('   Solution: In Blender, ensure the model has 2 UV layers before export.');
-        } else if (bothUVs === 0) {
-            logger.error('\n❌ NO meshes have UV2! Lightmaps will not work.');
-            logger.log('   Solution: Re-export from Blender with BOTH UV layers enabled.');
-        } else if (bothUVs < meshCount) {
-            logger.warn(`\n⚠️ Only ${bothUVs}/${meshCount} meshes have UV2!`);
-        } else {
-            logger.log('\n✅ All meshes have both UV channels with separate data');
-        }
-
-        return { meshCount, hasUV1, hasUV2, bothUVs, sameArray, missingUV2Meshes };
-    }
-
-    // Fix missing UV2 by copying UV1 as a fallback
-    fixMissingUV2() {
-        logger.log('🔧 Fixing missing UV2 channels...');
-        let fixedCount = 0;
-
-        this.model.traverse((node) => {
-            if (node.isMesh) {
-                const geom = node.geometry;
-                const uv1 = geom.attributes.uv;
-                const uv2 = geom.attributes.uv2;
-
-                // If has UV1 but missing UV2, copy UV1 to UV2
-                if (uv1 && !uv2) {
-                    // Create a new array (don't reference the same array!)
-                    const uv2Array = new Float32Array(uv1.array);
-                    geom.setAttribute('uv2', new THREE.BufferAttribute(uv2Array, 2));
-                    fixedCount++;
-                    logger.log(`  ✅ Fixed UV2 for: ${node.name}`);
-                }
-            }
-        });
-
-        logger.log(`\n✅ Fixed ${fixedCount} meshes by copying UV1 to UV2`);
-        logger.warn('⚠️ Note: This is a temporary fix. For proper lightmapping,');
-        logger.warn('   re-export from Blender with a dedicated lightmap UV layer.');
-
-        return fixedCount;
-    }
-
-    // Compare UV1 and UV2 to check if they're actually different
-    compareUVChannels(meshName = null) {
-        logger.log('🔍 Comparing UV1 vs UV2 coordinates...');
-        let checkedMeshes = 0;
-        let identicalUVs = 0;
-        let differentUVs = 0;
-
-        this.model.traverse((node) => {
-            if (node.isMesh) {
-                // Filter by mesh name if specified
-                if (meshName && !node.name.toLowerCase().includes(meshName.toLowerCase())) {
-                    return;
-                }
-
-                const geom = node.geometry;
-                const uv1 = geom.attributes.uv;
-                const uv2 = geom.attributes.uv2;
-
-                if (uv1 && uv2) {
-                    checkedMeshes++;
-
-                    // Check if coordinates are identical
-                    let areIdentical = true;
-                    const threshold = 0.001; // Small threshold for floating point comparison
-
-                    for (let i = 0; i < Math.min(uv1.array.length, uv2.array.length); i++) {
-                        if (Math.abs(uv1.array[i] - uv2.array[i]) > threshold) {
-                            areIdentical = false;
-                            break;
-                        }
-                    }
-
-                    if (areIdentical) {
-                        identicalUVs++;
-                        if (checkedMeshes <= 5 || meshName) {
-                            logger.warn(`  ⚠️ ${node.name}: UV1 and UV2 are IDENTICAL`);
-                        }
-                    } else {
-                        differentUVs++;
-                        if (checkedMeshes <= 5 || meshName) {
-                            logger.log(`  ✅ ${node.name}: UV1 and UV2 are different`);
-                            // Show sample coordinates
-                            logger.log(`     UV1[0]: (${uv1.array[0].toFixed(3)}, ${uv1.array[1].toFixed(3)})`);
-                            logger.log(`     UV2[0]: (${uv2.array[0].toFixed(3)}, ${uv2.array[1].toFixed(3)})`);
-                        }
-                    }
-                }
-            }
-        });
-
-        logger.log(`\n📊 UV Comparison Results:`);
-        logger.log(`  Total meshes checked: ${checkedMeshes}`);
-        logger.log(`  Identical UV1/UV2: ${identicalUVs} (${((identicalUVs/checkedMeshes)*100).toFixed(1)}%)`);
-        logger.log(`  Different UV1/UV2: ${differentUVs} (${((differentUVs/checkedMeshes)*100).toFixed(1)}%)`);
-
-        if (identicalUVs > 0) {
-            logger.warn(`\n⚠️ ${identicalUVs} meshes have identical UV1 and UV2!`);
-            logger.warn('   This means Blender exported the same UV layer twice.');
-            logger.warn('   Solution: In Blender, create a separate UV layer for lightmaps');
-            logger.warn('   and ensure it\'s named "LightmapUV" or similar.');
-        }
-
-        return { checkedMeshes, identicalUVs, differentUVs };
-    }
-
-    // Visual debug: Show lightmap textures in browser
-    showLightmapPreview() {
-        logger.log('🖼️ Creating lightmap preview...');
-
-        // Remove old preview if exists
-        const oldPreview = document.getElementById('lightmap-preview');
-        if (oldPreview) oldPreview.remove();
-
-        // Create preview container
-        const preview = document.createElement('div');
-        preview.id = 'lightmap-preview';
-        preview.style.position = 'fixed';
-        preview.style.top = '10px';
-        preview.style.right = '10px';
-        preview.style.zIndex = '10000';
-        preview.style.background = 'rgba(0,0,0,0.8)';
-        preview.style.padding = '10px';
-        preview.style.borderRadius = '5px';
-        preview.style.color = 'white';
-        preview.style.fontFamily = 'monospace';
-        preview.style.fontSize = '12px';
-
-        const title = document.createElement('div');
-        title.textContent = 'Lightmap Preview (Click to close)';
-        title.style.marginBottom = '10px';
-        title.style.cursor = 'pointer';
-        title.onclick = () => preview.remove();
-        preview.appendChild(title);
-
-        // Show Lightmap ON
-        if (this.lightmapOn && this.lightmapOn.image) {
-            const canvasOn = document.createElement('canvas');
-            canvasOn.width = 256;
-            canvasOn.height = 256;
-            const ctxOn = canvasOn.getContext('2d');
-            ctxOn.drawImage(this.lightmapOn.image, 0, 0, 256, 256);
-            const labelOn = document.createElement('div');
-            labelOn.textContent = 'Lightmap ON';
-            labelOn.style.marginTop = '5px';
-            preview.appendChild(labelOn);
-            preview.appendChild(canvasOn);
-        }
-
-        // Show Lightmap OFF
-        if (this.lightmapOff && this.lightmapOff.image) {
-            const canvasOff = document.createElement('canvas');
-            canvasOff.width = 256;
-            canvasOff.height = 256;
-            const ctxOff = canvasOff.getContext('2d');
-            ctxOff.drawImage(this.lightmapOff.image, 0, 0, 256, 256);
-            const labelOff = document.createElement('div');
-            labelOff.textContent = 'Lightmap OFF';
-            labelOff.style.marginTop = '10px';
-            preview.appendChild(labelOff);
-            preview.appendChild(canvasOff);
-        }
-
-        document.body.appendChild(preview);
-        logger.log('✅ Lightmap preview displayed (top-right corner)');
     }
 }
 
