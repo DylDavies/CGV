@@ -137,9 +137,9 @@ class GameManager {
         this.showHint(pageData.message, 5000);
 
         if (this.collectedPages.length >= 6) {
-            // After collecting all pages, trigger the speech and new objective
+            // After collecting all pages, trigger speech and objective to decipher them.
             await window.gameControls.narrativeManager.triggerEvent('stage1.all_pages_found');
-            window.gameControls.narrativeManager.triggerEvent('stage1.all_pages_placed');
+            window.gameControls.narrativeManager.triggerEvent('stage1.decipher_pages');
             this.completeObjective('collect_pages'); 
         }
 
@@ -164,40 +164,34 @@ class GameManager {
     }
 
     // NEW: Checks if the placed pages match the solution
-    async checkPageOrder() {
+   async checkPageOrder() {
         if (this.placedPages.includes(null)) {
-            return; // Not all slots are filled yet
+            return; // Exit if not all slots are filled.
         }
 
-        // This block will now only run once when the final page is placed.
-        if (!this.allPagesPlaced) {
-            this.allPagesPlaced = true; // Set flag to prevent re-triggering.
+        let isCorrect = true; // Placeholder for your actual solution logic
+
+        if (isCorrect && !this.allPagesPlaced) {
+            this.allPagesPlaced = true; // Prevent this from running again.
+            
             this.completeObjective('all_pages_placed');
-            await window.gameControls.narrativeManager.triggerEvent('stage1.all_pages_placed_speech');
-            window.gameControls.narrativeManager.triggerEvent('stage1.decipher_pages');
-        }
+            await window.gameControls.narrativeManager.triggerEvent('stage1.truth_is_found');
 
-        let isCorrect = true;
-        // for (let i = 0; i < this.pageSolution.length; i++) {
-        //     if (this.placedPages[i] !== this.pageSolution[i]) {
-        //         isCorrect = false;
-        //         break;
-        //     }
-        // }
+           // Trigger attack sequence
+            await window.gameControls.narrativeManager.triggerEvent('stage1.escape_monster');
+            window.gameControls.narrativeManager.triggerEvent('stage1.monster_awaken_warning');
+            window.gameControls.narrativeManager.triggerEvent('stage1.run_away_from_monster');
 
-        if (isCorrect) {
-            this.completeObjective('place_pages');
-            this.showHint("The pages glow in unison... a hidden passage has been revealed!", 8000);
-            
-            // NEW: Loop through the solution and activate the glow on each symbol.
-            if (this.mansion) {
-                this.pageSolution.forEach(pageId => {
-                    this.mansion.activatePageSymbolGlow(pageId);
-                });
-            }
-            
-            // Trigger an event here, like opening a door
-        } else {
+            // Monster attack and teleport sequence
+            setTimeout(async () => {
+                window.gameControls.audioManager.playSound('player_hit', 'public/audio/sfx/hit_sound.mp3');
+                window.gameControls.narrativeManager.showBlackout();
+                window.gameControls.physicsManager.teleportTo(new THREE.Vector3(0, 1.8, 0));
+                await window.gameControls.narrativeManager.triggerEvent('stage1.attacked_by_monster');
+                await window.gameControls.narrativeManager.triggerEvent('intro.wake_up');
+            }, 5000);
+
+        } else if (!isCorrect) {
             this.showHint("Nothing happens... the order must be wrong.", 4000);
         }
     }

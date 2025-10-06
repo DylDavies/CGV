@@ -375,11 +375,10 @@ class InteractionSystem {
         userData.interacted = true;
     }
 
-async handleLaptopInteraction(laptopObject, userData) {
+    async handleLaptopInteraction(laptopObject, userData) {
         console.log("Interacting with laptop");
-        const clue = "> The clocks are wrong, find the two that are the same. The time they display is the key.";
+        const clue = "> The pages must be placed in the order of the cosmos: Sun, Star, Eye, Hand, Spiral, Moon.";
 
-        // --- This now happens first ---
         await window.gameControls.narrativeManager.triggerEvent('stage1.laptop_puzzle_speech');
 
         if (this.isColorPuzzleSolved) {
@@ -398,38 +397,12 @@ async handleLaptopInteraction(laptopObject, userData) {
             colorPuzzle.onSolve(() => {
                 this.isColorPuzzleSolved = true;
                 this.showClueScreenDialog(clue);
+                
+                // After getting the clue, mark deciphering as complete...
+                window.gameControls.gameManager.completeObjective('decipher_pages');
+                // ...and give the new objective to place the pages.
+                window.gameControls.narrativeManager.triggerEvent('stage1.all_pages_placed');
 
-                const closeClueButton = this.uiManager.uiElements.closeClueButton;
-                if (closeClueButton) {
-                    const originalOnClick = closeClueButton.onclick;
-                    
-                    closeClueButton.onclick = async () => {
-                        if (originalOnClick) originalOnClick();
-
-                        await window.gameControls.narrativeManager.triggerEvent('stage1.pages_deciphered');
-                        await window.gameControls.narrativeManager.triggerEvent('stage1.escape_monster');
-                        
-                        window.gameControls.narrativeManager.triggerEvent('stage1.monster_awaken_warning');
-                        window.gameControls.narrativeManager.triggerEvent('stage1.run_away_from_monster');
-                        
-                        setTimeout(async () => {
-                            // Play the hit sound
-                            window.gameControls.audioManager.playSound('player_hit', 'public/audio/sfx/hit_sound.mp3');
-                            
-                            window.gameControls.narrativeManager.showBlackout();
-                            
-                            // Teleport the player to the origin
-                            window.gameControls.physicsManager.teleportTo(new THREE.Vector3(0, 1.8, 0));
-                            
-                            // Knockout into wakeup scene
-                            await window.gameControls.narrativeManager.triggerEvent('stage1.attacked_by_monster');
-                            await window.gameControls.narrativeManager.triggerEvent('intro.wake_up');
-
-                        }, 5000); 
-                        
-                        closeClueButton.onclick = originalOnClick;
-                    };
-                }
             }, 'ACCESS GRANTED');
 
         } else {

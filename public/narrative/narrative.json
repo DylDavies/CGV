@@ -65,13 +65,19 @@
     "all_pages_found": {
       "type": "speechBubble",
       "title": "You",
-      "text": "That looks like all the pages, but where should I put them?",
-      "duration": 4000
+      "text": "That's all of them. Now I need to figure out what they mean, and where they go.",
+      "duration": 4500
     },
     "all_pages_placed": {
-        "type": "objective",
-        "id": "all_pages_placed",
-        "description": "Find out where the pages should go"
+      "type": "objective",
+      "id": "all_pages_placed",
+      "description": "Place the pages on the wall in the correct order"
+    },
+    "truth_is_found": {
+      "type": "speechBubble",
+      "title": "You",
+      "text": "It worked... Wait, the pages are glowing. The text is changing... 'it wakes when the truth is found'… what does that mean—",
+      "duration": 6000
     },
     "all_pages_placed_speech": {
       "type": "speechBubble",
@@ -82,12 +88,12 @@
     "decipher_pages": {
       "type": "objective",
       "id": "decipher_pages",
-      "description": "Find a way to deciper the meaning of the pages"
+      "description": "Find a way to decipher the meaning of the pages"
     },
     "laptop_puzzle_speech": {
       "type": "speechBubble",
       "title": "You",
-      "text": "Maybe this can decode the symbols…",
+      "text": "This old laptop... maybe it has some information.",
       "duration": 4000
     },
     "escape_monster": {
