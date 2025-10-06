@@ -670,59 +670,30 @@ toggleNavMeshNodesVisualizer() {
         const geometry = new THREE.BufferGeometry();
 
         const positions = new Float32Array(particleCount * 3);
-        const randoms = new Float32Array(particleCount * 3); // x: lifetime, y: speed, z: size
+        const velocities = new Float32Array(particleCount * 3); // x: lifetime, y: speed, z: size
 
-        for (let i = 0; i < particleCount; i++) {
-            positions[i * 3 + 0] = (Math.random() - 0.5) * 0.5; // x
-            positions[i * 3 + 1] = Math.random() * 0.2;         // y
-            positions[i * 3 + 2] = (Math.random() - 0.5) * 0.5; // z
+        for (let i = 0; i < particleCount * 3; i += 3) {
+            positions[i] = (Math.random() - 0.5) * 0.5; // x
+            positions[i + 1] = Math.random() * 0.2;         // y
+            positions[i + 2] = (Math.random() - 0.5) * 0.5; // z
 
-            randoms[i * 3 + 0] = 1.0 + Math.random(); // lifetime
-            randoms[i * 3 + 1] = 0.5 + Math.random() * 0.5; // speed
-            randoms[i * 3 + 2] = 0.1 + Math.random() * 0.1; // size
+            velocities[i] = (Math.random() - 0.5) * 0.02; // lifetime
+            velocities[i + 1] = 0.5 + Math.random() * 0.5; // speed
+            velocities[i + 2] = (Math.random() - 0.5) * 0.02; // size
         }
 
         geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
-        geometry.setAttribute('aRandom', new THREE.BufferAttribute(randoms, 3));
+        geometry.setAttribute('velocity', new THREE.BufferAttribute(velocities, 3));
+        geometry.attributes.position.setUsage(THREE.DynamicDrawUsage);
 
-        const material = new THREE.ShaderMaterial({
-            uniforms: {
-                uTime: { value: 0.0 },
-                uColor: { value: new THREE.Color(0xff6600) },
-            },
-            vertexShader: `
-                uniform float uTime;
-                attribute vec3 aRandom; // x: lifetime, y: speed, z: size
-
-                void main() {
-                    vec3 pos = position;
-                    float progress = mod(uTime * aRandom.y, aRandom.x) / aRandom.x;
-
-                    pos.y += progress * 2.0; // Move particle up
-
-                    // Fade out at the end of life
-                    float size = aRandom.z * (1.0 - progress);
-
-                    vec4 modelPosition = modelMatrix * vec4(pos, 1.0);
-                    vec4 viewPosition = viewMatrix * modelPosition;
-                    gl_Position = projectionMatrix * viewPosition;
-                    gl_PointSize = size * 100.0;
-                    gl_PointSize *= (1.0 / -viewPosition.z);
-                }
-            `,
-            fragmentShader: `
-                uniform vec3 uColor;
-
-                void main() {
-                    float distanceToCenter = distance(gl_PointCoord, vec2(0.5));
-                    float strength = 1.0 - (distanceToCenter * 2.0);
-                    gl_FragColor = vec4(uColor, strength);
-                }
-            `,
+        const material = new THREE.PointsMaterial({
+            color: 0xff6600,
+            size: 0.15,
             transparent: true,
+            opacity: 0.8,
             blending: THREE.AdditiveBlending,
-            depthWrite: false, // Important for transparency
-        });
+            sizeAttenuation: true
+        })
 
         const fireParticles = new THREE.Points(geometry, material);
         fireParticles.position.copy(firePosition);
@@ -896,14 +867,28 @@ toggleNavMeshNodesVisualizer() {
     updateFireplaces(delta) {
         const time = Date.now() * 0.001;
 
-        for (const fireplace of this.fireplaces) {
-            // Update the time uniform for the shader
-            fireplace.particles.material.uniforms.uTime.value = time;
+        this.fireplaceUpdateCounter = (this.fireplaceUpdateCounter || 0) + 1;
+        const shouldUpdateParticles = this.fireplaceUpdateCounter % this.fireplaceUpdateRate === 0;
 
-            // Keep the light flickering on the CPU
-            const flicker = Math.sin(time * 10 + fireplace.flickerPhase);
-            const noise = Math.random() * 0.3;
-            fireplace.light.intensity = fireplace.baseIntensity * (0.8 + flicker * 0.2 + noise);
+        if (shouldUpdateParticles) {  
+            for (const fireplace of this.fireplaces) {
+                const positions = fireplace.particles.geometry.attributes.position.array;
+                const velocities = fireplace.particles.geometry.attributes.velocity.array;
+
+                for (let i = 0; i < positions.length; i += 3) {
+                    positions[i] += velocities[i] * delta * 2;
+                    positions[i + 1] += velocities[i + 1] * delta * 2;
+                    positions[i + 2] += velocities[i + 2] * delta * 2;
+
+                    if (positions[i + 1] > 0.7) {
+                        positions[i] = (Math.random() - 0.5) * 0.5;
+                        positions[i + 1] = 0;
+                        positions[i + 2] = (Math.random() - 0.5) * 0.5;
+                    }
+                }
+
+                fireplace.particles.geometry.attributes.position.needsUpdate = true;
+            }
         }
     }
 
