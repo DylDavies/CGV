@@ -41,6 +41,9 @@ class MansionLoader {
         this.fireplacesEnabled = true;
         this.navMeshNodesVisualizer = null;
 
+        // NEW: Page glow control
+        this.pageGlowEnabled = false;
+
         // Material caching for performance
         this.materialCache = new Map();
 
@@ -148,8 +151,8 @@ class MansionLoader {
 
         this.model.traverse((node) => {
             // Find and store specific, named props
-            if (node.name === 'S_Telephone001') { 
-                this.props.set('telephone', node); 
+            if (node.name === 'S_Telephone001') {
+                this.props.set('telephone', node);
                 node.userData = { type: 'telephone', interactable: 'true' };
                 console.log(`📞 Found prop: ${node.name}`);
             }
@@ -157,6 +160,11 @@ class MansionLoader {
                 this.props.set('laptop', node);
                 node.userData = { type: 'laptop', interactable: true };
                 console.log(`💻 Found prop: ${node.name}`);
+            }
+            if (node.name === 'S_ElectricalCabinet001') {
+                this.props.set('fuse_box', node);
+                node.userData = { type: 'fuse_box', interactable: true };
+                console.log(`⚡ Found prop: ${node.name} (Fuse Box)`);
             }
             
             if (node.isMesh) {
@@ -226,12 +234,24 @@ class MansionLoader {
         this.model.traverse((node) => {
             if (node.userData.type === 'page_slot') {
                 console.log(`🔍 Found page slot: ${node.name}`);
-                // Make the placeholder slot visible with a subtle material
                 node.visible = true;
                 node.material = slotMaterial;
                 this.pageSlots[node.userData.slotIndex] = node;
+
+                // --- FIX FOR ALL SUNKEN SLOTS ---
+                // 1. Get the direction the slot is "facing"
+                const forward = new THREE.Vector3(0, 0, 1);
+                forward.applyQuaternion(node.quaternion);
+
+                // 2. Move the slot slightly forward in that direction
+                // You can adjust the 0.02 value if it needs to be more or less
+                node.position.add(forward.multiplyScalar(0.02)); 
+                // --- END FIX ---
             }
         });
+        // The console.log was here, but it's better to log inside the loop
+        // to confirm each adjustment. Let's add a final confirmation.
+        console.log(`🔧 Adjusted positions for all ${this.pageSlots.length} page slots.`);
     }
 
     displayPageOnSlot(slotIndex, pageId) {
@@ -249,7 +269,28 @@ class MansionLoader {
         
         const pageObject = this.pages[pageIndex];
 
-        // The page was removed from the scene, re-add it
+        pageObject.traverse((node) => {
+        if (node.isMesh) {
+            // Apply the polygon offset fix to all parts of the page
+            node.material = node.material.clone();
+            node.material.polygonOffset = true;
+            node.material.polygonOffsetFactor = -1.0;
+            node.material.polygonOffsetUnits = -1.0;
+
+            // --- FIX TO LIFT SYMBOL OFF PAGE ---
+            // Check if the current mesh is a symbol
+            if (node.name.toLowerCase().includes('_symbol')) {
+                // The symbol's "forward" is its local Z-axis
+                const symbolForward = new THREE.Vector3(0, 0, 1); 
+                
+                // Move the symbol slightly along its own forward axis
+                node.position.add(symbolForward.multiplyScalar(0.01));
+                console.log(`🔧 Lifted symbol ${node.name} off its page.`);
+            }
+            // --- END FIX ---
+        }
+    });
+
         this.scene.add(pageObject);
 
         // Get the world position and rotation of the slot
@@ -264,7 +305,7 @@ class MansionLoader {
         
         // Add a small offset along the object's normal to prevent z-fighting with the wall
         const normal = new THREE.Vector3(0, 0, 1).applyQuaternion(pageObject.quaternion);
-        pageObject.position.add(normal.multiplyScalar(0.01));
+        pageObject.position.add(normal.multiplyScalar(0.015));
 
         // Make the page visible again and stop its glow
         pageObject.visible = true;
@@ -804,7 +845,15 @@ class MansionLoader {
     }
 
 
+    // NEW: Enable page glow (called when phone is answered)
+    enablePageGlow() {
+        this.pageGlowEnabled = true;
+        console.log('✨ Page glow enabled');
+    }
+
     updatePageGlow() {
+        if (!this.pageGlowEnabled) return; // Don't glow until enabled
+
         const time = Date.now() * 0.005;
         const pulseIntensity = (Math.sin(time) + 1) / 2;
         for (const page of this.pages) {
@@ -882,6 +931,13 @@ class MansionLoader {
         this.lampsEnabled = enabled;
         for (const lamp of this.lamps) lamp.light.visible = enabled;
         console.log(`💡 Lamps ${enabled ? 'enabled' : 'disabled'}`);
+    }
+
+    // NEW: Control all lights (lamps and fireplaces)
+    setAllLightsEnabled(enabled) {
+        this.setLampsEnabled(enabled);
+        this.setFireplacesEnabled(enabled);
+        console.log(`💡 All lights ${enabled ? 'ON' : 'OFF'}`);
     }
     showLightHelpers() {
         console.log('💡 Adding light helpers...');

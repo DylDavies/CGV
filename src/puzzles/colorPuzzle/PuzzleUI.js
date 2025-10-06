@@ -15,12 +15,22 @@ export class PuzzleUI {
     }
 
     _addEventListeners() {
-        const resetButton = document.getElementById('reset-puzzle-btn');
-        const closeButton = document.getElementById('close-puzzle-btn');
+    const resetButton = document.getElementById('reset-puzzle-btn');
+    const closeButton = document.getElementById('close-puzzle-btn');
 
-        if (resetButton) resetButton.onclick = () => this.callbacks.onReset();
-        if (closeButton) closeButton.onclick = () => this.callbacks.onClose();
+    if (resetButton) {
+        resetButton.onclick = (event) => {
+            event.stopPropagation(); // Prevent click from bubbling up
+            this.callbacks.onReset();
+        };
     }
+    if (closeButton) {
+        closeButton.onclick = (event) => {
+            event.stopPropagation(); // Prevent click from bubbling up
+            this.callbacks.onClose();
+        };
+    }
+}
 
     render(logic) {
         this.renderBoard(logic);

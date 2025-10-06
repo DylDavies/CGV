@@ -88,12 +88,13 @@ async function main() {
             }
             scene.add(camera);
 
-            uiManager.updateLoadingProgress(75, "Waking the beast...");
+            uiManager.updateLoadingProgress(75, "Preparing the experience...");
             const monster = await createMonster('/blender/monster.glb');
             scene.add(monster);
 
             const monsterAI = new MonsterAI(monster, camera, mansionLoader.pathfinding, scene, audioManager);
-            monsterAI.spawn();
+            // DON'T spawn monster yet - it spawns in stage 2
+            monster.visible = false; // Hide monster initially
             
             uiManager.updateLoadingProgress(85, "Preparing your escape...");
             const controls = new FirstPersonControls(camera, renderer.domElement, physicsManager, { colorPuzzle, wirePuzzle }, monsterAI, mansionLoader);
