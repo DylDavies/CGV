@@ -399,40 +399,40 @@ class InteractionSystem {
         userData.interacted = true;
     }
 
-    handleLaptopInteraction(laptopObject, userData) {
-    console.log("Interacting with laptop");
-    const clue = "> The clocks are wrong, find the two that are the same. The time they display is the key.";
+    async handleLaptopInteraction(laptopObject, userData) {
+        console.log("Interacting with laptop");
+        const clue = "> The pages must be placed in the order of the cosmos: Sun, Star, Eye, Hand, Spiral, Moon.";
 
-    if (this.isColorPuzzleSolved) {
-        console.log("Puzzle already solved. Showing clue directly.");
-        this.showClueScreenDialog(clue);
-        return;
-    }
+        await window.gameControls.narrativeManager.triggerEvent('stage1.laptop_puzzle_speech');
 
-    const colorPuzzle = window.gameControls.colorPuzzle;
-    if (colorPuzzle) {
-        if (this.controls) this.controls.freeze();
-        this.currentInteraction = 'color_puzzle';
-
-        // Show the puzzle and give it the function to call when it needs to be closed.
-        colorPuzzle.show(4, () => this.closePuzzleUI());
-
-        colorPuzzle.onSolve(() => {
-            this.isColorPuzzleSolved = true;
-            this.gameManager.laptopPuzzleCompleted = true; // NEW: Mark laptop puzzle as complete
-            this.gameManager.completeObjective('decipher_pages'); // NEW: Complete objective
-
-            // The puzzle is hidden by the time this is called. Now show the clue.
+        if (this.isColorPuzzleSolved) {
+            console.log("Puzzle already solved. Showing clue directly.");
             this.showClueScreenDialog(clue);
+            return;
+        }
 
-            // NEW: Add objective to place pages
-            window.gameControls.narrativeManager.triggerEvent('stage1.objective_place_pages');
-        }, 'ACCESS GRANTED');
+        const colorPuzzle = window.gameControls.colorPuzzle;
+        if (colorPuzzle) {
+            if (this.controls) this.controls.freeze();
+            this.currentInteraction = 'color_puzzle';
 
-    } else {
-        this.showMessage("The laptop screen is dark.");
+            colorPuzzle.show(4, () => this.closePuzzleUI());
+
+            colorPuzzle.onSolve(() => {
+                this.isColorPuzzleSolved = true;
+                this.showClueScreenDialog(clue);
+                
+                // After getting the clue, mark deciphering as complete...
+                window.gameControls.gameManager.completeObjective('decipher_pages');
+                // ...and give the new objective to place the pages.
+                window.gameControls.narrativeManager.triggerEvent('stage1.all_pages_placed');
+
+            }, 'ACCESS GRANTED');
+
+        } else {
+            this.showMessage("The laptop screen is dark.");
+        }
     }
-}
 
     showClueScreenDialog(clueText) {
         if (this.controls) this.controls.freeze();

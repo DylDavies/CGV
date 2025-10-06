@@ -44,6 +44,7 @@ class GameManager {
 
         this.hintQueue = []; // NEW: A queue to hold pending hints.
         this.isHintVisible = false; // NEW: A flag to check if a hint is on screen.
+        this.allPagesPlaced = false;
 
         
         this.ui = this.createUI();
@@ -114,7 +115,7 @@ class GameManager {
 
     
     // MODIFIED: This now shows a message when a page is collected
-    collectPage(pageId) {
+    async collectPage(pageId) {
 
         const slotIndex = this.placedPages.indexOf(pageId);
         if (slotIndex !== -1) {
@@ -125,6 +126,11 @@ class GameManager {
 
         if (this.collectedPages.includes(pageId)) {
             return; 
+        }
+
+        // Narrative event for when the first page is collected
+        if (this.collectedPages.length === 0) {
+            await window.gameControls.narrativeManager.triggerEvent('stage1.collect_pages_speech');
         }
 
         this.collectedPages.push(pageId);
@@ -143,14 +149,12 @@ class GameManager {
         this.showHint(pageData.message, 5000);
 
         if (this.collectedPages.length >= 6) {
-            this.completeObjective('find_pages');
-            // NEW: Trigger laptop suggestion and decipher objective
-            window.gameControls.narrativeManager.triggerEvent('stage1.all_pages_found').then(() => {
-                window.gameControls.narrativeManager.triggerEvent('stage1.laptop_suggestion').then(() => {
-                    window.gameControls.narrativeManager.triggerEvent('stage1.objective_decipher_pages');
-                });
-            });
+            // After collecting all pages, trigger speech and objective to decipher them.
+            await window.gameControls.narrativeManager.triggerEvent('stage1.all_pages_found');
+            window.gameControls.narrativeManager.triggerEvent('stage1.decipher_pages');
+            this.completeObjective('collect_pages'); 
         }
+
         this.updateUI();
     }
 
@@ -172,36 +176,34 @@ class GameManager {
     }
 
     // NEW: Checks if the placed pages match the solution
-    checkPageOrder() {
+   async checkPageOrder() {
         if (this.placedPages.includes(null)) {
-            return; // Not all slots are filled yet
+            return; // Exit if not all slots are filled.
         }
 
-        let isCorrect = true;
-        // for (let i = 0; i < this.pageSolution.length; i++) {
-        //     if (this.placedPages[i] !== this.pageSolution[i]) {
-        //         isCorrect = false;
-        //         break;
-        //     }
-        // }
+        let isCorrect = true; // Placeholder for your actual solution logic
 
-        if (isCorrect) {
-            this.pagesPuzzleCompleted = true; // NEW: Mark puzzle as completed
-            this.completeObjective('place_pages');
-            this.showHint("The pages glow in unison... a hidden passage has been revealed!", 8000);
+        if (isCorrect && !this.allPagesPlaced) {
+            this.allPagesPlaced = true; // Prevent this from running again.
+            
+            this.completeObjective('all_pages_placed');
+            await window.gameControls.narrativeManager.triggerEvent('stage1.truth_is_found');
 
-            // NEW: Loop through the solution and activate the glow on each symbol.
-            if (this.mansion) {
-                this.pageSolution.forEach(pageId => {
-                    this.mansion.activatePageSymbolGlow(pageId);
-                });
-            }
+           // Trigger attack sequence
+            await window.gameControls.narrativeManager.triggerEvent('stage1.escape_monster');
+            window.gameControls.narrativeManager.triggerEvent('stage1.monster_awaken_warning');
+            window.gameControls.narrativeManager.triggerEvent('stage1.run_away_from_monster');
 
-            // NEW: Trigger Stage 2 transition after a delay
-            setTimeout(() => {
-                this.startStage2();
-            }, 9000); // 9 seconds delay after the glow message
-        } else {
+            // Monster attack and teleport sequence
+            setTimeout(async () => {
+                window.gameControls.audioManager.playSound('player_hit', 'public/audio/sfx/hit_sound.mp3');
+                window.gameControls.narrativeManager.showBlackout();
+                window.gameControls.physicsManager.teleportTo(new THREE.Vector3(0, 1.8, 0));
+                await window.gameControls.narrativeManager.triggerEvent('stage1.attacked_by_monster');
+                await window.gameControls.narrativeManager.triggerEvent('intro.wake_up');
+            }, 5000);
+
+        } else if (!isCorrect) {
             this.showHint("Nothing happens... the order must be wrong.", 4000);
         }
     }

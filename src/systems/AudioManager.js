@@ -18,6 +18,7 @@ class AudioManager {
             rotaryPhone: 'public/audio/sfx/rotary-phone-ring.mp3',
             whispering: 'public/audio/ambience/creepy-whispering.mp3', 
             violentDoorSlam: 'public/audio/ambience/violent-door-slam.mp3',
+            hitSound: 'public/audio/sfx/hit_sound.mp3',
 
             //ambient sound effects - to be used for random sound generation
             ambientSounds: [
