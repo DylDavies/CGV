@@ -38,6 +38,7 @@ class GameManager {
 
         this.hintQueue = []; // NEW: A queue to hold pending hints.
         this.isHintVisible = false; // NEW: A flag to check if a hint is on screen.
+        this.allPagesPlaced = false;
 
         
         this.ui = this.createUI();
@@ -102,7 +103,7 @@ class GameManager {
 
     
     // MODIFIED: This now shows a message when a page is collected
-    collectPage(pageId) {
+    async collectPage(pageId) {
 
         const slotIndex = this.placedPages.indexOf(pageId);
         if (slotIndex !== -1) {
@@ -113,6 +114,11 @@ class GameManager {
 
         if (this.collectedPages.includes(pageId)) {
             return; 
+        }
+
+        // Narrative event for when the first page is collected
+        if (this.collectedPages.length === 0) {
+            await window.gameControls.narrativeManager.triggerEvent('stage1.collect_pages_speech');
         }
 
         this.collectedPages.push(pageId);
@@ -131,9 +137,12 @@ class GameManager {
         this.showHint(pageData.message, 5000);
 
         if (this.collectedPages.length >= 6) {
-            this.completeObjective('collect_pages');
-            this.showHint("You have all the pages. You should find where they belong.");
+            // After collecting all pages, trigger the speech and new objective
+            await window.gameControls.narrativeManager.triggerEvent('stage1.all_pages_found');
+            window.gameControls.narrativeManager.triggerEvent('stage1.all_pages_placed');
+            this.completeObjective('collect_pages'); 
         }
+
         this.updateUI();
     }
 
@@ -155,9 +164,17 @@ class GameManager {
     }
 
     // NEW: Checks if the placed pages match the solution
-    checkPageOrder() {
+    async checkPageOrder() {
         if (this.placedPages.includes(null)) {
             return; // Not all slots are filled yet
+        }
+
+        // This block will now only run once when the final page is placed.
+        if (!this.allPagesPlaced) {
+            this.allPagesPlaced = true; // Set flag to prevent re-triggering.
+            this.completeObjective('all_pages_placed');
+            await window.gameControls.narrativeManager.triggerEvent('stage1.all_pages_placed_speech');
+            window.gameControls.narrativeManager.triggerEvent('stage1.decipher_pages');
         }
 
         let isCorrect = true;

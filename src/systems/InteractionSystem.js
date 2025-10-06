@@ -375,34 +375,67 @@ class InteractionSystem {
         userData.interacted = true;
     }
 
-    handleLaptopInteraction(laptopObject, userData) {
-    console.log("Interacting with laptop");
-    const clue = "> The clocks are wrong, find the two that are the same. The time they display is the key.";
+async handleLaptopInteraction(laptopObject, userData) {
+        console.log("Interacting with laptop");
+        const clue = "> The clocks are wrong, find the two that are the same. The time they display is the key.";
 
-    if (this.isColorPuzzleSolved) {
-        console.log("Puzzle already solved. Showing clue directly.");
-        this.showClueScreenDialog(clue);
-        return;
-    }
+        // --- This now happens first ---
+        await window.gameControls.narrativeManager.triggerEvent('stage1.laptop_puzzle_speech');
 
-    const colorPuzzle = window.gameControls.colorPuzzle;
-    if (colorPuzzle) {
-        if (this.controls) this.controls.freeze();
-        this.currentInteraction = 'color_puzzle';
-
-        // Show the puzzle and give it the function to call when it needs to be closed.
-        colorPuzzle.show(4, () => this.closePuzzleUI());
-
-        colorPuzzle.onSolve(() => {
-            this.isColorPuzzleSolved = true;
-            // The puzzle is hidden by the time this is called. Now show the clue.
+        if (this.isColorPuzzleSolved) {
+            console.log("Puzzle already solved. Showing clue directly.");
             this.showClueScreenDialog(clue);
-        }, 'ACCESS GRANTED');
+            return;
+        }
 
-    } else {
-        this.showMessage("The laptop screen is dark.");
+        const colorPuzzle = window.gameControls.colorPuzzle;
+        if (colorPuzzle) {
+            if (this.controls) this.controls.freeze();
+            this.currentInteraction = 'color_puzzle';
+
+            colorPuzzle.show(4, () => this.closePuzzleUI());
+
+            colorPuzzle.onSolve(() => {
+                this.isColorPuzzleSolved = true;
+                this.showClueScreenDialog(clue);
+
+                const closeClueButton = this.uiManager.uiElements.closeClueButton;
+                if (closeClueButton) {
+                    const originalOnClick = closeClueButton.onclick;
+                    
+                    closeClueButton.onclick = async () => {
+                        if (originalOnClick) originalOnClick();
+
+                        await window.gameControls.narrativeManager.triggerEvent('stage1.pages_deciphered');
+                        await window.gameControls.narrativeManager.triggerEvent('stage1.escape_monster');
+                        
+                        window.gameControls.narrativeManager.triggerEvent('stage1.monster_awaken_warning');
+                        window.gameControls.narrativeManager.triggerEvent('stage1.run_away_from_monster');
+                        
+                        setTimeout(async () => {
+                            // Play the hit sound
+                            window.gameControls.audioManager.playSound('player_hit', 'public/audio/sfx/hit_sound.mp3');
+                            
+                            window.gameControls.narrativeManager.showBlackout();
+                            
+                            // Teleport the player to the origin
+                            window.gameControls.physicsManager.teleportTo(new THREE.Vector3(0, 1.8, 0));
+                            
+                            // Knockout into wakeup scene
+                            await window.gameControls.narrativeManager.triggerEvent('stage1.attacked_by_monster');
+                            await window.gameControls.narrativeManager.triggerEvent('intro.wake_up');
+
+                        }, 5000); 
+                        
+                        closeClueButton.onclick = originalOnClick;
+                    };
+                }
+            }, 'ACCESS GRANTED');
+
+        } else {
+            this.showMessage("The laptop screen is dark.");
+        }
     }
-}
 
     showClueScreenDialog(clueText) {
         if (this.controls) this.controls.freeze();

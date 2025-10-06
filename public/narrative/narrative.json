@@ -39,7 +39,7 @@
       "text": "I hope you enjoy the truth you’ve stumbled upon. You wanted a story… now live it.",
       "duration": 5000
     },
-        "phone_dead_line_1": {
+    "phone_dead_line_1": {
       "type": "speechBubble",
       "title": "Anonymous",
       "text": "...",
@@ -58,15 +58,58 @@
     },
     "collect_pages_speech": {
       "type": "speechBubble",
-      "title": "Inner Monologue",
-      "text": "These… look like research notes. But the symbols don’t make sense.",
+      "title": "You",
+      "text": "This look like research notes. But the symbols don't make sense.",
       "duration": 4000
+    },
+    "all_pages_found": {
+      "type": "speechBubble",
+      "title": "You",
+      "text": "That looks like all the pages, but where should I put them?",
+      "duration": 4000
+    },
+    "all_pages_placed": {
+        "type": "objective",
+        "id": "all_pages_placed",
+        "description": "Find out where the pages should go"
+    },
+    "all_pages_placed_speech": {
+      "type": "speechBubble",
+      "title": "You",
+      "text": "The pages seem to fit perfectly on the wall",
+      "duration": 4500
+    },
+    "decipher_pages": {
+      "type": "objective",
+      "id": "decipher_pages",
+      "description": "Find a way to deciper the meaning of the pages"
     },
     "laptop_puzzle_speech": {
       "type": "speechBubble",
-      "title": "Inner Monologue",
+      "title": "You",
       "text": "Maybe this can decode the symbols…",
       "duration": 4000
+    },
+    "escape_monster": {
+      "type": "blackScreen",
+      "text": "Press 'SHIFT' to run",
+      "duration": 2000
+    },
+    "pages_deciphered": {
+      "type": "speechBubble",
+      "title": "You",
+      "text": "Hold on,  the writing says 'it wakes when the truth is found'… what—",
+      "duration": 4000
+    },
+    "run_away_from_monster": {
+      "type": "objective",
+      "id": "get_away_from_monster",
+      "description": "Get as far away as possible!"
+    },
+    "attacked_by_monster": {
+      "type": "blackScreen",
+      "text": "Something struck from the shadows. Your head throbs. The air feels wrong. You need to get out—now. You need to E S C A P E.",
+      "duration": 4000 
     },
     "monster_awaken_warning": {
       "type": "warning",
@@ -76,7 +119,7 @@
   "endings": {
     "escape": {
       "type": "blackScreen",
-      "text": "You came looking for a story. Now you’ve survived one. But the house… waits for the next curious soul.",
+      "text": "You came looking for a story. Now you've survived one. But the house… waits for the next curious soul.",
       "duration": 8000
     },
     "death": {
