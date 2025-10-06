@@ -18,11 +18,13 @@ import { MonsterAI } from './components/Monster/MonsterAI.js';
 import { ColorPuzzle } from './puzzles/colorPuzzle/ColorPuzzle.js';
 import { WirePuzzle } from './puzzles/wirePuzzle/WirePuzzle.js';
 import { PauseMenu } from './systems/PauseMenu.js';
-import { AudioManager } from './systems/AudioManager.js'; // <-- IMPORT aUDIO MANAGER
+import { AudioManager } from './systems/AudioManager.js';
+import logger from './utils/Logger.js'; // Import logger
 
 async function main() {
     try {
-        console.log('噫 Initializing Project HER...');
+        logger.log('噫 Initializing Project HER...');
+        logger.log(`📊 Logger initialized - File logging: ${logger.fileLoggingEnabled ? 'ENABLED' : 'DISABLED'}`);
         const canvas = document.querySelector('#game-canvas');
 
         // --- Initialize Core & UI Systems ---
@@ -72,7 +74,7 @@ async function main() {
             if (doorSpawnPoint) {
                 spawnPosition = doorSpawnPoint;
                 camera.position.copy(doorSpawnPoint);
-                console.log(`📍 Will spawn at entrance door`);
+                logger.log(`📍 Will spawn at entrance door`);
             } else {
                 // Fallback to entrance room
                 const entranceRoom = mansionLoader.getEntranceRoom();
@@ -80,7 +82,7 @@ async function main() {
                     const spawnY = entranceRoom.bounds.max.y + 2.5;
                     spawnPosition = new THREE.Vector3(entranceRoom.center.x, spawnY, entranceRoom.center.z);
                     camera.position.copy(spawnPosition);
-                    console.log(`📍 Will spawn at entrance: ${entranceRoom.name} at Y=${spawnY.toFixed(2)}`);
+                    logger.log(`📍 Will spawn at entrance: ${entranceRoom.name} at Y=${spawnY.toFixed(2)}`);
                 } else {
                     spawnPosition = new THREE.Vector3(0, 10, 5);
                     camera.position.copy(spawnPosition);
@@ -145,8 +147,26 @@ async function main() {
                     mansionLoader.toggleNavMeshNodesVisualizer();
                 }
             };
-            console.log('🔧 Debug controls available in `window.gameControls`.');
-            console.log("庁 To toggle the navigation mesh visualizer, type `gameControls.toggleNavMesh()` in the console.");
+            
+            // Also expose logger and mansionLoader for easy access
+            window.game = { mansionLoader, logger };
+            logger.log('🔧 Debug controls available in `window.gameControls`.');
+            logger.log("庁 To toggle the navigation mesh visualizer, type `gameControls.toggleNavMesh()` in the console.");
+            logger.log('');
+            logger.log('📝 LOGGING COMMANDS:');
+            logger.log('   logger.disable()          - Disable console logging');
+            logger.log('   logger.enable()           - Enable console logging');
+            logger.log('   logger.downloadLogs()     - Download log file');
+            logger.log('   logger.clearBuffer()      - Clear log buffer');
+            logger.log('   logger.getStats()         - View logger stats');
+            logger.log('');
+            logger.log('💡 LIGHTMAP COMMANDS:');
+            logger.log('   window.game.mansionLoader.toggleLightmaps()           - Toggle lights on/off');
+            logger.log('   window.game.mansionLoader.setLightmapIntensity(5.0)   - Adjust brightness');
+            logger.log('   window.game.mansionLoader.showLightmapPreview()       - Show lightmap textures');
+            logger.log('   window.game.mansionLoader.debugUVs()                  - Check UV channels');
+            logger.log('   window.game.mansionLoader.compareUVChannels()         - Compare UV1 vs UV2');
+            logger.log('');
 
             uiManager.updateLoadingText("Preparing spawn point...");
 
@@ -156,7 +176,7 @@ async function main() {
             // Wait a moment for the loop to start, then teleport
             setTimeout(() => {
                 physicsManager.teleportTo(spawnPosition);
-                console.log(`📍 Teleported and stabilizing...`);
+                logger.log(`📍 Teleported and stabilizing...`);
 
                 // Wait for physics stabilization to complete (100ms total)
                 setTimeout(() => {
@@ -167,14 +187,14 @@ async function main() {
                         uiManager.hideLoadingScreen();
                         document.body.classList.add('game-active');
                         controls.lock();
-                        console.log('✅ Game ready!');
+                        logger.log('✅ Game ready!');
                     }, 500);
                 }, 100);
             }, 50);
         });
 
     } catch (error) {
-        console.error('圷 A critical error occurred during initialization:', error);
+        logger.error('圷 A critical error occurred during initialization:', error);
         const loadingText = document.getElementById('loading-text');
         if (loadingText) {
             loadingText.textContent = `Error: Could not start the game.`;

@@ -3,6 +3,7 @@
 import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.127.0/build/three.module.js';
 import { GLTFLoader } from 'https://cdn.jsdelivr.net/npm/three@0.127.0/examples/jsm/loaders/GLTFLoader.js';
 import { Pathfinding } from 'https://unpkg.com/three-pathfinding@1.2.0/dist/three-pathfinding.module.js';
+import logger from '../utils/Logger.js';
 
 class MansionLoader {
     constructor(scene, physicsManager = null, qualityPreset = 'medium') {
@@ -37,6 +38,11 @@ class MansionLoader {
         this.fireplacesEnabled = true;
         this.navMeshNodesVisualizer = null;
 
+        // Lightmap system
+        this.lightmapOn = null;  // Lightmap with lights ON
+        this.lightmapOff = null; // Lightmap with lights OFF
+        this.useLightsOn = true;  // Toggle between lights on/off (renamed from lightmapsEnabled)
+
         // Material caching for performance
         this.materialCache = new Map();
 
@@ -46,7 +52,7 @@ class MansionLoader {
             this.recreateFireplaces();
         });
 
-        console.log(`🏠 MansionLoader initialized (${qualityPreset} quality)`);
+        logger.log(`🏠 MansionLoader initialized (${qualityPreset} quality)`);
     }
 
     setQualityPreset(preset) {
@@ -88,11 +94,64 @@ class MansionLoader {
         this.maxVisibleDistance = settings.maxVisibleDistance;
         this.maxActiveLights = settings.maxActiveLights;
 
-        console.log(`🎨 Quality preset "${preset}" applied to MansionLoader`);
+        logger.log(`🎨 Quality preset "${preset}" applied to MansionLoader`);
     }
 
     async loadMansion(modelPath) {
-        console.log('📦 Loading mansion model:', modelPath);
+        logger.log('📦 Loading mansion model:', modelPath);
+
+        // Load lightmap textures first
+        logger.log('🗺️ Loading lightmap textures...');
+        const textureLoader = new THREE.TextureLoader();
+
+        try {
+            this.lightmapOn = await textureLoader.loadAsync('blender/Mansion_Lightmap_On.png');
+            this.lightmapOff = await textureLoader.loadAsync('blender/Mansion_Lightmap_Off.png');
+
+            // Configure lightmaps - CRITICAL for proper rendering
+            this.lightmapOn.flipY = false;
+            this.lightmapOff.flipY = false;
+            this.lightmapOn.encoding = THREE.sRGBEncoding;
+            this.lightmapOff.encoding = THREE.sRGBEncoding;
+
+            // Enable anisotropic filtering for better quality
+            this.lightmapOn.anisotropy = 16;
+            this.lightmapOff.anisotropy = 16;
+
+            logger.log('✅ Lightmap textures loaded successfully');
+            logger.log(`   Lightmap On size: ${this.lightmapOn.image.width}x${this.lightmapOn.image.height}`);
+            logger.log(`   Lightmap Off size: ${this.lightmapOff.image.width}x${this.lightmapOff.image.height}`);
+
+            // Debug: Check actual pixel data
+            const canvas = document.createElement('canvas');
+            canvas.width = this.lightmapOn.image.width;
+            canvas.height = this.lightmapOn.image.height;
+            const ctx = canvas.getContext('2d');
+            ctx.drawImage(this.lightmapOn.image, 0, 0);
+            const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+            const data = imageData.data;
+
+            // Sample some pixels to verify it's not all black
+            let totalBrightness = 0;
+            const samplePoints = 100;
+            for (let i = 0; i < samplePoints; i++) {
+                const randomIdx = Math.floor(Math.random() * (data.length / 4)) * 4;
+                const r = data[randomIdx];
+                const g = data[randomIdx + 1];
+                const b = data[randomIdx + 2];
+                totalBrightness += (r + g + b) / 3;
+            }
+            const avgBrightness = totalBrightness / samplePoints;
+            logger.log(`   Average pixel brightness: ${avgBrightness.toFixed(2)}/255`);
+
+            if (avgBrightness < 10) {
+                logger.warn('   ⚠️ WARNING: Lightmap appears mostly black! Check Blender bake.');
+            } else {
+                logger.log('   ✅ Lightmap contains visible data');
+            }
+        } catch (error) {
+            logger.error('❌ Failed to load lightmap textures:', error);
+        }
 
         return new Promise((resolve, reject) => {
             const loader = new GLTFLoader();
@@ -100,11 +159,13 @@ class MansionLoader {
             loader.load(
                 modelPath,
                 (gltf) => {
-                    console.log('✅ Mansion model loaded successfully');
+                    logger.log('✅ Mansion model loaded successfully');
                     this.model = gltf.scene;
 
                     // Process the model (includes material sharing)
                     this.processModel();
+
+                    this.setupInstancedMeshes()
 
                     // Add to scene
                     this.scene.add(this.model);
@@ -123,26 +184,27 @@ class MansionLoader {
                     // Setup occlusion culling
                     this.setupOcclusionCulling();
 
-                    console.log(`🏠 Mansion ready with ${this.rooms.size} rooms and ${this.lamps.length} lamps`);
+                    logger.log(`🏠 Mansion ready with ${this.rooms.size} rooms and ${this.lamps.length} lamps`);
                     resolve(this.model);
                 },
                 (progress) => {
                     const percent = (progress.loaded / progress.total) * 100;
-                    console.log(`⏳ Loading: ${percent.toFixed(1)}%`);
+                    logger.log(`⏳ Loading: ${percent.toFixed(1)}%`);
                 },
                 (error) => {
-                    console.error('❌ Error loading mansion:', error);
+                    logger.error('❌ Error loading mansion:', error);
                     reject(error);
                 }
             );
         });
     }
 
-processModel() {
-        console.log('🔍 Processing mansion model - optimizing Blender materials...');
+    processModel() {
+        logger.log('🔍 Processing mansion model - optimizing Blender materials...');
 
         let totalMeshes = 0;
         let sharedMaterials = 0;
+        let lightmappedMeshes = 0;
         const materialMap = new Map(); // Track materials by their properties
 
         // Performance optimizations while keeping Blender materials
@@ -160,36 +222,42 @@ processModel() {
                 // Optimize existing Blender materials
                 if (node.material) {
                     const materials = Array.isArray(node.material) ? node.material : [node.material];
-                    
+
                     materials.forEach((material, index) => {
-                        // Create a key based on material properties (color, type, etc.)
-                        const key = this.getMaterialKey(material);
-                        
-                        if (!materialMap.has(key)) {
-                            // First time seeing this material - optimize it
-                            this.optimizeMaterial(material);
-                            materialMap.set(key, material);
-                        } else {
-                            // We've seen this material before - reuse it!
-                            const existingMaterial = materialMap.get(key);
-                            if (Array.isArray(node.material)) {
-                                node.material[index] = existingMaterial;
-                            } else {
-                                node.material = existingMaterial;
+                        // CRITICAL: Apply lightmap to material BEFORE material sharing
+                        // Don't share lightmaps across materials - each needs its own
+                        if (this.lightmapOn && this.lightmapOff) {
+                            material.lightMap = this.useLightsOn ? this.lightmapOn : this.lightmapOff;
+                            // INCREASED INTENSITY: Match Blender's brightness
+                            material.lightMapIntensity = 2.5;  // Increased from 1.0 to 2.5
+                            material.needsUpdate = true;
+                            lightmappedMeshes++;
+
+                            // Debug first few materials
+                            if (lightmappedMeshes <= 3) {
+                                logger.log(`  🗺️ Applied lightmap to ${node.name}:`);
+                                logger.log(`     Material: ${material.name}`);
+                                logger.log(`     LightMap: ${material.lightMap ? '✅' : '❌'}`);
+                                logger.log(`     Intensity: ${material.lightMapIntensity}`);
                             }
-                            sharedMaterials++;
                         }
+
+                        // DON'T share materials if they have lightmaps (each mesh needs its own material instance)
+                        // This prevents lightmap conflicts
+                        this.optimizeMaterial(material);
                     });
                 }
 
                 // Optimize geometry
                 if (node.geometry) {
                     node.geometry.computeBoundingSphere();
-                    
-                    // Remove unused attributes to save memory
-                    if (node.geometry.attributes.uv2) {
-                        node.geometry.deleteAttribute('uv2');
+
+                    // CRITICAL: Check if uv2 exists for lightmaps
+                    if (!node.geometry.attributes.uv2) {
+                        logger.warn(`  ⚠️ ${node.name} missing uv2! Re-export from Blender with both UV layers.`);
                     }
+
+                    // Remove unused attributes to save memory
                     if (node.geometry.attributes.tangent) {
                         node.geometry.deleteAttribute('tangent');
                     }
@@ -197,17 +265,54 @@ processModel() {
             }
         });
 
-        console.log(`♻️ Material optimization complete:`);
-        console.log(`   Total meshes: ${totalMeshes}`);
-        console.log(`   Unique materials: ${materialMap.size}`);
-        console.log(`   Materials shared: ${sharedMaterials}`);
-        console.log(`   Memory saved: ~${Math.round((sharedMaterials / totalMeshes) * 100)}%`);
+        logger.log(`♻️ Material optimization complete:`);
+        logger.log(`   Total meshes: ${totalMeshes}`);
+        logger.log(`   Lightmapped meshes: ${lightmappedMeshes}`);
+        logger.log(`   Lightmap intensity: 2.5x`);
 
         // Store the material map for later use
         this.materialCache = materialMap;
 
         // Organize meshes by room collections
         this.organizeByRooms();
+    }
+
+    setupInstancedMeshes() {
+        logger.log('🔄 Creating InstancedMeshes...');
+        const instances = new Map();
+
+        // First, group all meshes by their base name (e.g., "Chair")
+        this.model.traverse((node) => {
+            if (node.isMesh) {
+                const baseName = node.name.split('.')[0]; // "Chair.001" -> "Chair"
+                if (!instances.has(baseName)) {
+                    instances.set(baseName, []);
+                }
+                instances.get(baseName).push(node);
+            }
+        });
+
+        // Now, create InstancedMesh for groups with more than one object
+        for (const [name, meshes] of instances.entries()) {
+            if (meshes.length > 1) {
+                const firstMesh = meshes[0];
+                const geometry = firstMesh.geometry;
+                const material = firstMesh.material;
+                const instancedMesh = new THREE.InstancedMesh(geometry, material, meshes.length);
+
+                // Set the position and rotation for each instance
+                for (let i = 0; i < meshes.length; i++) {
+                    const mesh = meshes[i];
+                    mesh.updateWorldMatrix(true, false);
+                    instancedMesh.setMatrixAt(i, mesh.matrixWorld);
+                    // Hide the original mesh
+                    mesh.visible = false;
+                }
+
+                this.scene.add(instancedMesh);
+                logger.log(`  - Created InstancedMesh for "${name}" with ${meshes.length} instances.`);
+            }
+        }
     }
 
     optimizeMaterial(material) {
@@ -255,7 +360,7 @@ processModel() {
     }
 
     organizeByRooms() {
-        console.log('🗂️ Organizing rooms from collections...');
+        logger.log('🗂️ Organizing rooms from collections...');
 
         this.model.traverse((node) => {
             if (node.type === 'Group' && node.children.length > 0) {
@@ -281,13 +386,13 @@ processModel() {
                 });
 
                 this.rooms.set(roomName, roomData);
-                console.log(`📍 Room "${roomName}" registered with ${roomData.meshes.length} meshes`);
+                logger.log(`📍 Room "${roomName}" registered with ${roomData.meshes.length} meshes`);
             }
         });
     }
 
     generatePhysics() {
-        console.log('⚙️ Generating physics collision bodies...');
+        logger.log('⚙️ Generating physics collision bodies...');
 
         let collisionCount = 0;
         let skippedCount = 0;
@@ -338,12 +443,12 @@ processModel() {
             }
         });
 
-        console.log(`✅ Generated ${collisionCount} physics collision bodies`);
-        console.log(`🚪 Skipped ${skippedCount} objects (doors, openings, etc.)`);
+        logger.log(`✅ Generated ${collisionCount} physics collision bodies`);
+        logger.log(`🚪 Skipped ${skippedCount} objects (doors, openings, etc.)`);
     }
 
     hideDebugObjects() {
-        console.log('🔍 Scanning for debug/leftover objects and portraits...');
+        logger.log('🔍 Scanning for debug/leftover objects and portraits...');
 
         let hiddenCount = 0;
 
@@ -392,7 +497,7 @@ processModel() {
             }
         });
 
-        console.log(`✅ Hidden ${hiddenCount} debug/helper objects and portraits`);
+        logger.log(`✅ Hidden ${hiddenCount} debug/helper objects and portraits`);
     }
 
     createPhysicsBodyFromMesh(mesh) {
@@ -428,7 +533,7 @@ processModel() {
             loader.load(path, (gltf) => {
                 const navMeshNode = gltf.scene.children[0];
                 if (!navMeshNode || !navMeshNode.geometry) {
-                    console.error('NavMesh GLB must contain a single mesh.');
+                    logger.error('NavMesh GLB must contain a single mesh.');
                     return reject();
                 }
 
@@ -436,17 +541,17 @@ processModel() {
                 // Hide the original navmesh model
                 this.navMesh.visible = false; 
 
-                console.log('🧠 Building navigation zone...');
+                logger.log('🧠 Building navigation zone...');
                 const zone = Pathfinding.createZone(navMeshNode.geometry);
                 this.pathfinding.setZoneData(this.ZONE, zone);
-                console.log('✅ Navigation mesh created successfully.');
+                logger.log('✅ Navigation mesh created successfully.');
 
                 this.createNavMeshVisualizer();
                 this.createNavMeshNodesVisualizer();
                 resolve();
 
             }, undefined, (error) => {
-                console.error(`❌ Error loading navigation mesh from ${path}:`, error);
+                logger.error(`❌ Error loading navigation mesh from ${path}:`, error);
                 reject(error);
             });
         });
@@ -468,14 +573,14 @@ processModel() {
         this.navMeshVisualizer = visualMesh;
         this.navMeshVisualizer.visible = false; // Initially hidden
         this.scene.add(this.navMeshVisualizer);
-        console.log("✅ Navigation mesh visualizer created. Toggle with gameControls.toggleNavMeshVisualizer()");
+        logger.log("✅ Navigation mesh visualizer created. Toggle with gameControls.toggleNavMeshVisualizer()");
     }
 
     createNavMeshNodesVisualizer() {
     const zone = this.pathfinding.zones[this.ZONE];
-    console.log("Inspecting the navigation zone object:", zone); 
+    logger.log("Inspecting the navigation zone object:", zone); 
     if (!zone) {
-        console.warn("Could not create node visualizer: Zone not found.");
+        logger.warn("Could not create node visualizer: Zone not found.");
         return;
     }
 
@@ -496,13 +601,13 @@ processModel() {
     this.navMeshNodesVisualizer = group;
     this.navMeshNodesVisualizer.visible = false; // Initially hidden
     this.scene.add(this.navMeshNodesVisualizer);
-    console.log(`✅ Navigation mesh node visualizer created with ${navMeshNodes.length} nodes.`);
+    logger.log(`✅ Navigation mesh node visualizer created with ${navMeshNodes.length} nodes.`);
 }
 
 toggleNavMeshNodesVisualizer() {
     if (this.navMeshNodesVisualizer) {
         this.navMeshNodesVisualizer.visible = !this.navMeshNodesVisualizer.visible;
-        console.log(`NavMesh nodes visualizer ${this.navMeshNodesVisualizer.visible ? 'ON' : 'OFF'}`);
+        logger.log(`NavMesh nodes visualizer ${this.navMeshNodesVisualizer.visible ? 'ON' : 'OFF'}`);
     }
 }
     
@@ -510,102 +615,34 @@ toggleNavMeshNodesVisualizer() {
     toggleNavMeshVisualizer() {
         if (this.navMeshVisualizer) {
             this.navMeshVisualizer.visible = !this.navMeshVisualizer.visible;
-            console.log(`NavMesh visualizer ${this.navMeshVisualizer.visible ? 'ON' : 'OFF'}`);
+            logger.log(`NavMesh visualizer ${this.navMeshVisualizer.visible ? 'ON' : 'OFF'}`);
         }
     }
 
     toggleMansionVisibility() {
     if (this.model) {
         this.model.visible = !this.model.visible;
-        console.log(`Mansion model visibility ${this.model.visible ? 'ON' : 'OFF'}`);
+        logger.log(`Mansion model visibility ${this.model.visible ? 'ON' : 'OFF'}`);
     }
 }
 
 
     setupLamps() {
-        console.log('💡 Setting up automatic lamp lighting...');
-
-        let lampCount = 0;
+        logger.log('🔥 Setting up fireplaces...');
 
         this.model.traverse((node) => {
             const nodeName = node.name.toLowerCase();
-
-            if (nodeName.includes('walllamp') || nodeName.includes('chandelier') ||
-                nodeName.includes('lamp') || nodeName.includes('light')) {
-
-                node.updateMatrixWorld(true);
-                const lampPosition = new THREE.Vector3();
-                node.getWorldPosition(lampPosition);
-
-                let lightColor, lightIntensity, lightDistance;
-
-                if (nodeName.includes('chandelier')) {
-                    lightColor = 0xffaa55;
-                    lightIntensity = 2.0;
-                    lightDistance = 4;
-                } else if (nodeName.includes('walllamp')) {
-                    lightColor = 0xffbb66;
-                    lightIntensity = 1.5;
-                    lightDistance = 3;
-                } else {
-                    lightColor = 0xffcc77;
-                    lightIntensity = 1.5;
-                    lightDistance = 4;
-                }
-
-                const lampLight = new THREE.PointLight(lightColor, lightIntensity, lightDistance, 3);
-
-                if (nodeName.includes('walllamp')) {
-                    const worldQuaternion = new THREE.Quaternion();
-                    node.getWorldQuaternion(worldQuaternion);
-
-                    const forward = new THREE.Vector3(0.5, 0, 0);
-                    forward.applyQuaternion(worldQuaternion);
-                    forward.normalize();
-
-                    lampLight.position.copy(lampPosition);
-                    lampLight.position.add(forward.multiplyScalar(0.4));
-                    lampLight.position.y += 0.1;
-                } else {
-                    lampLight.position.copy(lampPosition);
-                }
-
-                lampLight.castShadow = false;
-                
-                // CRITICAL FIX: Start with light visible!
-                lampLight.visible = true;
-
-                this.scene.add(lampLight);
-
-                if (lampCount < 3) {
-                    console.log(`💡 ${node.name}: pos=${lampLight.position.x.toFixed(1)},${lampLight.position.y.toFixed(1)},${lampLight.position.z.toFixed(1)}`);
-                }
-
-                const lampData = {
-                    mesh: node,
-                    light: lampLight,
-                    baseIntensity: lightIntensity,
-                    flickerPhase: Math.random() * Math.PI * 2,
-                    flickerSpeed: 0.5 + Math.random() * 0.5,
-                    type: nodeName.includes('chandelier') ? 'chandelier' :
-                          nodeName.includes('walllamp') ? 'walllamp' : 'lamp'
-                };
-
-                this.lamps.push(lampData);
-                lampCount++;
-            }
 
             if (nodeName.includes('fire') && !nodeName.includes('fireplace')) {
                 this.setupFireplace(node);
             }
         });
 
-        console.log(`💡 Added ${lampCount} automatic lights to lamps`);
-        console.log(`🔥 Found ${this.fireplaces.length} fireplaces`);
+        logger.log(`🔥 Found ${this.fireplaces.length} fireplaces`);
     }
 
     recreateFireplaces() {
-        console.log('🔄 Recreating fireplaces with new quality settings...');
+        logger.log('🔄 Recreating fireplaces with new quality settings...');
 
         for (const fireplace of this.fireplaces) {
             this.scene.remove(fireplace.particles);
@@ -621,7 +658,7 @@ toggleNavMeshNodesVisualizer() {
             this.setupFireplace(fireNode);
         }
 
-        console.log(`✅ Recreated ${this.fireplaces.length} fireplaces`);
+        logger.log(`✅ Recreated ${this.fireplaces.length} fireplaces`);
     }
 
     setupFireplace(fireNode) {
@@ -631,30 +668,60 @@ toggleNavMeshNodesVisualizer() {
 
         const particleCount = this.fireParticleCount;
         const geometry = new THREE.BufferGeometry();
+
         const positions = new Float32Array(particleCount * 3);
-        const velocities = new Float32Array(particleCount * 3);
+        const randoms = new Float32Array(particleCount * 3); // x: lifetime, y: speed, z: size
 
-        for (let i = 0; i < particleCount * 3; i += 3) {
-            positions[i] = (Math.random() - 0.5) * 0.5;
-            positions[i + 1] = Math.random() * 0.2;
-            positions[i + 2] = (Math.random() - 0.5) * 0.5;
+        for (let i = 0; i < particleCount; i++) {
+            positions[i * 3 + 0] = (Math.random() - 0.5) * 0.5; // x
+            positions[i * 3 + 1] = Math.random() * 0.2;         // y
+            positions[i * 3 + 2] = (Math.random() - 0.5) * 0.5; // z
 
-            velocities[i] = (Math.random() - 0.5) * 0.02;
-            velocities[i + 1] = 0.5 + Math.random() * 0.5;
-            velocities[i + 2] = (Math.random() - 0.5) * 0.02;
+            randoms[i * 3 + 0] = 1.0 + Math.random(); // lifetime
+            randoms[i * 3 + 1] = 0.5 + Math.random() * 0.5; // speed
+            randoms[i * 3 + 2] = 0.1 + Math.random() * 0.1; // size
         }
 
         geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
-        geometry.setAttribute('velocity', new THREE.BufferAttribute(velocities, 3));
-        geometry.attributes.position.setUsage(THREE.DynamicDrawUsage);
+        geometry.setAttribute('aRandom', new THREE.BufferAttribute(randoms, 3));
 
-        const material = new THREE.PointsMaterial({
-            color: 0xff6600,
-            size: 0.15,
+        const material = new THREE.ShaderMaterial({
+            uniforms: {
+                uTime: { value: 0.0 },
+                uColor: { value: new THREE.Color(0xff6600) },
+            },
+            vertexShader: `
+                uniform float uTime;
+                attribute vec3 aRandom; // x: lifetime, y: speed, z: size
+
+                void main() {
+                    vec3 pos = position;
+                    float progress = mod(uTime * aRandom.y, aRandom.x) / aRandom.x;
+
+                    pos.y += progress * 2.0; // Move particle up
+
+                    // Fade out at the end of life
+                    float size = aRandom.z * (1.0 - progress);
+
+                    vec4 modelPosition = modelMatrix * vec4(pos, 1.0);
+                    vec4 viewPosition = viewMatrix * modelPosition;
+                    gl_Position = projectionMatrix * viewPosition;
+                    gl_PointSize = size * 100.0;
+                    gl_PointSize *= (1.0 / -viewPosition.z);
+                }
+            `,
+            fragmentShader: `
+                uniform vec3 uColor;
+
+                void main() {
+                    float distanceToCenter = distance(gl_PointCoord, vec2(0.5));
+                    float strength = 1.0 - (distanceToCenter * 2.0);
+                    gl_FragColor = vec4(uColor, strength);
+                }
+            `,
             transparent: true,
-            opacity: 0.8,
             blending: THREE.AdditiveBlending,
-            sizeAttenuation: true
+            depthWrite: false, // Important for transparency
         });
 
         const fireParticles = new THREE.Points(geometry, material);
@@ -670,14 +737,14 @@ toggleNavMeshNodesVisualizer() {
             particles: fireParticles,
             light: fireLight,
             baseIntensity: 3.0,
-            flickerPhase: Math.random() * Math.PI * 2
+            flickerPhase: Math.random() * Math.PI * 2,
         };
 
         this.fireplaces.push(fireplaceData);
     }
 
     setupOcclusionCulling() {
-        console.log('👁️ Setting up occlusion culling system...');
+        logger.log('👁️ Setting up occlusion culling system...');
 
         let meshCount = 0;
         this.model.traverse((node) => {
@@ -698,7 +765,7 @@ toggleNavMeshNodesVisualizer() {
             }
         });
 
-        console.log(`👁️ Frustum culling enabled on ${meshCount} meshes`);
+        logger.log(`👁️ Frustum culling enabled on ${meshCount} meshes`);
 
         for (const roomData of this.rooms.values()) {
             this.visibleRooms.add(roomData.name);
@@ -808,12 +875,12 @@ toggleNavMeshNodesVisualizer() {
             }
         }
 
-        console.log(`👁️ Occlusion culling: ${enabled ? 'ON' : 'OFF'}`);
+        logger.log(`👁️ Occlusion culling: ${enabled ? 'ON' : 'OFF'}`);
     }
 
     setMaxVisibleDistance(distance) {
         this.maxVisibleDistance = distance;
-        console.log(`👁️ Max visible distance set to: ${distance}`);
+        logger.log(`👁️ Max visible distance set to: ${distance}`);
     }
 
     tick(delta, cameraPosition) {
@@ -821,152 +888,62 @@ toggleNavMeshNodesVisualizer() {
             this.updateOcclusionCulling(cameraPosition);
         }
 
-        if (this.lampsEnabled) {
-            this.updateLampFlickering(delta);
-        }
-
         if (this.fireplacesEnabled) {
             this.updateFireplaces(delta);
-        }
-    }
-
-    updateLampFlickering(delta) {
-        const time = Date.now() * 0.001;
-        const playerPos = this.playerPosition;
-
-        this.lampUpdateCounter = (this.lampUpdateCounter || 0) + 1;
-        if (this.lampUpdateCounter % this.lampUpdateRate !== 0) return;
-
-        // FIXED: Only cull if player position is set (not at 0,0,0)
-        const playerPosSet = playerPos.length() > 0.1;
-        
-        if (playerPosSet) {
-            // Distance-based light culling
-            let activeLights = 0;
-            
-            const lampDistances = this.lamps.map(lamp => ({
-                lamp,
-                distance: lamp.light.position.distanceTo(playerPos)
-            }));
-            
-            lampDistances.sort((a, b) => a.distance - b.distance);
-
-            for (const { lamp, distance } of lampDistances) {
-                // More generous distance check
-                if (distance < lamp.light.distance * 2.5 && activeLights < this.maxActiveLights) {
-                    lamp.light.visible = true;
-                    
-                    const flicker = Math.sin(time * lamp.flickerSpeed * this.lampFlickerSpeed + lamp.flickerPhase);
-                    const noise = Math.random() * 0.1 - 0.05;
-                    lamp.light.intensity = lamp.baseIntensity * (0.9 + flicker * 0.05 + noise);
-                    
-                    activeLights++;
-                } else if (activeLights >= this.maxActiveLights) {
-                    // Gradually fade out distant lights instead of instantly hiding
-                    lamp.light.intensity *= 0.95;
-                    if (lamp.light.intensity < 0.1) {
-                        lamp.light.visible = false;
-                    }
-                }
-            }
-        } else {
-            // Player position not set yet, show all lights
-            for (const lamp of this.lamps) {
-                lamp.light.visible = true;
-                const flicker = Math.sin(time * lamp.flickerSpeed * this.lampFlickerSpeed + lamp.flickerPhase);
-                const noise = Math.random() * 0.1 - 0.05;
-                lamp.light.intensity = lamp.baseIntensity * (0.9 + flicker * 0.05 + noise);
-            }
         }
     }
 
     updateFireplaces(delta) {
         const time = Date.now() * 0.001;
 
-        this.fireplaceUpdateCounter = (this.fireplaceUpdateCounter || 0) + 1;
-        const shouldUpdateParticles = this.fireplaceUpdateCounter % this.fireplaceUpdateRate === 0;
-
         for (const fireplace of this.fireplaces) {
-            if (shouldUpdateParticles) {
-                const positions = fireplace.particles.geometry.attributes.position.array;
-                const velocities = fireplace.particles.geometry.attributes.velocity.array;
+            // Update the time uniform for the shader
+            fireplace.particles.material.uniforms.uTime.value = time;
 
-                for (let i = 0; i < positions.length; i += 3) {
-                    positions[i] += velocities[i] * delta * 2;
-                    positions[i + 1] += velocities[i + 1] * delta * 2;
-                    positions[i + 2] += velocities[i + 2] * delta * 2;
-
-                    if (positions[i + 1] > 0.7) {
-                        positions[i] = (Math.random() - 0.5) * 0.5;
-                        positions[i + 1] = 0;
-                        positions[i + 2] = (Math.random() - 0.5) * 0.5;
-                    }
-                }
-
-                fireplace.particles.geometry.attributes.position.needsUpdate = true;
-            }
-
+            // Keep the light flickering on the CPU
             const flicker = Math.sin(time * 10 + fireplace.flickerPhase);
             const noise = Math.random() * 0.3;
             fireplace.light.intensity = fireplace.baseIntensity * (0.8 + flicker * 0.2 + noise);
         }
     }
 
-    // Lamp control API
-    setLampsEnabled(enabled) {
-        this.lampsEnabled = enabled;
-        for (const lamp of this.lamps) {
-            lamp.light.visible = enabled;
+    // Lightmap control API
+    toggleLightmaps() {
+        this.useLightsOn = !this.useLightsOn;
+
+        if (!this.lightmapOn || !this.lightmapOff) {
+            logger.warn('⚠️ Lightmap textures not loaded');
+            return this.useLightsOn;
         }
-        console.log(`💡 Lamps ${enabled ? 'enabled' : 'disabled'}`);
-    }
 
-    // Debug: Show light helpers
-    showLightHelpers() {
-        console.log('💡 Adding light helpers...');
-
-        for (const lamp of this.lamps) {
-            if (!lamp.helper) {
-                const helper = new THREE.PointLightHelper(lamp.light, 0.2);
-                this.scene.add(helper);
-                lamp.helper = helper;
-            } else {
-                lamp.helper.visible = true;
+        // Update all materials
+        this.model.traverse((node) => {
+            if (node.isMesh && node.material) {
+                const materials = Array.isArray(node.material) ? node.material : [node.material];
+                materials.forEach(material => {
+                    material.lightMap = this.useLightsOn ? this.lightmapOn : this.lightmapOff;
+                    material.needsUpdate = true;
+                });
             }
-        }
+        });
 
-        console.log(`✅ Showing helpers for ${this.lamps.length} lights`);
+        logger.log(`💡 Mansion lights: ${this.useLightsOn ? 'ON' : 'OFF'}`);
+        return this.useLightsOn;
     }
 
-    hideLightHelpers() {
-        for (const lamp of this.lamps) {
-            if (lamp.helper) {
-                lamp.helper.visible = false;
+    setLightmapIntensity(intensity) {
+        this.model.traverse((node) => {
+            if (node.isMesh && node.material) {
+                const materials = Array.isArray(node.material) ? node.material : [node.material];
+                materials.forEach(material => {
+                    if (material.lightMap) {
+                        material.lightMapIntensity = intensity;
+                        material.needsUpdate = true;
+                    }
+                });
             }
-        }
-        console.log('💡 Light helpers hidden');
-    }
-
-    toggleLamps() {
-        this.setLampsEnabled(!this.lampsEnabled);
-        return this.lampsEnabled;
-    }
-
-    setLampIntensity(intensity) {
-        // Update base intensity for all lamps
-        for (const lamp of this.lamps) {
-            lamp.baseIntensity = intensity;
-        }
-        console.log(`💡 Lamp intensity set to: ${intensity}`);
-    }
-
-    setLampFlickerSpeed(speed) {
-        this.lampFlickerSpeed = speed;
-        console.log(`💡 Lamp flicker speed set to: ${speed}`);
-    }
-
-    getLampsByType(type) {
-        return this.lamps.filter(lamp => lamp.type === type);
+        });
+        logger.log(`🗺️ Lightmap intensity set to: ${intensity}`);
     }
 
     // Fireplace control API
@@ -978,7 +955,7 @@ toggleNavMeshNodesVisualizer() {
             fireplace.light.visible = enabled;
         }
 
-        console.log(`🔥 Fireplaces ${enabled ? 'enabled' : 'disabled'}`);
+        logger.log(`🔥 Fireplaces ${enabled ? 'enabled' : 'disabled'}`);
     }
 
     toggleFireplaces() {
@@ -1004,7 +981,7 @@ toggleNavMeshNodesVisualizer() {
 
     // Debug: List all objects in the model
     listAllObjects(filter = '') {
-        console.log('📋 Listing all objects in mansion model:');
+        logger.log('📋 Listing all objects in mansion model:');
         const objects = [];
 
         this.model.traverse((node) => {
@@ -1022,24 +999,24 @@ toggleNavMeshNodesVisualizer() {
         });
 
         console.table(objects);
-        console.log(`📊 Total: ${objects.length} objects${filter ? ` (filtered by "${filter}")` : ''}`);
+        logger.log(`📊 Total: ${objects.length} objects${filter ? ` (filtered by "${filter}")` : ''}`);
         return objects;
     }
 
     // Debug: Search for objects by name
     findObjects(searchTerm) {
-        console.log(`🔍 Searching for objects containing "${searchTerm}":`);
+        logger.log(`🔍 Searching for objects containing "${searchTerm}":`);
         return this.listAllObjects(searchTerm);
     }
 
     // Debug: Show parent hierarchy of an object
     showObjectHierarchy(objectName) {
-        console.log(`🌳 Showing hierarchy for "${objectName}":`);
+        logger.log(`🌳 Showing hierarchy for "${objectName}":`);
 
         this.model.traverse((node) => {
             if (node.name.toLowerCase().includes(objectName.toLowerCase())) {
-                console.log(`\n📍 Found: ${node.name}`);
-                console.log('Hierarchy (from root to object):');
+                logger.log(`\n📍 Found: ${node.name}`);
+                logger.log('Hierarchy (from root to object):');
 
                 const hierarchy = [];
                 let current = node;
@@ -1059,14 +1036,14 @@ toggleNavMeshNodesVisualizer() {
                     item.name.toLowerCase().includes('door')
                 );
 
-                console.log(`Has "door" in parent hierarchy: ${hassDoorParent ? '✅ YES' : '❌ NO'}`);
+                logger.log(`Has "door" in parent hierarchy: ${hassDoorParent ? '✅ YES' : '❌ NO'}`);
             }
         });
     }
 
     // Debug: List all groups/collections
     listCollections() {
-        console.log('📁 Listing all groups/collections:');
+        logger.log('📁 Listing all groups/collections:');
         const collections = [];
 
         this.model.traverse((node) => {
@@ -1083,7 +1060,7 @@ toggleNavMeshNodesVisualizer() {
     }
 
     dispose() {
-        console.log('🧹 Disposing mansion loader...');
+        logger.log('🧹 Disposing mansion loader...');
 
         for (const { body } of this.physicsBodies) {
             this.physicsManager.removeBody(body);
@@ -1118,7 +1095,238 @@ toggleNavMeshNodesVisualizer() {
         this.rooms.clear();
         this.visibleRooms.clear();
 
-        console.log('✅ Mansion loader disposed');
+        logger.log('✅ Mansion loader disposed');
+    }
+
+    // Debug: Check UV channels
+    debugUVs() {
+        logger.log('🔍 UV Channel Debug:');
+        let meshCount = 0;
+        let hasUV1 = 0;
+        let hasUV2 = 0;
+        let bothUVs = 0;
+        let sameArray = 0;
+        const missingUV2Meshes = [];
+
+        this.model.traverse((node) => {
+            if (node.isMesh) {
+                meshCount++;
+                const geom = node.geometry;
+                const uv1 = geom.attributes.uv;
+                const uv2 = geom.attributes.uv2;
+
+                if (uv1) hasUV1++;
+                if (uv2) hasUV2++;
+                if (uv1 && uv2) {
+                    bothUVs++;
+                    // Check if UV1 and UV2 point to the same array (BUG!)
+                    if (uv1.array === uv2.array) {
+                        sameArray++;
+                    }
+                } else if (uv1 && !uv2) {
+                    // Track meshes missing UV2
+                    missingUV2Meshes.push(node.name);
+                }
+
+                // Log first mesh details
+                if (meshCount === 1) {
+                    logger.log(`\nFirst mesh: ${node.name}`);
+                    logger.log(`  UV1: ${uv1 ? `✅ (${uv1.count} coords)` : '❌ Missing'}`);
+                    logger.log(`  UV2: ${uv2 ? `✅ (${uv2.count} coords)` : '❌ Missing'}`);
+
+                    if (uv1 && uv2) {
+                        // Sample first coordinate
+                        logger.log(`  UV1 sample: (${uv1.array[0].toFixed(3)}, ${uv1.array[1].toFixed(3)})`);
+                        logger.log(`  UV2 sample: (${uv2.array[0].toFixed(3)}, ${uv2.array[1].toFixed(3)})`);
+
+                        if (uv1.array === uv2.array) {
+                            logger.error('  ⚠️ UV1 and UV2 are THE SAME ARRAY! This is the bug!');
+                        }
+                    }
+                }
+            }
+        });
+
+        logger.log(`\n📊 UV Statistics:`);
+        logger.log(`  Total meshes: ${meshCount}`);
+        logger.log(`  Has UV1: ${hasUV1}`);
+        logger.log(`  Has UV2: ${hasUV2}`);
+        logger.log(`  Has BOTH: ${bothUVs}`);
+
+        if (missingUV2Meshes.length > 0) {
+            logger.warn(`\n⚠️ Meshes missing UV2 (${missingUV2Meshes.length}):`);
+            missingUV2Meshes.forEach(name => logger.log(`  - ${name}`));
+        }
+
+        if (sameArray > 0) {
+            logger.error(`\n❌ CRITICAL: ${sameArray} meshes have UV1 and UV2 pointing to SAME array!`);
+            logger.log('   This means the Blender export did NOT include separate UV layers.');
+            logger.log('   Solution: In Blender, ensure the model has 2 UV layers before export.');
+        } else if (bothUVs === 0) {
+            logger.error('\n❌ NO meshes have UV2! Lightmaps will not work.');
+            logger.log('   Solution: Re-export from Blender with BOTH UV layers enabled.');
+        } else if (bothUVs < meshCount) {
+            logger.warn(`\n⚠️ Only ${bothUVs}/${meshCount} meshes have UV2!`);
+        } else {
+            logger.log('\n✅ All meshes have both UV channels with separate data');
+        }
+
+        return { meshCount, hasUV1, hasUV2, bothUVs, sameArray, missingUV2Meshes };
+    }
+
+    // Fix missing UV2 by copying UV1 as a fallback
+    fixMissingUV2() {
+        logger.log('🔧 Fixing missing UV2 channels...');
+        let fixedCount = 0;
+
+        this.model.traverse((node) => {
+            if (node.isMesh) {
+                const geom = node.geometry;
+                const uv1 = geom.attributes.uv;
+                const uv2 = geom.attributes.uv2;
+
+                // If has UV1 but missing UV2, copy UV1 to UV2
+                if (uv1 && !uv2) {
+                    // Create a new array (don't reference the same array!)
+                    const uv2Array = new Float32Array(uv1.array);
+                    geom.setAttribute('uv2', new THREE.BufferAttribute(uv2Array, 2));
+                    fixedCount++;
+                    logger.log(`  ✅ Fixed UV2 for: ${node.name}`);
+                }
+            }
+        });
+
+        logger.log(`\n✅ Fixed ${fixedCount} meshes by copying UV1 to UV2`);
+        logger.warn('⚠️ Note: This is a temporary fix. For proper lightmapping,');
+        logger.warn('   re-export from Blender with a dedicated lightmap UV layer.');
+
+        return fixedCount;
+    }
+
+    // Compare UV1 and UV2 to check if they're actually different
+    compareUVChannels(meshName = null) {
+        logger.log('🔍 Comparing UV1 vs UV2 coordinates...');
+        let checkedMeshes = 0;
+        let identicalUVs = 0;
+        let differentUVs = 0;
+
+        this.model.traverse((node) => {
+            if (node.isMesh) {
+                // Filter by mesh name if specified
+                if (meshName && !node.name.toLowerCase().includes(meshName.toLowerCase())) {
+                    return;
+                }
+
+                const geom = node.geometry;
+                const uv1 = geom.attributes.uv;
+                const uv2 = geom.attributes.uv2;
+
+                if (uv1 && uv2) {
+                    checkedMeshes++;
+
+                    // Check if coordinates are identical
+                    let areIdentical = true;
+                    const threshold = 0.001; // Small threshold for floating point comparison
+
+                    for (let i = 0; i < Math.min(uv1.array.length, uv2.array.length); i++) {
+                        if (Math.abs(uv1.array[i] - uv2.array[i]) > threshold) {
+                            areIdentical = false;
+                            break;
+                        }
+                    }
+
+                    if (areIdentical) {
+                        identicalUVs++;
+                        if (checkedMeshes <= 5 || meshName) {
+                            logger.warn(`  ⚠️ ${node.name}: UV1 and UV2 are IDENTICAL`);
+                        }
+                    } else {
+                        differentUVs++;
+                        if (checkedMeshes <= 5 || meshName) {
+                            logger.log(`  ✅ ${node.name}: UV1 and UV2 are different`);
+                            // Show sample coordinates
+                            logger.log(`     UV1[0]: (${uv1.array[0].toFixed(3)}, ${uv1.array[1].toFixed(3)})`);
+                            logger.log(`     UV2[0]: (${uv2.array[0].toFixed(3)}, ${uv2.array[1].toFixed(3)})`);
+                        }
+                    }
+                }
+            }
+        });
+
+        logger.log(`\n📊 UV Comparison Results:`);
+        logger.log(`  Total meshes checked: ${checkedMeshes}`);
+        logger.log(`  Identical UV1/UV2: ${identicalUVs} (${((identicalUVs/checkedMeshes)*100).toFixed(1)}%)`);
+        logger.log(`  Different UV1/UV2: ${differentUVs} (${((differentUVs/checkedMeshes)*100).toFixed(1)}%)`);
+
+        if (identicalUVs > 0) {
+            logger.warn(`\n⚠️ ${identicalUVs} meshes have identical UV1 and UV2!`);
+            logger.warn('   This means Blender exported the same UV layer twice.');
+            logger.warn('   Solution: In Blender, create a separate UV layer for lightmaps');
+            logger.warn('   and ensure it\'s named "LightmapUV" or similar.');
+        }
+
+        return { checkedMeshes, identicalUVs, differentUVs };
+    }
+
+    // Visual debug: Show lightmap textures in browser
+    showLightmapPreview() {
+        logger.log('🖼️ Creating lightmap preview...');
+
+        // Remove old preview if exists
+        const oldPreview = document.getElementById('lightmap-preview');
+        if (oldPreview) oldPreview.remove();
+
+        // Create preview container
+        const preview = document.createElement('div');
+        preview.id = 'lightmap-preview';
+        preview.style.position = 'fixed';
+        preview.style.top = '10px';
+        preview.style.right = '10px';
+        preview.style.zIndex = '10000';
+        preview.style.background = 'rgba(0,0,0,0.8)';
+        preview.style.padding = '10px';
+        preview.style.borderRadius = '5px';
+        preview.style.color = 'white';
+        preview.style.fontFamily = 'monospace';
+        preview.style.fontSize = '12px';
+
+        const title = document.createElement('div');
+        title.textContent = 'Lightmap Preview (Click to close)';
+        title.style.marginBottom = '10px';
+        title.style.cursor = 'pointer';
+        title.onclick = () => preview.remove();
+        preview.appendChild(title);
+
+        // Show Lightmap ON
+        if (this.lightmapOn && this.lightmapOn.image) {
+            const canvasOn = document.createElement('canvas');
+            canvasOn.width = 256;
+            canvasOn.height = 256;
+            const ctxOn = canvasOn.getContext('2d');
+            ctxOn.drawImage(this.lightmapOn.image, 0, 0, 256, 256);
+            const labelOn = document.createElement('div');
+            labelOn.textContent = 'Lightmap ON';
+            labelOn.style.marginTop = '5px';
+            preview.appendChild(labelOn);
+            preview.appendChild(canvasOn);
+        }
+
+        // Show Lightmap OFF
+        if (this.lightmapOff && this.lightmapOff.image) {
+            const canvasOff = document.createElement('canvas');
+            canvasOff.width = 256;
+            canvasOff.height = 256;
+            const ctxOff = canvasOff.getContext('2d');
+            ctxOff.drawImage(this.lightmapOff.image, 0, 0, 256, 256);
+            const labelOff = document.createElement('div');
+            labelOff.textContent = 'Lightmap OFF';
+            labelOff.style.marginTop = '10px';
+            preview.appendChild(labelOff);
+            preview.appendChild(canvasOff);
+        }
+
+        document.body.appendChild(preview);
+        logger.log('✅ Lightmap preview displayed (top-right corner)');
     }
 }
 
