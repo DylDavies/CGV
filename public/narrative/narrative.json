@@ -51,28 +51,6 @@
       "text": "Hmmm, the line was cut.",
       "duration": 4000
     },
-    "all_pages_found": {
-      "type": "speechBubble",
-      "title": "You",
-      "text": "I have all the pages... but these symbols don't make any sense.",
-      "duration": 4000
-    },
-    "laptop_suggestion": {
-      "type": "speechBubble",
-      "title": "You",
-      "text": "Maybe that laptop I saw earlier could help decipher them...",
-      "duration": 4000
-    },
-    "objective_decipher_pages": {
-      "type": "objective",
-      "id": "decipher_pages",
-      "description": "Use the laptop to decipher the page symbols"
-    },
-    "objective_place_pages": {
-      "type": "objective",
-      "id": "place_pages",
-      "description": "Place the deciphered pages in the correct order"
-    },
     "collect_pages_speech": {
       "type": "speechBubble",
       "title": "You",
@@ -85,22 +63,10 @@
       "text": "That's all of them. Now I need to figure out what they mean, and where they go.",
       "duration": 4500
     },
-    "all_pages_placed": {
+    "objective_find_pages": {
       "type": "objective",
-      "id": "all_pages_placed",
-      "description": "Place the pages on the wall in the correct order"
-    },
-    "truth_is_found": {
-      "type": "speechBubble",
-      "title": "You",
-      "text": "It worked... Wait, the pages are glowing. The text is changing... 'it wakes when the truth is found'… what does that mean—",
-      "duration": 6000
-    },
-    "all_pages_placed_speech": {
-      "type": "speechBubble",
-      "title": "You",
-      "text": "The pages seem to fit perfectly on the wall",
-      "duration": 4500
+      "id": "collect_pages",
+      "description": "Find and collect all 6 research pages"
     },
     "decipher_pages": {
       "type": "objective",
@@ -113,21 +79,16 @@
       "text": "This old laptop... maybe it has some information.",
       "duration": 4000
     },
-    "escape_monster": {
-      "type": "blackScreen",
-      "text": "Press 'SHIFT' to run",
-      "duration": 2000
+    "all_pages_placed": {
+      "type": "objective",
+      "id": "place_pages",
+      "description": "Place the pages on the wall in the correct order"
     },
-    "pages_deciphered": {
+    "truth_is_found": {
       "type": "speechBubble",
       "title": "You",
-      "text": "Hold on,  the writing says 'it wakes when the truth is found'… what—",
-      "duration": 4000
-    },
-    "run_away_from_monster": {
-      "type": "objective",
-      "id": "get_away_from_monster",
-      "description": "Get as far away as possible!"
+      "text": "It worked... Wait, the pages are glowing. The text is changing... 'it wakes when the truth is found'… what does that mean—",
+      "duration": 6000
     },
     "attacked_by_monster": {
       "type": "blackScreen",
