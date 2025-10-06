@@ -5,7 +5,7 @@ import { Resizer } from './systems/Resizer.js';
 import { Loop } from './systems/Loop.js';
 import { createStats } from './systems/Stats.js';
 import { UIManager } from './systems/uiManager.js';
-import { CannonPhysicsManager } from './systems/CannonPhysicsManager.js';
+import { RapierPhysicsManager } from './systems/RapierPhysicsManager.js';
 import { MansionLoader } from './systems/MansionLoader.js';
 import { GameManager } from './systems/GameManager.js';
 import { InteractionSystem } from './systems/InteractionSystem.js';
@@ -19,11 +19,16 @@ import { ColorPuzzle } from './puzzles/colorPuzzle/ColorPuzzle.js';
 import { WirePuzzle } from './puzzles/wirePuzzle/WirePuzzle.js';
 import { PauseMenu } from './systems/PauseMenu.js';
 import { AudioManager } from './systems/AudioManager.js';
+import { Minimap } from './systems/Minimap.js';
 import logger from './utils/Logger.js'; // Import logger
+import RAPIER from 'https://cdn.skypack.dev/@dimforge/rapier3d-compat';
 
 async function main() {
     try {
         logger.log('噫 Initializing Project HER...');
+
+        await RAPIER.init();
+
         logger.log(`📊 Logger initialized - File logging: ${logger.fileLoggingEnabled ? 'ENABLED' : 'DISABLED'}`);
         const canvas = document.querySelector('#game-canvas');
 
@@ -56,7 +61,7 @@ async function main() {
             const atmosphere = new SimpleAtmosphere(scene, camera, settings.quality || 'medium');
 
             uiManager.updateLoadingText("Setting up physics...");
-            const physicsManager = new CannonPhysicsManager(camera);
+            const physicsManager = new RapierPhysicsManager(scene, camera, null);
 
             uiManager.updateLoadingText("Loading mansion model...");
             const mansionLoader = new MansionLoader(scene, physicsManager, settings.quality || 'medium');
@@ -118,6 +123,10 @@ async function main() {
             puzzleSystem.registerPuzzle('colorPuzzle', colorPuzzle);
             puzzleSystem.registerPuzzle('wirePuzzle', wirePuzzle);
 
+            // --- Initialize Minimap ---
+            uiManager.updateLoadingText("Creating minimap...");
+            const minimap = new Minimap(scene, camera, mansionLoader, renderer);
+
             // --- Final Setup & Start Loop ---
             new Resizer(camera, renderer);
             loop.updatables.push(
@@ -129,14 +138,15 @@ async function main() {
                 puzzleSystem,
                 gameManager,
                 atmosphere,
-                monsterAI 
+                monsterAI,
+                minimap
             );
 
             // --- Global Debug ---
            window.gameControls = {
                 camera, scene, flashlight, physicsManager, mansionLoader, gameManager,
                 interactionSystem, puzzleSystem, atmosphere, colorPuzzle, wirePuzzle,
-                audioManager, monsterAI,
+                audioManager, monsterAI, minimap,
                 toggleNavMesh: () => {
                     mansionLoader.toggleNavMeshVisualizer();
                 },
@@ -145,6 +155,9 @@ async function main() {
                 },
                 toggleNavMeshNodes: () => {
                     mansionLoader.toggleNavMeshNodesVisualizer();
+                },
+                toggleMinimap: () => {
+                    minimap.toggle();
                 }
             };
             

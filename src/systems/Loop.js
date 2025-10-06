@@ -35,8 +35,13 @@ class Loop {
         }
       }
 
-      // Always render the scene even when paused
-      this.renderer.render(this.scene, this.camera);
+      try {
+        this.renderer.render(this.scene, this.camera);
+      } catch (error) {
+        console.error("❌ Rendering error detected. This is often caused by an invalid camera or object position (NaN).", error);
+        // We stop the loop here to prevent a flood of errors.
+        this.stop(); 
+      }
 
       this.stats.end();
     });

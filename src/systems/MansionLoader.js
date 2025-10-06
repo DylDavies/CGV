@@ -280,33 +280,42 @@ class MansionLoader {
     organizeByRooms() {
         logger.log('🗂️ Organizing rooms from collections...');
 
-        this.model.traverse((node) => {
-            if (node.type === 'Group' && node.children.length > 0) {
+        // NEW: First, find the main 'Mansion' parent group
+        const mansionNode = this.model.getObjectByName('Mansion');
+
+        if (!mansionNode) {
+            logger.error("❌ Critical Error: Could not find the 'Mansion' group in the model! Make sure your main collection is named 'Mansion'.");
+            return;
+        }
+
+        mansionNode.children.forEach((node) => {
+            // This check ensures we only process children that are actual groups (your room collections)
+            if (node.type === 'Object3D' && node.children.length > 0) {
                 const roomName = node.name;
 
                 const box = new THREE.Box3().setFromObject(node);
                 const center = new THREE.Vector3();
                 box.getCenter(center);
 
+                // This part of your original logic was perfect, no changes needed here
                 const roomData = {
                     name: roomName,
-                    group: node,
-                    meshes: [],
+                    children: node.children, // Store children for the minimap
                     bounds: box,
                     center: center,
-                    visible: true
+                    // The rest of the properties from your original object can go here too
                 };
 
-                node.traverse((child) => {
-                    if (child.isMesh) {
-                        roomData.meshes.push(child);
-                    }
-                });
-
                 this.rooms.set(roomName, roomData);
-                logger.log(`📍 Room "${roomName}" registered with ${roomData.meshes.length} meshes`);
+                logger.log(`✅ Room "${roomName}" registered successfully.`);
             }
         });
+
+        console.log(this.rooms)
+
+        if (this.rooms.size === 0) {
+            logger.warn("⚠️ No rooms were registered. Check that your room collections are direct children of the 'Mansion' group.");
+        }
     }
 
     generatePhysics() {
@@ -351,7 +360,7 @@ class MansionLoader {
 
                 const body = this.createPhysicsBodyFromMesh(node);
                 if (body) {
-                    this.physicsManager.addBody(body);
+                    //this.physicsManager.addBody(body);
                     this.physicsBodies.push({
                         mesh: node,
                         body: body
@@ -431,6 +440,12 @@ class MansionLoader {
 
         const size = new THREE.Vector3();
         box.getSize(size);
+
+        const minThickness = 0.01; 
+        if (size.x < minThickness || size.y < minThickness || size.z < minThickness) {
+            // console.warn(`Skipping physics body for "${mesh.name}" due to small size:`, size);
+            return null; // Silently skip creating a body for this object
+        }
 
         if (isNaN(center.x) || isNaN(center.y) || isNaN(center.z)) {
             return null;
@@ -585,6 +600,11 @@ toggleNavMeshNodesVisualizer() {
                     const forward = new THREE.Vector3(0.5, 0, 0);
                     forward.applyQuaternion(worldQuaternion);
                     forward.normalize();
+
+                    if (isNaN(forward.x) || isNaN(forward.y) || isNaN(forward.z)) {
+                        console.error("❌ Failed to calculate spawn point direction. Using fallback.");
+                        return null; // Return null to indicate failure
+                    }
 
                     lampLight.position.copy(lampPosition);
                     lampLight.position.add(forward.multiplyScalar(0.4));
@@ -753,11 +773,17 @@ toggleNavMeshNodesVisualizer() {
 
     getCurrentRoom(position) {
         for (const [roomName, roomData] of this.rooms) {
-            if (roomData.bounds.containsPoint(position)) {
-                return roomData;
+            // Create a temporary, "flattened" bounding box for a 2D check.
+            // This ignores the Y-axis, making detection much more reliable.
+            const bounds2D = roomData.bounds.clone();
+            bounds2D.min.y = -Infinity;
+            bounds2D.max.y = Infinity;
+
+            if (bounds2D.containsPoint(position)) {
+                return roomData; // Return the room if the player is within its footprint
             }
         }
-        return null;
+        return null; // Return null if the player is not in any room
     }
 
     getRoomByName(name) {
@@ -810,6 +836,7 @@ toggleNavMeshNodesVisualizer() {
             spawnPoint.add(forward.multiplyScalar(2.0));
             spawnPoint.y += 0.5;
             spawnPoint.x += 0.5;
+            spawnPoint.z -= 1;
 
             if (isNaN(spawnPoint.x) || isNaN(spawnPoint.y) || isNaN(spawnPoint.z)) {
                 return null;

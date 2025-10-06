@@ -205,6 +205,13 @@ class PauseMenu {
                 this.show();
             }
         });
+
+        // Prevent F10 from being caught by pause menu (let physics manager handle it)
+        document.addEventListener('keydown', (e) => {
+            if (e.code === 'F10') {
+                e.stopPropagation();
+            }
+        }, true); // Use capture phase to intercept before other listeners
     }
 
     show() {

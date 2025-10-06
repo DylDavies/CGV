@@ -897,66 +897,102 @@ class GameManager {
 
     // Room management
     tick(delta) {
-        if (this.gameState !== 'playing') return;
+        if (this.gameState !== 'playing') return;
 
-        // Update current room based on camera position
-        const currentRoom = this.mansion.getCurrentRoom(this.camera.position);
-        if (currentRoom && currentRoom !== this.currentRoom) {
-            this.onRoomEntered(currentRoom);
-            this.previousRoom = this.currentRoom;
-            this.currentRoom = currentRoom;
-            this.gameStats.roomsVisited.add(currentRoom.name);
-            this.updateUI();
-        }
+        // Get the room the player is currently in
+        const detectedRoom = this.mansion.getCurrentRoom(this.camera.position);
 
-        // Update exploration objective
-        if (this.gameStats.roomsVisited.size >= 5) {
-            this.completeObjective('explore_mansion');
-        }
+        // Check if the room has changed since the last frame
+        if (detectedRoom !== this.currentRoom) {
+            // A transition has occurred.
+            
+            // 1. Handle exiting the PREVIOUS room (if we were in one)
+            if (this.currentRoom) {
+                this.onRoomExited(this.currentRoom);
+            }
 
-        // Survival time tracking
-        const survivalTime = (Date.now() - this.gameStats.startTime) / 1000;
-        if (survivalTime > 300) { // 5 minutes
-            this.completeObjective('survive_horrors');
-        }
-    }
+            // 2. Handle entering the NEW room (if we are now in one)
+            if (detectedRoom) {
+                this.onRoomEntered(detectedRoom);
+            }
+
+            // 3. Update the state variables
+            this.previousRoom = this.currentRoom;
+            this.currentRoom = detectedRoom;
+            
+            // 4. Always update the UI after a transition
+            this.updateUI();
+        }
+
+        // --- Objective progress checks ---
+        this.checkTimedObjectives();
+    }
 
     onRoomEntered(room) {
-        console.log(`🚪 Entered ${room.name}`);
+        console.log(`🚪 Entered ${room.name}`);
 
-        // Room-specific events
-        this.handleRoomEntry(room);
+        // Show a hint only on the very first visit
+        if (!this.gameStats.roomsVisited.has(room.name)) {
+            this.handleFirstRoomEntry(room);
+        }
 
-        // Note: Puzzles are now handled separately through the PuzzleSystem
-        // Room-specific puzzle detection would go here
+        // Add to visited rooms list (moved here for better logic)
+        this.gameStats.roomsVisited.add(room.name);
 
-        // Special room events
-        this.triggerRoomSpecialEvents(room);
+        // Trigger any other events that should happen EVERY time you enter
+        this.triggerRoomSpecialEvents(room);
+
+        // Update exploration objective (moved here from tick)
+        if (this.gameStats.roomsVisited.size >= 5) {
+            this.completeObjective('explore_mansion');
+        }
+    }
+
+    /**
+     * NEW METHOD: Handles logic for when a player leaves a room.
+     * @param {object} room - The room object that was just exited.
+     */
+    onRoomExited(room) {
+        console.log(`🚪 Exited ${room.name}`);
+        // This is the place to add logic for when you leave a room, e.g.:
+        // - Stop room-specific ambient sounds
+        // - Hide room-specific UI elements
+    }
+
+    /**
+     * NEW METHOD: Centralizes time-based objective checks.
+     */
+    checkTimedObjectives() {
+        // Survival time tracking
+        const survivalTime = (Date.now() - this.gameStats.startTime) / 1000;
+        if (survivalTime > 300) { // 5 minutes
+            this.completeObjective('survive_horrors');
+        }
     }
 
-    handleRoomEntry(room) {
-        // Show hint when entering a room for the first time
-        if (!this.gameStats.roomsVisited.has(room.name)) {
-            // Extract room type from name (lowercase)
-            const roomType = room.name.toLowerCase();
+    /**
+     * RENAMED: This method now specifically handles FIRST-TIME entry events.
+     * @param {object} room - The room being entered for the first time.
+     */
+    handleFirstRoomEntry(room) {
+        const roomType = room.name.toLowerCase();
 
-            if (roomType.includes('entrance')) {
-                this.showHint("You're in the mansion's entrance hall. Look for clues about how to escape.");
-            } else if (roomType.includes('library')) {
-                this.showHint("Ancient books line the walls. Some might contain important information.");
-            } else if (roomType.includes('kitchen')) {
-                this.showHint("The kitchen feels cold and unused. Check the cabinets and drawers.");
-            } else if (roomType.includes('bedroom')) {
-                this.showHint("Someone once slept here. Search under the bed and in the dresser.");
-            } else if (roomType.includes('study')) {
-                this.showHint("This study might contain the mansion owner's personal documents.");
-            } else if (roomType.includes('attic')) {
-                this.showHint("The attic is full of old memories... and perhaps old secrets.");
-            } else {
-                this.showHint(`Entered: ${room.name}`);
-            }
-        }
-    }
+        if (roomType.includes('entrance')) {
+            this.showHint("You're in the mansion's entrance hall. Look for clues about how to escape.");
+        } else if (roomType.includes('library')) {
+            this.showHint("Ancient books line the walls. Some might contain important information.");
+        } else if (roomType.includes('kitchen')) {
+            this.showHint("The kitchen feels cold and unused. Check the cabinets and drawers.");
+        } else if (roomType.includes('bedroom')) {
+            this.showHint("Someone once slept here. Search under the bed and in the dresser.");
+        } else if (roomType.includes('study')) {
+            this.showHint("This study might contain the mansion owner's personal documents.");
+        } else if (roomType.includes('attic')) {
+            this.showHint("The attic is full of old memories... and perhaps old secrets.");
+        } else {
+            this.showHint(`You've discovered the ${room.name}.`);
+        }
+    }
 
     triggerRoomSpecialEvents(room) {
         // Random room events based on room type and visit count
