@@ -36,10 +36,15 @@
     },
     "phone_call_black_screen": {
       "type": "blackScreen",
-      "text": "I hope you enjoy the truth you’ve stumbled upon. You wanted a story… now live it.",
+      "text": "I hope you enjoy the truth you've stumbled upon. You wanted a story… now live it.",
       "duration": 5000
     },
-        "phone_dead_line_1": {
+    "objective_find_pages": {
+      "type": "objective",
+      "id": "find_pages",
+      "description": "Search the mansion for mysterious pages"
+    },
+    "phone_dead_line_1": {
       "type": "speechBubble",
       "title": "Anonymous",
       "text": "...",
@@ -51,15 +56,32 @@
       "text": "Hmmm, the line was cut.",
       "duration": 4000
     },
-    "objective_2_explore": {
+    "all_pages_found": {
+      "type": "speechBubble",
+      "title": "You",
+      "text": "I have all the pages... but these symbols don't make any sense.",
+      "duration": 4000
+    },
+    "laptop_suggestion": {
+      "type": "speechBubble",
+      "title": "You",
+      "text": "Maybe that laptop I saw earlier could help decipher them...",
+      "duration": 4000
+    },
+    "objective_decipher_pages": {
       "type": "objective",
-      "id": "explore_mansion",
-      "description": "Explore the mansion and find any clues or information."
+      "id": "decipher_pages",
+      "description": "Use the laptop to decipher the page symbols"
+    },
+    "objective_place_pages": {
+      "type": "objective",
+      "id": "place_pages",
+      "description": "Place the deciphered pages in the correct order"
     },
     "collect_pages_speech": {
       "type": "speechBubble",
       "title": "Inner Monologue",
-      "text": "These… look like research notes. But the symbols don’t make sense.",
+      "text": "These… look like research notes. But the symbols don't make sense.",
       "duration": 4000
     },
     "laptop_puzzle_speech": {
@@ -71,6 +93,55 @@
     "monster_awaken_warning": {
       "type": "warning",
       "text": "The creature is now active."
+    }
+  },
+  "stage2": {
+    "fix_fuse_box_objective": {
+      "type": "objective",
+      "id": "fix_fuse_box",
+      "description": "Find the fuse box and restore power to the mansion"
+    },
+    "transition_start": {
+      "type": "speechBubble",
+      "title": "You",
+      "text": "Something feels different... The air grows colder.",
+      "duration": 5000
+    },
+    "lights_out": {
+      "type": "speechBubble",
+      "title": "You",
+      "text": "The lights! Everything went dark!",
+      "duration": 4000
+    },
+    "need_power": {
+      "type": "speechBubble",
+      "title": "You",
+      "text": "I need to find the fuse box and restore the power...",
+      "duration": 5000
+    },
+    "something_moving": {
+      "type": "speechBubble",
+      "title": "You",
+      "text": "I hear something moving in the darkness...",
+      "duration": 4000
+    },
+    "fuse_box_examine": {
+      "type": "speechBubble",
+      "title": "You",
+      "text": "I need to rewire this... carefully.",
+      "duration": 3000
+    },
+    "lights_restored": {
+      "type": "speechBubble",
+      "title": "You",
+      "text": "The lights flicker back to life. I can see again!",
+      "duration": 5000
+    },
+    "not_alone": {
+      "type": "speechBubble",
+      "title": "You",
+      "text": "But I'm not alone anymore...",
+      "duration": 4000
     }
   },
   "endings": {

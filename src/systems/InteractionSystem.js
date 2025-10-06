@@ -130,7 +130,8 @@ class InteractionSystem {
                 handler: this.handlePageInteraction.bind(this)
             },
             page_slot: {
-                prompt: "Place a page",
+                prompt: "Press E to place page",
+                promptWithPage: "Press E to take the page",
                 handler: this.handlePageSlotInteraction.bind(this)
             },
             telephone: {
@@ -198,6 +199,11 @@ class InteractionSystem {
             escape_portal: {
                 prompt: "Press E to escape!",
                 handler: this.handleEscapePortal.bind(this)
+            },
+            fuse_box: {
+                prompt: "Press E to fix the fuse box",
+                fixedPrompt: "The fuse box is working",
+                handler: this.handleFuseBoxInteraction.bind(this)
             }
         };
     }
@@ -306,6 +312,12 @@ class InteractionSystem {
     }
 
     handlePageInteraction(pageObject, userData) {
+        // NEW: Check if pages puzzle is completed
+        if (this.gameManager.pagesPuzzleCompleted) {
+            this.showMessage("The pages are sealed in place by an ancient magic.");
+            return;
+        }
+
         if (userData.pageId) {
             this.gameManager.collectPage(userData.pageId);
             this.animateItemPickup(pageObject, () => {
@@ -319,6 +331,18 @@ class InteractionSystem {
     }
 
     handlePageSlotInteraction(slotObject, userData) {
+        // NEW: Check if pages puzzle is completed
+        if (this.gameManager.pagesPuzzleCompleted) {
+            this.showMessage("The pages are sealed in place by an ancient magic.");
+            return;
+        }
+
+        // NEW: Check if laptop puzzle is completed
+        if (!this.gameManager.laptopPuzzleCompleted) {
+            this.showMessage("The symbols don't make any sense. I need to decipher them first.");
+            return;
+        }
+
         const slotIndex = userData.slotIndex;
 
         // If a page is already in the slot, ask to remove it.
@@ -395,8 +419,14 @@ class InteractionSystem {
 
         colorPuzzle.onSolve(() => {
             this.isColorPuzzleSolved = true;
+            this.gameManager.laptopPuzzleCompleted = true; // NEW: Mark laptop puzzle as complete
+            this.gameManager.completeObjective('decipher_pages'); // NEW: Complete objective
+
             // The puzzle is hidden by the time this is called. Now show the clue.
             this.showClueScreenDialog(clue);
+
+            // NEW: Add objective to place pages
+            window.gameControls.narrativeManager.triggerEvent('stage1.objective_place_pages');
         }, 'ACCESS GRANTED');
 
     } else {
@@ -636,6 +666,43 @@ class InteractionSystem {
                 this.gameManager.onGameWon();
             }
         );
+    }
+
+    async handleFuseBoxInteraction(fuseBox, userData) {
+        // Check if already fixed
+        if (this.gameManager.fuseBoxFixed) {
+            this.showMessage("The fuse box is already working.");
+            return;
+        }
+
+        // Check if in stage 2
+        if (this.gameManager.gameStage !== 2) {
+            this.showMessage("The fuse box seems to be working fine.");
+            return;
+        }
+
+        // Inner monologue using narrative manager
+        await window.gameControls.narrativeManager.triggerEvent('stage2.fuse_box_examine');
+
+        // Launch wire puzzle
+        const wirePuzzle = window.gameControls.wirePuzzle;
+        if (wirePuzzle) {
+            if (this.controls) this.controls.freeze();
+            this.currentInteraction = 'wire_puzzle';
+
+            wirePuzzle.show();
+
+            wirePuzzle.onSolve(() => {
+                this.gameManager.fixFuseBox();
+                userData.fixed = true;
+            });
+
+            wirePuzzle.onClose(() => {
+                this.closePuzzleUI();
+            });
+        } else {
+            this.showMessage("Something's wrong with the wiring...");
+        }
     }
 
     startPuzzle(puzzleData, puzzleObject) {
@@ -915,26 +982,45 @@ class InteractionSystem {
     updateCrosshair() {
         this.raycaster.setFromCamera(new THREE.Vector2(0, 0), this.camera);
         const intersects = this.raycaster.intersectObjects(this.scene.children, true);
-        
+
         let isInteractable = false;
         let interactionPrompt = '';
-        
+
         if (intersects.length > 0) {
             const distance = intersects[0].distance;
             if (distance <= this.interactionRange) {
                 const interactableData = this.findInteractableData(intersects[0].object);
                 if (interactableData) {
-                    isInteractable = true;
-                    const interactionType = this.interactionTypes[interactableData.data.type];
-                    if (interactionType) {
-                        interactionPrompt = interactableData.data.locked ? 
-                            (interactionType.lockedPrompt || interactionType.prompt) : 
-                            interactionType.prompt;
+                    // NEW: Check if this is a page/page_slot and puzzle is completed
+                    const isPagesLocked = this.gameManager.pagesPuzzleCompleted &&
+                        (interactableData.data.type === 'page' || interactableData.data.type === 'page_slot');
+
+                    if (!isPagesLocked) {
+                        isInteractable = true;
+                        const interactionType = this.interactionTypes[interactableData.data.type];
+                        if (interactionType) {
+                            // NEW: Special handling for page_slot to show different prompt based on whether page is placed
+                            if (interactableData.data.type === 'page_slot') {
+                                const slotIndex = interactableData.data.slotIndex;
+                                const hasPage = this.gameManager.placedPages[slotIndex] !== null;
+                                interactionPrompt = hasPage ? interactionType.promptWithPage : interactionType.prompt;
+                            }
+                            // NEW: Special handling for fuse_box to show different prompt if fixed
+                            else if (interactableData.data.type === 'fuse_box') {
+                                interactionPrompt = this.gameManager.fuseBoxFixed ?
+                                    interactionType.fixedPrompt :
+                                    interactionType.prompt;
+                            } else {
+                                interactionPrompt = interactableData.data.locked ?
+                                    (interactionType.lockedPrompt || interactionType.prompt) :
+                                    interactionType.prompt;
+                            }
+                        }
                     }
                 }
             }
         }
-        
+
         if (isInteractable) {
             this.crosshair.style.background = '#00ff00';
             this.crosshair.style.borderColor = '#00ff00';

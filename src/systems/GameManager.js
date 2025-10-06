@@ -22,9 +22,15 @@ class GameManager {
         this.collectedPages = [];
         this.placedPages = new Array(6).fill(null); // Tracks pages placed on the wall
         this.pageSolution = ['S_Page1', 'S_Page3', 'S_Page5', 'S_Page4', 'S_Page6', 'S_Page2'];
+        this.pagesPuzzleCompleted = false; // NEW: Track if pages puzzle is solved
         this.currentRoom = null;
         this.previousRoom = null;
         this.gameState = 'playing'; // 'playing', 'won', 'lost', 'paused'
+        this.gameStage = 1; // NEW: Track game stage (1 or 2)
+        this.lightsOn = true; // NEW: Track light state
+        this.fuseBoxFixed = false; // NEW: Track if fuse box puzzle is complete
+        this.telephoneAnswered = false; // NEW: Track if phone has been answered
+        this.laptopPuzzleCompleted = false; // NEW: Track if laptop puzzle is complete
 
         this.objectives = [];
 
@@ -79,13 +85,19 @@ class GameManager {
         console.log("📞 Answering the telephone...");
 
         this.audioManager.stopSound('phone_ringing', 500);
+        this.telephoneAnswered = true; // NEW: Mark phone as answered
         this.completeObjective('answer_telephone');
 
         await window.gameControls.narrativeManager.triggerEvent('stage1.phone_ring_speech');
         await window.gameControls.narrativeManager.triggerEvent('stage1.phone_call_black_screen');
-        
-        // Trigger new objective
-        await window.gameControls.narrativeManager.triggerEvent('stage1.objective_2_explore');
+
+        // Trigger new objective - find pages
+        await window.gameControls.narrativeManager.triggerEvent('stage1.objective_find_pages');
+
+        // Enable page glow now that phone is answered
+        if (this.mansion) {
+            this.mansion.enablePageGlow();
+        }
     }
     
     completeObjective(objectiveId) {
@@ -131,8 +143,13 @@ class GameManager {
         this.showHint(pageData.message, 5000);
 
         if (this.collectedPages.length >= 6) {
-            this.completeObjective('collect_pages');
-            this.showHint("You have all the pages. You should find where they belong.");
+            this.completeObjective('find_pages');
+            // NEW: Trigger laptop suggestion and decipher objective
+            window.gameControls.narrativeManager.triggerEvent('stage1.all_pages_found').then(() => {
+                window.gameControls.narrativeManager.triggerEvent('stage1.laptop_suggestion').then(() => {
+                    window.gameControls.narrativeManager.triggerEvent('stage1.objective_decipher_pages');
+                });
+            });
         }
         this.updateUI();
     }
@@ -169,17 +186,21 @@ class GameManager {
         // }
 
         if (isCorrect) {
+            this.pagesPuzzleCompleted = true; // NEW: Mark puzzle as completed
             this.completeObjective('place_pages');
             this.showHint("The pages glow in unison... a hidden passage has been revealed!", 8000);
-            
+
             // NEW: Loop through the solution and activate the glow on each symbol.
             if (this.mansion) {
                 this.pageSolution.forEach(pageId => {
                     this.mansion.activatePageSymbolGlow(pageId);
                 });
             }
-            
-            // Trigger an event here, like opening a door
+
+            // NEW: Trigger Stage 2 transition after a delay
+            setTimeout(() => {
+                this.startStage2();
+            }, 9000); // 9 seconds delay after the glow message
         } else {
             this.showHint("Nothing happens... the order must be wrong.", 4000);
         }
@@ -1222,6 +1243,91 @@ class GameManager {
             this.showHint("Failed to load game save.", 3000);
         }
         return false;
+    }
+
+    // NEW: Stage 2 transition
+    async startStage2() {
+        console.log('🎭 Starting Stage 2...');
+        this.gameStage = 2;
+
+        // Inner monologue using narrative manager
+        await window.gameControls.narrativeManager.triggerEvent('stage2.transition_start');
+
+        // Turn off all lights
+        this.lightsOn = false;
+        if (this.mansion) {
+            this.mansion.setAllLightsEnabled(false);
+        }
+
+        await window.gameControls.narrativeManager.triggerEvent('stage2.lights_out');
+
+        await window.gameControls.narrativeManager.triggerEvent('stage2.need_power');
+
+        // Add objective to fix fuse box
+        await window.gameControls.narrativeManager.triggerEvent('stage2.fix_fuse_box_objective');
+
+        // Spawn the monster near the study
+        setTimeout(() => {
+            if (window.gameControls.monsterAI) {
+                this.spawnMonsterNearStudy();
+            }
+        }, 2000);
+    }
+
+    spawnMonsterNearStudy() {
+        const monsterAI = window.gameControls.monsterAI;
+        const pathfinding = monsterAI.pathfinding;
+
+        try {
+            const zone = pathfinding.zones[monsterAI.ZONE];
+            const nodes = zone.groups[monsterAI.groupID];
+
+            // Find nodes near the study (you may need to adjust coordinates based on your mansion layout)
+            // For now, we'll look for a specific node or use a fallback
+            let studyNode = null;
+
+            // Try to find a node close to study position
+            // You'll need to adjust these coordinates based on your actual study location
+            const studyApproxPosition = new THREE.Vector3(0, 0, 0); // Placeholder - adjust this!
+
+            let closestDistance = Infinity;
+            for (const node of nodes) {
+                const distance = node.centroid.distanceTo(studyApproxPosition);
+                if (distance < closestDistance) {
+                    closestDistance = distance;
+                    studyNode = node;
+                }
+            }
+
+            if (studyNode) {
+                monsterAI.monster.position.copy(studyNode.centroid);
+                monsterAI.monster.visible = true; // Make monster visible
+                console.log(`👾 Monster spawned near study at node`);
+            } else {
+                monsterAI.spawn(); // Fallback to random spawn
+                monsterAI.monster.visible = true; // Make monster visible
+            }
+
+            window.gameControls.narrativeManager.triggerEvent('stage2.something_moving');
+        } catch (error) {
+            console.error("Failed to spawn monster near study:", error);
+            monsterAI.spawn(); // Fallback
+        }
+    }
+
+    async fixFuseBox() {
+        console.log('💡 Fuse box fixed!');
+        this.fuseBoxFixed = true;
+        this.lightsOn = true;
+
+        if (this.mansion) {
+            this.mansion.setAllLightsEnabled(true);
+        }
+
+        this.completeObjective('fix_fuse_box');
+
+        await window.gameControls.narrativeManager.triggerEvent('stage2.lights_restored');
+        await window.gameControls.narrativeManager.triggerEvent('stage2.not_alone');
     }
 
     // Cleanup

@@ -126,7 +126,7 @@ export class ColorPuzzle {
 
         // Debug current selected color
         console.log(`Color change. New selected color: ${color}`);
-
+        
         this.ui.renderPalette(this.logic);
     }
     
