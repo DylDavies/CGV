@@ -12,10 +12,12 @@
     <link rel="stylesheet" href="./src/ui/creditsScreen/credits-screen.css">
     <link rel="stylesheet" href="./src/ui/settingsScreen/settings-screen.css">
     <link rel="stylesheet" href="./src/ui/wirePuzzle/wire-puzzle.css">
-    <link rel="stylesheet" href="./src/ui/wirePuzzle/wire-puzzle.css">
+    <link rel="stylesheet" href="./src/ui/clueScreen/clue-screen.css">
+    <link rel="stylesheet" href="./src/ui/narrative/narrative-elements.css">
+    <link rel="stylesheet" href="./src/ui/objectiveTracker/objective-tracker.css">
 
 </head>
-
+<body>
     <script type="importmap">
     {
         "imports": {
@@ -24,31 +26,25 @@
         }
     }
     </script>
-  <body>
+    
+    <div id="welcome-screen-container"></div>
+    <div id="credits-screen-container"></div>
+    <div id="settings-screen-container"></div>
+    
+    <div id="narrative-container"></div>
+    <div id="objective-tracker-container"></div>
 
-      <div id="welcome-screen-container"></div>
-      <div id="credits-screen-container"></div>
-      <div id="settings-screen-container"></div>
+    <div id="puzzle-container" style="display: none;"></div>
+    <div id="wire-puzzle-container" style="display: none;"></div>
+    
+    <div id="crosshair"></div>
+    <div id="interaction-prompt"></div>
+    <div id="result-screen-container"></div>
+    <div id="clue-screen-container"></div>
 
-      <div id="puzzle-container" style="display: none;"></div>
-      <div id="wire-puzzle-container" style="display: none;"></div>
+    <canvas id="game-canvas"></canvas>
+    <div id="blackout-screen" class="hidden"></div>
 
-      <!-- Full-screen loading overlay -->
-      <div id="loading-screen" style="display: none;">
-          <div id="loading-container">
-              <div id="loading-bar"></div>
-              <div id="loading-text">Loading...</div>
-          </div>
-      </div>
-      
-      
-      <div id="crosshair"></div>
-      <div id="interaction-prompt"></div>
-
-      <canvas id="game-canvas"></canvas>
-
-      <script type="module" src="src/main.js"></script>
-  </body>
-
-
+    <script type="module" src="src/main.js"></script>
+</body>
 </html>

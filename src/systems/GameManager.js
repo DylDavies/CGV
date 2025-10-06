@@ -1,17 +1,39 @@
-// src/systems/GameManager.js
+import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.127.0/build/three.module.js';
 
-import * as THREE from 'https://unpkg.com/three@0.127.0/build/three.module.js';
+// Define the data for each page
+const PAGE_DATA = {
+    'S_Page1': { symbol: 'sun', message: 'The first light reveals the path.' },
+    'S_Page2': { symbol: 'moon', message: 'But the second shadow conceals it.' },
+    'S_Page3': { symbol: 'star', message: 'The third star guides the lost.' },
+    'S_Page4': { symbol: 'hand', message: 'A fourth hand offers a false choice.' },
+    'S_Page5': { symbol: 'eye', message: 'The fifth eye sees the truth.' },
+    'S_Page6': { symbol: 'spiral', message: 'And the sixth spiral unwinds destiny.' }
+};
 
 class GameManager {
-    constructor(mansion, camera, scene) {
+    constructor(mansion, camera, scene, uiManager, audioManager, controls) {
         this.mansion = mansion;
         this.camera = camera;
         this.scene = scene;
+        this.uiManager = uiManager;
+        this.audioManager = audioManager;
+        this.controls = controls;   // NEW: Store the controls object
         this.inventory = [];
+        this.collectedPages = [];
+        this.placedPages = new Array(6).fill(null); // Tracks pages placed on the wall
+        this.pageSolution = ['S_Page1', 'S_Page3', 'S_Page5', 'S_Page4', 'S_Page6', 'S_Page2'];
+        this.pagesPuzzleCompleted = false; // NEW: Track if pages puzzle is solved
         this.currentRoom = null;
         this.previousRoom = null;
         this.gameState = 'playing'; // 'playing', 'won', 'lost', 'paused'
+        this.gameStage = 1; // NEW: Track game stage (1 or 2)
+        this.lightsOn = true; // NEW: Track light state
+        this.fuseBoxFixed = false; // NEW: Track if fuse box puzzle is complete
+        this.telephoneAnswered = false; // NEW: Track if phone has been answered
+        this.laptopPuzzleCompleted = false; // NEW: Track if laptop puzzle is complete
+
         this.objectives = [];
+
         this.gameStats = {
             startTime: Date.now(),
             roomsVisited: new Set(),
@@ -19,49 +41,171 @@ class GameManager {
             itemsCollected: 0,
             hintsUsed: 0
         };
+
+        this.hintQueue = []; // NEW: A queue to hold pending hints.
+        this.isHintVisible = false; // NEW: A flag to check if a hint is on screen.
+        this.allPagesPlaced = false;
+
         
-        // UI elements
         this.ui = this.createUI();
         this.audioEnabled = true;
+        this.nextAmbientSoundTime = this.getRandomAmbientTime();
         
         this.initializeGame();
     }
 
+    getRandomAmbientTime() {
+        return Math.random() * 60 + 10; // generate random time interval used for ambient sounds
+    }
+
     initializeGame() {
         console.log("🎮 Initializing game...");
-        
-        // Set up main objective: escape the mansion
-        this.objectives.push({
-            id: 'escape',
-            description: 'Find a way to escape the mansion',
-            completed: false,
-            type: 'main',
-            priority: 1
-        });
-
-        // Add exploration objectives
-        this.objectives.push({
-            id: 'explore_mansion',
-            description: 'Explore the mansion and discover its secrets',
-            completed: false,
-            type: 'secondary',
-            priority: 2
-        });
-
-        // Note: Puzzles can be added later via addObjective() when discovered
-        // The mansion loader doesn't automatically generate puzzles like the procedural system did
-
-        // Add survival objectives
-        this.objectives.push({
-            id: 'survive_horrors',
-            description: 'Survive the supernatural forces in the mansion',
-            completed: false,
-            type: 'secondary',
-            priority: 2
-        });
+         // Make phone start ringing 30 seconds into the game
+        setTimeout(() => {
+            this.startPhoneRingEvent();
+        }, 30000); // 30 seconds
 
         this.updateUI();
         this.showWelcomeMessage();
+    }
+
+    startPhoneRingEvent() {
+        console.log("☎️ Starting phone ring event...");
+        
+        // Trigger narrative events
+        window.gameControls.narrativeManager.triggerEvent('intro.speech_bubble_2');
+        window.gameControls.narrativeManager.triggerEvent('intro.objective_1');
+
+        const soundSourceMesh = this.mansion.getProp('telephone');
+        if (soundSourceMesh) {
+            this.audioManager.playLoopingPositionalSound('phone_ringing', this.audioManager.soundPaths.rotaryPhone, soundSourceMesh, 10);
+        } 
+    }
+    
+    async answerTelephone() {
+        console.log("📞 Answering the telephone...");
+
+        this.audioManager.stopSound('phone_ringing', 500);
+        this.telephoneAnswered = true; // NEW: Mark phone as answered
+        this.completeObjective('answer_telephone');
+
+        await window.gameControls.narrativeManager.triggerEvent('stage1.phone_ring_speech');
+        await window.gameControls.narrativeManager.triggerEvent('stage1.phone_call_black_screen');
+
+        // Trigger new objective - find pages
+        await window.gameControls.narrativeManager.triggerEvent('stage1.objective_find_pages');
+
+        // Enable page glow now that phone is answered
+        if (this.mansion) {
+            this.mansion.enablePageGlow();
+        }
+    }
+    
+    completeObjective(objectiveId) {
+        console.log(`[GameManager] Objective '${objectiveId}' reported as complete.`);
+        // Mark obj as complted
+        this.uiManager.markObjectiveComplete(objectiveId);
+        
+        // You can still have logic that runs after an objective is completed
+        if (objectiveId === 'answer_telephone') {
+            // For example, trigger the next narrative event here.
+            // window.gameControls.narrativeManager.triggerEvent('stage1.next_objective');
+        }
+    }
+
+    
+    // MODIFIED: This now shows a message when a page is collected
+    async collectPage(pageId) {
+
+        const slotIndex = this.placedPages.indexOf(pageId);
+        if (slotIndex !== -1) {
+            // If it is, call the remove function instead and exit.
+            this.removePageFromSlot(slotIndex);
+            return;
+        }
+
+        if (this.collectedPages.includes(pageId)) {
+            return; 
+        }
+
+        // Narrative event for when the first page is collected
+        if (this.collectedPages.length === 0) {
+            await window.gameControls.narrativeManager.triggerEvent('stage1.collect_pages_speech');
+        }
+
+        this.collectedPages.push(pageId);
+        const pageData = PAGE_DATA[pageId];
+
+        this.addToInventory({
+            name: `Page (${pageData.symbol})`,
+            type: 'scroll',
+            description: 'A strange page with a unique symbol.',
+            stackable: false,
+            pageId: pageId, // Store the ID for placing it later
+            symbol: pageData.symbol
+        });
+
+        // Show the message on the page
+        this.showHint(pageData.message, 5000);
+
+        if (this.collectedPages.length >= 6) {
+            // After collecting all pages, trigger speech and objective to decipher them.
+            await window.gameControls.narrativeManager.triggerEvent('stage1.all_pages_found');
+            window.gameControls.narrativeManager.triggerEvent('stage1.decipher_pages');
+            this.completeObjective('collect_pages'); 
+        }
+
+        this.updateUI();
+    }
+
+    // NEW: Handles placing a page on a wall slot
+    placePage(slotIndex, pageItem) {
+        // Remove the page from inventory
+        this.removeFromInventory(pageItem.name);
+
+        // Record the placement
+        this.placedPages[slotIndex] = pageItem.pageId;
+
+        // Tell MansionLoader to create the visual
+        if (this.mansion) {
+            this.mansion.displayPageOnSlot(slotIndex, pageItem.pageId);
+        }
+
+        this.showHint(`You placed the ${pageItem.symbol} page.`);
+        this.checkPageOrder();
+    }
+
+    // NEW: Checks if the placed pages match the solution
+   async checkPageOrder() {
+        if (this.placedPages.includes(null)) {
+            return; // Exit if not all slots are filled.
+        }
+
+        let isCorrect = true; // Placeholder for your actual solution logic
+
+        if (isCorrect && !this.allPagesPlaced) {
+            this.allPagesPlaced = true; // Prevent this from running again.
+            
+            this.completeObjective('all_pages_placed');
+            await window.gameControls.narrativeManager.triggerEvent('stage1.truth_is_found');
+
+           // Trigger attack sequence
+            await window.gameControls.narrativeManager.triggerEvent('stage1.escape_monster');
+            window.gameControls.narrativeManager.triggerEvent('stage1.monster_awaken_warning');
+            window.gameControls.narrativeManager.triggerEvent('stage1.run_away_from_monster');
+
+            // Monster attack and teleport sequence
+            setTimeout(async () => {
+                window.gameControls.audioManager.playSound('player_hit', 'public/audio/sfx/hit_sound.mp3');
+                window.gameControls.narrativeManager.showBlackout();
+                window.gameControls.physicsManager.teleportTo(new THREE.Vector3(0, 1.8, 0));
+                await window.gameControls.narrativeManager.triggerEvent('stage1.attacked_by_monster');
+                await window.gameControls.narrativeManager.triggerEvent('intro.wake_up');
+            }, 5000);
+
+        } else if (!isCorrect) {
+            this.showHint("Nothing happens... the order must be wrong.", 4000);
+        }
     }
 
     createUI() {
@@ -98,7 +242,7 @@ class GameManager {
             border-radius: 8px;
             backdrop-filter: blur(5px);
             max-width: 250px;
-            display: none;
+            display: block;
         `;
 
         // Objectives UI - HIDDEN (per user request)
@@ -153,10 +297,14 @@ class GameManager {
             border-radius: 10px;
             display: none;
             pointer-events: auto;
-            z-index: 1001;
+            z-index: 1600;
             backdrop-filter: blur(10px);
             box-shadow: 0 0 30px rgba(0,0,0,0.8);
         `;
+
+        ui.interaction.addEventListener('click', (event) => {
+            event.stopPropagation();
+        });
 
         // Game menu UI
         ui.gameMenu.style.cssText = `
@@ -226,7 +374,7 @@ class GameManager {
         return ui;
     }
 
-    createInventoryPopup() {
+     createInventoryPopup() {
         const popup = document.createElement('div');
         popup.id = 'inventory-popup';
         popup.style.cssText = `
@@ -251,6 +399,12 @@ class GameManager {
             font-family: 'Courier New', monospace;
         `;
 
+        // NEW: Add this event listener to stop clicks from passing through.
+        popup.addEventListener('click', (event) => {
+            event.stopPropagation();
+        });
+
+
         // Set up key listener for 'I' key
         document.addEventListener('keydown', (e) => {
             if (e.code === 'KeyI' && this.gameState === 'playing') {
@@ -267,11 +421,14 @@ class GameManager {
 
         if (isVisible) {
             this.ui.inventoryPopup.style.display = 'none';
+            if (this.controls) this.controls.unfreeze(); // NEW: Unfreeze controls when closing
         } else {
             this.updateInventoryPopup();
             this.ui.inventoryPopup.style.display = 'block';
+            if (this.controls) this.controls.freeze(); // NEW: Freeze controls when opening
         }
     }
+
 
     updateInventoryPopup() {
         const inventoryHTML = `
@@ -284,7 +441,7 @@ class GameManager {
                 '<p style="color: #888; font-style: italic; text-align: center; padding: 40px 20px;">Your inventory is empty</p>' :
                 '<div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 15px;">' +
                 this.inventory.map((item, index) =>
-                    `<div class="inventory-item-card" onclick="window.gameManager?.useItem?.(${index})" style="
+                    `<div class="inventory-item-card" onclick="window.gameControls?.gameManager?.useItem?.(${index})" style="
                         background: rgba(255,255,255,0.05);
                         padding: 15px;
                         border: 2px solid #${this.getItemColor(item.type)};
@@ -303,7 +460,7 @@ class GameManager {
             }
             <hr style="border-color: #444; margin: 20px 0;">
             <div style="text-align: center;">
-                <button onclick="window.gameManager?.toggleInventoryPopup?.()" style="
+                <button onclick="window.gameControls?.gameManager?.toggleInventoryPopup?.()" style="
                     background: linear-gradient(45deg, #444, #666);
                     color: white;
                     border: 1px solid #888;
@@ -333,10 +490,43 @@ class GameManager {
         };
         return icons[itemType] || '📦';
     }
+     // NEW: Add this function to handle removing a page from a slot.
+    removePageFromSlot(slotIndex) {
+        const pageId = this.placedPages[slotIndex];
+        if (!pageId) return;
+
+        // Find the page item in the inventory to add it back. We don't call collectPage
+        // as it might have unintended side effects like re-completing objectives.
+        const pageData = PAGE_DATA[pageId];
+        this.addToInventory({
+            name: `Page (${pageData.symbol})`,
+            type: 'scroll',
+            description: 'A strange page with a unique symbol.',
+            stackable: false,
+            pageId: pageId,
+            symbol: pageData.symbol
+        });
+
+        // Clear the page from the placed pages array.
+        this.placedPages[slotIndex] = null;
+
+        // Tell the MansionLoader to visually hide the page from the slot.
+        if (this.mansion) {
+            this.mansion.hidePageOnSlot(slotIndex);
+        }
+
+        this.showHint(`You took back the page with the ${this.getPageSymbol(pageId)} symbol.`);
+        this.checkPageOrder(); // Re-check the solution.
+    }
+
+    // NEW: Add this utility function to get a page's symbol for UI prompts.
+    getPageSymbol(pageId) {
+        return PAGE_DATA[pageId] ? PAGE_DATA[pageId].symbol : 'unknown';
+    }
 
     updateUI() {
         this.updateInventoryUI();
-        this.updateObjectivesUI();
+        //this.updateObjectivesUI();
         this.updateStatusUI();
     }
 
@@ -468,19 +658,37 @@ class GameManager {
         this.showHint("Welcome to the mansion. Find a way to escape... if you can. Press TAB to highlight nearby objects.", 8000);
     }
 
-    showHint(text, duration = 5000) {
-        this.ui.hint.innerHTML = `<p style="margin: 0;">💡 ${text}</p>`;
-        this.ui.hint.style.display = 'block';
-        
-        // Auto-hide after duration
-        setTimeout(() => {
-            this.ui.hint.style.display = 'none';
-        }, duration);
-        
+   showHint(text, duration = 5000) {
+        this.hintQueue.push({ text, duration });
+        if (!this.isHintVisible) {
+            this.processHintQueue();
+        }
         this.gameStats.hintsUsed++;
     }
 
+     processHintQueue() {
+        if (this.hintQueue.length === 0) {
+            this.isHintVisible = false;
+            return;
+        }
+
+        this.isHintVisible = true;
+        const hint = this.hintQueue.shift(); // Get the next hint from the queue
+
+        this.ui.hint.innerHTML = `<p style="margin: 0;">💡 ${hint.text}</p>`;
+        this.ui.hint.style.display = 'block';
+        
+        // After the duration, hide the hint and process the next one.
+        setTimeout(() => {
+            this.ui.hint.style.display = 'none';
+            this.processHintQueue();
+        }, hint.duration);
+    }
+
+
     showInteraction(title, text, options, callback) {
+        if (this.controls) this.controls.freeze();
+
         const optionButtons = options.map((option, index) => 
             `<button onclick="window.gameInteractionCallback(${index})" style="
                 background: linear-gradient(45deg, #444, #666);
@@ -503,6 +711,19 @@ class GameManager {
         `;
         
         this.ui.interaction.style.display = 'block';
+
+        this.ui.interaction.querySelectorAll('.interaction-button').forEach(button => {
+            button.addEventListener('click', () => {
+                const index = parseInt(button.dataset.index);
+
+                // Hide the UI and unfreeze controls BEFORE calling the original function.
+                this.ui.interaction.style.display = 'none';
+                if (this.controls) this.controls.unfreeze();
+
+                // Run the original callback.
+                if (callback) callback(index);
+            });
+        });
 
         // Store callback globally for button access
         window.gameInteractionCallback = (index) => {
@@ -926,6 +1147,15 @@ class GameManager {
 
         // --- Objective progress checks ---
         this.checkTimedObjectives();
+
+        this.nextAmbientSoundTime -= delta;
+        if (this.nextAmbientSoundTime <= 0) {
+            if (this.audioManager) {
+                this.audioManager.playRandomAmbientSound();
+            }
+            // Reset the timer for the next sound
+            this.nextAmbientSoundTime = this.getRandomAmbientTime();
+        }
     }
 
     onRoomEntered(room) {
@@ -1051,6 +1281,91 @@ class GameManager {
             this.showHint("Failed to load game save.", 3000);
         }
         return false;
+    }
+
+    // NEW: Stage 2 transition
+    async startStage2() {
+        console.log('🎭 Starting Stage 2...');
+        this.gameStage = 2;
+
+        // Inner monologue using narrative manager
+        await window.gameControls.narrativeManager.triggerEvent('stage2.transition_start');
+
+        // Turn off all lights
+        this.lightsOn = false;
+        if (this.mansion) {
+            this.mansion.setAllLightsEnabled(false);
+        }
+
+        await window.gameControls.narrativeManager.triggerEvent('stage2.lights_out');
+
+        await window.gameControls.narrativeManager.triggerEvent('stage2.need_power');
+
+        // Add objective to fix fuse box
+        await window.gameControls.narrativeManager.triggerEvent('stage2.fix_fuse_box_objective');
+
+        // Spawn the monster near the study
+        setTimeout(() => {
+            if (window.gameControls.monsterAI) {
+                this.spawnMonsterNearStudy();
+            }
+        }, 2000);
+    }
+
+    spawnMonsterNearStudy() {
+        const monsterAI = window.gameControls.monsterAI;
+        const pathfinding = monsterAI.pathfinding;
+
+        try {
+            const zone = pathfinding.zones[monsterAI.ZONE];
+            const nodes = zone.groups[monsterAI.groupID];
+
+            // Find nodes near the study (you may need to adjust coordinates based on your mansion layout)
+            // For now, we'll look for a specific node or use a fallback
+            let studyNode = null;
+
+            // Try to find a node close to study position
+            // You'll need to adjust these coordinates based on your actual study location
+            const studyApproxPosition = new THREE.Vector3(0, 0, 0); // Placeholder - adjust this!
+
+            let closestDistance = Infinity;
+            for (const node of nodes) {
+                const distance = node.centroid.distanceTo(studyApproxPosition);
+                if (distance < closestDistance) {
+                    closestDistance = distance;
+                    studyNode = node;
+                }
+            }
+
+            if (studyNode) {
+                monsterAI.monster.position.copy(studyNode.centroid);
+                monsterAI.monster.visible = true; // Make monster visible
+                console.log(`👾 Monster spawned near study at node`);
+            } else {
+                monsterAI.spawn(); // Fallback to random spawn
+                monsterAI.monster.visible = true; // Make monster visible
+            }
+
+            window.gameControls.narrativeManager.triggerEvent('stage2.something_moving');
+        } catch (error) {
+            console.error("Failed to spawn monster near study:", error);
+            monsterAI.spawn(); // Fallback
+        }
+    }
+
+    async fixFuseBox() {
+        console.log('💡 Fuse box fixed!');
+        this.fuseBoxFixed = true;
+        this.lightsOn = true;
+
+        if (this.mansion) {
+            this.mansion.setAllLightsEnabled(true);
+        }
+
+        this.completeObjective('fix_fuse_box');
+
+        await window.gameControls.narrativeManager.triggerEvent('stage2.lights_restored');
+        await window.gameControls.narrativeManager.triggerEvent('stage2.not_alone');
     }
 
     // Cleanup

@@ -1,0 +1,203 @@
+{
+  "intro": {
+    "black_screen_1": {
+      "type": "blackScreen",
+      "text": "You are a journalist. You came here chasing a story… Now the story has you.",
+      "duration": 5000
+    },
+    "wake_up": {
+      "type": "wakeUp",
+      "duration": 8000
+    },
+    "speech_bubble_1": {
+      "type": "speechBubble",
+      "title": "You",
+      "text": "Ugh... my head. Where am I? What happened?",
+      "duration": 5000
+    },
+    "speech_bubble_2": {
+      "type": "speechBubble",
+      "title": "You",
+      "text": "Is that a telephone ringing? Sounds like its coming from the study, maybe I should go check it out",
+      "duration": 5000
+    },
+    "objective_1": {
+      "type": "objective",
+      "id": "answer_telephone",
+      "description": "Find the study and answer the telephone"
+    }
+  },
+  "stage1": {
+    "phone_ring_speech": {
+      "type": "speechBubble",
+      "title": "You",
+      "text": "Who… who could that be in a place like this?",
+      "duration": 4000
+    },
+    "phone_call_black_screen": {
+      "type": "blackScreen",
+      "text": "I hope you enjoy the truth you've stumbled upon. You wanted a story… now live it.",
+      "duration": 5000
+    },
+    "phone_dead_line_1": {
+      "type": "speechBubble",
+      "title": "Anonymous",
+      "text": "...",
+      "duration": 2000
+    },
+    "phone_dead_line_2": {
+      "type": "speechBubble",
+      "title": "You",
+      "text": "Hmmm, the line was cut.",
+      "duration": 4000
+    },
+    "all_pages_found": {
+      "type": "speechBubble",
+      "title": "You",
+      "text": "I have all the pages... but these symbols don't make any sense.",
+      "duration": 4000
+    },
+    "laptop_suggestion": {
+      "type": "speechBubble",
+      "title": "You",
+      "text": "Maybe that laptop I saw earlier could help decipher them...",
+      "duration": 4000
+    },
+    "objective_decipher_pages": {
+      "type": "objective",
+      "id": "decipher_pages",
+      "description": "Use the laptop to decipher the page symbols"
+    },
+    "objective_place_pages": {
+      "type": "objective",
+      "id": "place_pages",
+      "description": "Place the deciphered pages in the correct order"
+    },
+    "collect_pages_speech": {
+      "type": "speechBubble",
+      "title": "You",
+      "text": "This look like research notes. But the symbols don't make sense.",
+      "duration": 4000
+    },
+    "all_pages_found": {
+      "type": "speechBubble",
+      "title": "You",
+      "text": "That's all of them. Now I need to figure out what they mean, and where they go.",
+      "duration": 4500
+    },
+    "all_pages_placed": {
+      "type": "objective",
+      "id": "all_pages_placed",
+      "description": "Place the pages on the wall in the correct order"
+    },
+    "truth_is_found": {
+      "type": "speechBubble",
+      "title": "You",
+      "text": "It worked... Wait, the pages are glowing. The text is changing... 'it wakes when the truth is found'… what does that mean—",
+      "duration": 6000
+    },
+    "all_pages_placed_speech": {
+      "type": "speechBubble",
+      "title": "You",
+      "text": "The pages seem to fit perfectly on the wall",
+      "duration": 4500
+    },
+    "decipher_pages": {
+      "type": "objective",
+      "id": "decipher_pages",
+      "description": "Find a way to decipher the meaning of the pages"
+    },
+    "laptop_puzzle_speech": {
+      "type": "speechBubble",
+      "title": "You",
+      "text": "This old laptop... maybe it has some information.",
+      "duration": 4000
+    },
+    "escape_monster": {
+      "type": "blackScreen",
+      "text": "Press 'SHIFT' to run",
+      "duration": 2000
+    },
+    "pages_deciphered": {
+      "type": "speechBubble",
+      "title": "You",
+      "text": "Hold on,  the writing says 'it wakes when the truth is found'… what—",
+      "duration": 4000
+    },
+    "run_away_from_monster": {
+      "type": "objective",
+      "id": "get_away_from_monster",
+      "description": "Get as far away as possible!"
+    },
+    "attacked_by_monster": {
+      "type": "blackScreen",
+      "text": "Something struck from the shadows. Your head throbs. The air feels wrong. You need to get out—now. You need to E S C A P E.",
+      "duration": 4000 
+    },
+    "monster_awaken_warning": {
+      "type": "warning",
+      "text": "The creature is now active."
+    }
+  },
+  "stage2": {
+    "fix_fuse_box_objective": {
+      "type": "objective",
+      "id": "fix_fuse_box",
+      "description": "Find the fuse box and restore power to the mansion"
+    },
+    "transition_start": {
+      "type": "speechBubble",
+      "title": "You",
+      "text": "Something feels different... The air grows colder.",
+      "duration": 5000
+    },
+    "lights_out": {
+      "type": "speechBubble",
+      "title": "You",
+      "text": "The lights! Everything went dark!",
+      "duration": 4000
+    },
+    "need_power": {
+      "type": "speechBubble",
+      "title": "You",
+      "text": "I need to find the fuse box and restore the power...",
+      "duration": 5000
+    },
+    "something_moving": {
+      "type": "speechBubble",
+      "title": "You",
+      "text": "I hear something moving in the darkness...",
+      "duration": 4000
+    },
+    "fuse_box_examine": {
+      "type": "speechBubble",
+      "title": "You",
+      "text": "I need to rewire this... carefully.",
+      "duration": 3000
+    },
+    "lights_restored": {
+      "type": "speechBubble",
+      "title": "You",
+      "text": "The lights flicker back to life. I can see again!",
+      "duration": 5000
+    },
+    "not_alone": {
+      "type": "speechBubble",
+      "title": "You",
+      "text": "But I'm not alone anymore...",
+      "duration": 4000
+    }
+  },
+  "endings": {
+    "escape": {
+      "type": "blackScreen",
+      "text": "You came looking for a story. Now you've survived one. But the house… waits for the next curious soul.",
+      "duration": 8000
+    },
+    "death": {
+      "type": "blackScreen",
+      "text": "The story ends here. The house claims another victim.",
+      "duration": 8000
+    }
+  }
+}

@@ -3,11 +3,13 @@
 import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.127.0/build/three.module.js';
 
 class MonsterAI {
-    constructor(monsterMesh, playerCamera, pathfinding, scene) {
+    constructor(monsterMesh, playerCamera, pathfinding, scene, audioManager) {
         this.monster = monsterMesh;
         this.player = playerCamera;
         this.pathfinding = pathfinding;
         this.scene = scene;
+        this.audioManager = audioManager;
+        this.audioManager.playHeartbeat();
         
         this.speed = 3; // Adjusted for delta-time based movement
         this.path = [];
@@ -48,6 +50,7 @@ class MonsterAI {
 
         this.mixer = monsterMesh.mixer;
         this.animations = monsterMesh.animations;
+        this.activeAnimation = null;
         // --- END REVISED ---
 
         console.log("👾 Monster AI Initialized with NavMesh pathfinding.");
@@ -223,6 +226,11 @@ class MonsterAI {
         const now = Date.now();
         const distanceToPlayer = this.monster.position.distanceTo(this.player.position);
 
+        // update heartbeat based on the distance to the player
+        if(this.audioManager){
+            this.audioManager.updateHeartbeat(distanceToPlayer, 25);
+        }
+
         switch (this.aggressionLevel) {
             case 1: // Docile
                 if (this.canSeePlayer()) {
@@ -325,16 +333,38 @@ class MonsterAI {
                 break;
         }
 
-        if (this.animations.walk) {
-            const isMoving = this.path.length > 0 || this.directPursuit;
-            if (isMoving && !this.animations.walk.isRunning()) {
-                this.animations.walk.play();
-            } else if (!isMoving && this.animations.walk.isRunning()) {
-                this.animations.walk.stop();
+        const isMoving = this.path.length > 0 || this.directPursuit;
+        let animationToPlay = null;
+
+        if (isMoving) {
+            if (this.aggressionLevel === 5) {
+                animationToPlay = 'run';
+            } else {
+                animationToPlay = 'walk';
             }
         }
+
+        this.setAnimation(animationToPlay);
     }
     
+    setAnimation(animationName) {
+        if (this.activeAnimation === animationName) {
+            return;
+        }
+
+        // Stop the current animation if it's playing
+        if (this.activeAnimation && this.animations[this.activeAnimation]) {
+            this.animations[this.activeAnimation].stop();
+        }
+
+        // Start the new animation
+        if (animationName && this.animations[animationName]) {
+            this.animations[animationName].play();
+        }
+
+        this.activeAnimation = animationName;
+    }
+
     moveDirectlyToPlayer(delta) {
        const direction = this.player.position.clone().sub(this.monster.position).normalize();
         direction.y = 0; 
@@ -516,6 +546,6 @@ class MonsterAI {
         this.update(delta);
     }
 }
+//this is the monsterAI
 
 export { MonsterAI };
-

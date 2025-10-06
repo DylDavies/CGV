@@ -9,25 +9,47 @@ class AudioManager {
 
         this.audioLoader = new THREE.AudioLoader();
         this.soundCache = new Map();
+        this.activeSounds = new Map();
 
-        this.sounds = {
-            music: null,
-            sfx: [],
-            ambience: null,
+        // Centralized sound paths
+        this.soundPaths = {
+            mainMenuMusic: 'public/audio/music/main_menu_audio.mp3',
+            heartbeat: 'public/audio/sfx/heartbeat.mp3',
+            rotaryPhone: 'public/audio/sfx/rotary-phone-ring.mp3',
+            whispering: 'public/audio/ambience/creepy-whispering.mp3', 
+            violentDoorSlam: 'public/audio/ambience/violent-door-slam.mp3',
+            hitSound: 'public/audio/sfx/hit_sound.mp3',
+
+            //ambient sound effects - to be used for random sound generation
+            ambientSounds: [
+                'public/audio/ambience/creaking-knocking.mp3',
+                'public/audio/ambience/ghost-sound.mp3',
+                'public/audio/ambience/horror-warning.mp3',
+                'public/audio/ambience/paranormal-horror-sound.mp3',
+                'public/audio/ambience/creepy-whispering.mp3', 
+            ]
+
         };
 
         this.globalVolume = {
             music: 0.9,
-            sfx: 0.8,
+            sfx: 0.95,
             ambience: 0.5,
         };
 
         console.log('🔊 AudioManager initialized');
     }
 
-    async loadSound(path, type = 'sfx', loop = false, volume = 1.0) {
+    async _loadSound(path, type = 'sfx', loop = false, initialVolume = 1.0) {
         if (this.soundCache.has(path)) {
-            return this.soundCache.get(path);
+            const cachedSound = this.soundCache.get(path);
+            // It's important to create a new Audio object for each playback
+            // to allow for overlapping sounds and individual control.
+            const sound = new THREE.Audio(this.listener).setBuffer(cachedSound.buffer);
+            sound.setLoop(loop);
+            const volumeType = this.globalVolume[type] || 1.0;
+            sound.setVolume(initialVolume * volumeType);
+            return sound;
         }
 
         return new Promise((resolve, reject) => {
@@ -37,15 +59,16 @@ class AudioManager {
                     const sound = new THREE.Audio(this.listener);
                     sound.setBuffer(buffer);
                     sound.setLoop(loop);
-                    
-                    const volumeType = this.globalVolume[type] || 1.0;
-                    sound.setVolume(volume * volumeType);
 
-                    this.soundCache.set(path, sound);
+                    const volumeType = this.globalVolume[type] || 1.0;
+                    sound.setVolume(initialVolume * volumeType);
+
+                    // Cache the buffer for future use
+                    this.soundCache.set(path, { buffer: buffer });
                     console.log(`🔊 Loaded sound: ${path}`);
                     resolve(sound);
                 },
-                () => {}, // onProgress callback (optional)
+                () => {}, // onProgress
                 (err) => {
                     console.error(`Failed to load sound: ${path}`, err);
                     reject(err);
@@ -54,52 +77,199 @@ class AudioManager {
         });
     }
 
-    async playMusic(path) {
-        if (this.sounds.music && this.sounds.music.isPlaying) {
-            this.sounds.music.stop();
-        }
-        const music = await this.loadSound(path, 'music', true, 1.0);
-        this.sounds.music = music;
+    // --- Music ---
+
+    async playMainMenuMusic(fadeDuration = 1000) {
+        if (this.activeSounds.has('mainMenuMusic')) return;
+
+        const music = await this._loadSound(this.soundPaths.mainMenuMusic, 'music', true, 0);
+        this.activeSounds.set('mainMenuMusic', music);
         music.play();
-    }
-    
-    // Stop currently playing music
-    stopMusic(fadeOutDuration = 1000) {
-        const music = this.sounds.music;
-        if (!music || !music.isPlaying) return;
-
-        const startVolume = music.getVolume();
-        let currentTime = 0;
-
-        const fadeOutInterval = setInterval(() => {
-            currentTime += 50; // Update every 50ms
-            const newVolume = startVolume * (1 - currentTime / fadeOutDuration);
-            
-            if (newVolume > 0) {
-                music.setVolume(newVolume);
-            } else {
-                music.stop();
-                clearInterval(fadeOutInterval);
-            }
-        }, 50);
+        this.fadeIn(music, this.globalVolume.music, fadeDuration);
     }
 
-    async playSFX(path, volume = 1.0) {
-        const sfx = await this.loadSound(path, 'sfx', false, volume);
-        // Allows playing the same sound multiple times without cutting off
-        if (sfx.isPlaying) {
-            sfx.stop();
+    stopMainMenuMusic(fadeDuration = 1000) {
+        this.stopSound('mainMenuMusic', fadeDuration);
+    }
+
+    // --- Sound Effects ---
+/**
+     * Plays a looping sound attached to a specific 3D object in the scene.
+     * @param {string} soundId - A unique name for this sound instance (e.g., 'phone_ringing').
+     * @param {string} path - The path to the audio file.
+     * @param {THREE.Object3D} mesh - The 3D object to attach the sound to.
+     * @param {number} refDistance - How quickly the sound fades. A larger number means it can be heard from further away.
+     */
+    async playLoopingPositionalSound(soundId, path, mesh, refDistance = 10) {
+        if (this.activeSounds.has(soundId)) {
+            this.stopSound(soundId);
         }
-        sfx.play();
+
+        try {
+            const sound = await this._loadSound(path, 'sfx', true);
+            
+            const positionalSound = new THREE.PositionalAudio(this.listener);
+            positionalSound.setBuffer(sound.buffer);
+            positionalSound.setLoop(true);
+            positionalSound.setRefDistance(refDistance);
+            positionalSound.setVolume(this.globalVolume.sfx);
+
+            mesh.add(positionalSound);
+            positionalSound.play();
+
+            this.activeSounds.set(soundId, positionalSound);
+            console.log(`🔊 Playing looping positional sound '${soundId}' on object '${mesh.name}'`);
+        } catch (error) {
+            console.error(`Could not play positional sound '${soundId}':`, error);
+        }
+    }
+
+
+    async playHeartbeat() {
+        if (this.activeSounds.has('heartbeat')) return;
+
+        const heartbeat = await this._loadSound(this.soundPaths.heartbeat, 'sfx', true, 0);
+        this.activeSounds.set('heartbeat', heartbeat);
+        heartbeat.play();
+    }
+
+    updateHeartbeat(distance, maxDistance = 20) {
+        const sound = this.activeSounds.get('heartbeat');
+        if (!sound) return;
+
+        const closeness = 1 - (Math.min(distance, maxDistance) / maxDistance); // 0 to 1
+
+        // Adjust volume based on distance
+        const volume = Math.pow(closeness, 2); // Use pow for a more dramatic effect
+        sound.setVolume(volume * this.globalVolume.sfx);
+
+        // Adjust tempo (playback rate)
+        const minRate = 0.8;
+        const maxRate = 2.0;
+        const playbackRate = minRate + (maxRate - minRate) * closeness;
+        if (sound.source && sound.source.buffer) {
+             sound.playbackRate = playbackRate;
+        }
+    }
+
+
+    stopHeartbeat(fadeDuration = 500) {
+        this.stopSound('heartbeat', fadeDuration);
+    }
+
+    async playMonsterGrowl(monsterMesh) {
+        this.playPositionalSound('monsterGrowl', this.soundPaths.monsterGrowl, monsterMesh);
+    }
+
+        async playRandomAmbientSound() {
+        // Prevent overlapping ambient sounds
+        if (this.activeSounds.has('randomAmbient')) return;
+
+        // Pick a random sound from our new list
+        const randomSoundPath = this.soundPaths.ambientSounds[Math.floor(Math.random() * this.soundPaths.ambientSounds.length)];
+
+        // Load and play the sound (you can adjust the volume here)
+        const sound = await this._loadSound(randomSoundPath, 'ambience', false, 0.7); // 70% volume
+        this.activeSounds.set('randomAmbient', sound);
+
+        // When the sound finishes, remove it from active sounds so another can play later
+        sound.onEnded = () => {
+            this.activeSounds.delete('randomAmbient');
+        };
+        sound.play();
+    }
+
+
+    // --- Generic Playback ---
+
+    async playSound(soundId, path, loop = false, volume = 1.0) {
+        if (this.activeSounds.has(soundId)) {
+            this.activeSounds.get(soundId).stop();
+        }
+        const sound = await this._loadSound(path, 'sfx', loop, volume);
+        this.activeSounds.set(soundId, sound);
+        sound.play();
+    }
+
+    async playPositionalSound(soundId, path, mesh, distance = 5) {
+        const sound = await this._loadSound(path, 'sfx', false, 1.0);
+        const positionalSound = new THREE.PositionalAudio(this.listener);
+        positionalSound.setBuffer(sound.buffer);
+        positionalSound.setRefDistance(distance); // How far away the sound starts to fade
+        mesh.add(positionalSound);
+        positionalSound.play();
+        this.activeSounds.set(soundId, positionalSound);
+    }
+
+
+    stopSound(soundId, fadeDuration = 0) {
+        const sound = this.activeSounds.get(soundId);
+        if (sound && sound.isPlaying) {
+            if (fadeDuration > 0) {
+                this.fadeOut(sound, fadeDuration, () => {
+                    this.activeSounds.delete(soundId);
+                });
+            } else {
+                sound.stop();
+                this.activeSounds.delete(soundId);
+            }
+        }
+    }
+
+
+    // --- Utilities ---
+
+    fadeIn(sound, targetVolume, duration) {
+        let currentVolume = 0;
+        sound.setVolume(currentVolume);
+        const steps = 50;
+        const stepTime = duration / steps;
+        const volumeStep = targetVolume / steps;
+
+        const fade = () => {
+            if (currentVolume < targetVolume) {
+                currentVolume += volumeStep;
+                sound.setVolume(currentVolume);
+                setTimeout(fade, stepTime);
+            } else {
+                sound.setVolume(targetVolume);
+            }
+        };
+        fade();
+    }
+
+    fadeOut(sound, duration, onComplete = null) {
+        const startVolume = sound.getVolume();
+        const steps = 50;
+        const stepTime = duration / steps;
+        const volumeStep = startVolume / steps;
+
+        const fade = () => {
+            let currentVolume = sound.getVolume();
+            if (currentVolume > 0) {
+                sound.setVolume(Math.max(0, currentVolume - volumeStep));
+                setTimeout(fade, stepTime);
+            } else {
+                sound.stop();
+                if (onComplete) {
+                    onComplete();
+                }
+            }
+        };
+        fade();
     }
 
     setVolume(type, volume) {
         this.globalVolume[type] = Math.max(0, Math.min(1, volume));
         console.log(`🔊 Set ${type} volume to ${this.globalVolume[type]}`);
-        
+
         // Update any currently playing sounds of this type
-        if (type === 'music' && this.sounds.music) {
-            this.sounds.music.setVolume(this.globalVolume.music);
+        for (const [id, sound] of this.activeSounds.entries()) {
+            // This is a simplification; you might want to store the sound's type
+            // to adjust it correctly. For now, we'll assume the main music is the only 'music' type
+            if (id.toLowerCase().includes('music')) {
+                sound.setVolume(this.globalVolume.music);
+            }
         }
     }
 }

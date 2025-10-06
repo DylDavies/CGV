@@ -1,18 +1,24 @@
 // src/systems/InteractionSystem.js
 
-import * as THREE from 'https://unpkg.com/three@0.127.0/build/three.module.js';
+import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.127.0/build/three.module.js';
 
 class InteractionSystem {
-    constructor(camera, scene, gameManager) {
+   constructor(camera, scene, gameManager, uiManager, controls) {
         this.camera = camera;
         this.scene = scene;
         this.gameManager = gameManager;
+        this.uiManager = uiManager; // uiManager was missing from the original constructor but is used, so I've added it.
+        this.controls = controls; // NEW: Store the controls object
         this.raycaster = new THREE.Raycaster();
         this.mouse = new THREE.Vector2();
         this.interactableObjects = new Map();
         this.highlightedObject = null;
         this.currentInteraction = null;
         this.interactionRange = 5; // Maximum interaction distance
+
+        this.messageQueue = []; // NEW: A queue for interaction messages.
+        this.isMessageVisible = false; // NEW: A flag to check visibility.
+        this.isColorPuzzleSolved = false;
         
         // UI Elements
         this.crosshair = null;
@@ -108,12 +114,34 @@ class InteractionSystem {
             min-width: 300px;
             box-shadow: 0 0 20px rgba(0,0,0,0.8);
         `;
+
+        this.puzzleUI.addEventListener('click', (event) => {
+            event.stopPropagation();
+        });
+
         document.body.appendChild(this.puzzleUI);
     }
 
     registerInteractionTypes() {
         // Register different types of interactions
         this.interactionTypes = {
+            page: {
+                prompt: "Press E to take the page",
+                handler: this.handlePageInteraction.bind(this)
+            },
+            page_slot: {
+                prompt: "Press E to place page",
+                promptWithPage: "Press E to take the page",
+                handler: this.handlePageSlotInteraction.bind(this)
+            },
+            telephone: {
+                prompt: "[E] Answer Phone",
+                handler: this.handleTelephoneInteraction.bind(this)
+            },
+            laptop: {
+                prompt: "Press E to use laptop",
+                handler: this.handleLaptopInteraction.bind(this)
+            },
             door: {
                 prompt: "Press E to open door",
                 lockedPrompt: "Door is locked - need key",
@@ -171,12 +199,22 @@ class InteractionSystem {
             escape_portal: {
                 prompt: "Press E to escape!",
                 handler: this.handleEscapePortal.bind(this)
+            },
+            fuse_box: {
+                prompt: "Press E to fix the fuse box",
+                fixedPrompt: "The fuse box is working",
+                handler: this.handleFuseBoxInteraction.bind(this)
             }
         };
     }
 
     onMouseClick(event) {
-        if (this.currentInteraction) return; // Don't process if puzzle UI is open
+         // If controls are frozen for a puzzle, do nothing.
+        if (this.controls && this.controls.isFrozen) {
+            return;
+        }
+        
+        if (this.currentInteraction) return;
         
         this.checkInteraction();
     }
@@ -190,6 +228,9 @@ class InteractionSystem {
     onKeyDown(event) {
         switch (event.code) {
             case 'KeyE':
+                if (this.controls && this.controls.isFrozen) {
+                return;
+                }
                 if (!this.currentInteraction) {
                     this.checkInteraction();
                 }
@@ -270,8 +311,145 @@ class InteractionSystem {
         }
     }
 
-    // Interaction Handlers
+    handlePageInteraction(pageObject, userData) {
+        // NEW: Check if pages puzzle is completed
+        if (this.gameManager.pagesPuzzleCompleted) {
+            this.showMessage("The pages are sealed in place by an ancient magic.");
+            return;
+        }
 
+        if (userData.pageId) {
+            this.gameManager.collectPage(userData.pageId);
+            this.animateItemPickup(pageObject, () => {
+                if (pageObject.parent) {
+                    pageObject.parent.remove(pageObject);
+                }
+            });
+        } else {
+            console.warn("Tried to pick up a page with no pageId property:", pageObject.name);
+        }
+    }
+
+    handlePageSlotInteraction(slotObject, userData) {
+        // NEW: Check if pages puzzle is completed
+        if (this.gameManager.pagesPuzzleCompleted) {
+            this.showMessage("The pages are sealed in place by an ancient magic.");
+            return;
+        }
+
+        // NEW: Check if laptop puzzle is completed
+        if (!this.gameManager.laptopPuzzleCompleted) {
+            this.showMessage("The symbols don't make any sense. I need to decipher them first.");
+            return;
+        }
+
+        const slotIndex = userData.slotIndex;
+
+        // If a page is already in the slot, ask to remove it.
+        if (this.gameManager.placedPages[slotIndex]) {
+            const pageId = this.gameManager.placedPages[slotIndex];
+            const pageSymbol = this.gameManager.getPageSymbol(pageId);
+
+            // this.showConfirmation(
+            //     `A page with the ${pageSymbol} symbol is here. Do you want to take it back?`,
+            //     () => { // This function runs if you click "Yes".
+            //         this.gameManager.removePageFromSlot(slotIndex);
+            //     }
+            // );
+            // return;
+            this.gameManager.removePageFromSlot(slotIndex);
+        }
+
+        // If the slot is empty, the rest of the function works as before to place a new page.
+        const availablePages = this.gameManager.inventory.filter(item => item.pageId);
+
+        if (availablePages.length === 0) {
+            this.showMessage("You don't have any pages to place.");
+            return;
+        }
+
+        const options = availablePages.map(page => `Place Page (${page.symbol})`);
+        options.push("Cancel");
+
+        this.showPuzzleDialog(
+            "Place a Page",
+            "Which page do you want to place in this slot?",
+            options,
+            (choiceIndex) => {
+                if (choiceIndex < availablePages.length) {
+                    const chosenPage = availablePages[choiceIndex];
+                    this.gameManager.placePage(slotIndex, chosenPage);
+                }
+            }
+        );
+    }
+
+    handleTelephoneInteraction(phone, userData) {
+        if (userData.interacted) {
+            // Trigger the new "dead line" dialogue sequence
+            window.gameControls.narrativeManager.triggerEvent('stage1.phone_dead_line_1').then(() => {
+                window.gameControls.narrativeManager.triggerEvent('stage1.phone_dead_line_2');
+            });
+            return;
+        }
+        // Stop the ringing sound
+        this.gameManager.answerTelephone();
+
+        // Mark the object as interacted to prevent re-triggering
+        userData.interacted = true;
+    }
+
+    async handleLaptopInteraction(laptopObject, userData) {
+        console.log("Interacting with laptop");
+        const clue = "> The pages must be placed in the order of the cosmos: Sun, Star, Eye, Hand, Spiral, Moon.";
+
+        await window.gameControls.narrativeManager.triggerEvent('stage1.laptop_puzzle_speech');
+
+        if (this.isColorPuzzleSolved) {
+            console.log("Puzzle already solved. Showing clue directly.");
+            this.showClueScreenDialog(clue);
+            return;
+        }
+
+        const colorPuzzle = window.gameControls.colorPuzzle;
+        if (colorPuzzle) {
+            if (this.controls) this.controls.freeze();
+            this.currentInteraction = 'color_puzzle';
+
+            colorPuzzle.show(4, () => this.closePuzzleUI());
+
+            colorPuzzle.onSolve(() => {
+                this.isColorPuzzleSolved = true;
+                this.showClueScreenDialog(clue);
+                
+                // After getting the clue, mark deciphering as complete...
+                window.gameControls.gameManager.completeObjective('decipher_pages');
+                // ...and give the new objective to place the pages.
+                window.gameControls.narrativeManager.triggerEvent('stage1.all_pages_placed');
+
+            }, 'ACCESS GRANTED');
+
+        } else {
+            this.showMessage("The laptop screen is dark.");
+        }
+    }
+
+    showClueScreenDialog(clueText) {
+        if (this.controls) this.controls.freeze();
+        this.currentInteraction = 'clue';
+
+        const clueScreen = this.uiManager.uiElements.clueScreen;
+        if (clueScreen) {
+            const clueTextElement = clueScreen.querySelector('.clue-text');
+            if (clueTextElement) {
+                clueTextElement.textContent = clueText;
+            }
+            clueScreen.style.display = 'flex';
+            setTimeout(() => {
+                clueScreen.focus();
+            }, 50);
+        }
+    }
     handleDoorInteraction(door, userData) {
         const doorData = this.gameManager.mansion.doors.find(d => 
             d.mesh === door || d.mesh === door.parent
@@ -295,7 +473,6 @@ class InteractionSystem {
                 }
             } else {
                 this.showMessage("Door is already unlocked.");
-                // Could add door opening animation here
             }
         }
     }
@@ -308,7 +485,6 @@ class InteractionSystem {
                 id: userData.keyId
             });
             
-            // Remove key from scene with animation
             this.animateItemPickup(key, () => {
                 if (key.parent) {
                     key.parent.remove(key);
@@ -323,13 +499,11 @@ class InteractionSystem {
 
         this.showScrollDialog(bookTitle, bookContent);
 
-        // Some books might contain clues or trigger events
         if (userData.clue) {
             this.showMessage(`You notice something important: ${userData.clue}`);
         }
 
         if (userData.triggersEvent) {
-            // Handle special book events
             setTimeout(() => {
                 this.showMessage("Reading this book seems to have triggered something...");
             }, 2000);
@@ -399,7 +573,6 @@ class InteractionSystem {
                     case 1: // Look for mechanism
                         if (Math.random() < 0.5) {
                             this.showMessage("You hear a clicking sound. One of the books seems loose!");
-                            // Start book cipher puzzle
                             this.startBookCipherPuzzle(bookshelf);
                         } else {
                             this.showMessage("You don't find any hidden mechanisms.");
@@ -421,7 +594,6 @@ class InteractionSystem {
                     return;
                 }
                 
-                // Start the appropriate puzzle
                 this.startPuzzle(puzzleData, puzzle);
             }
         }
@@ -455,7 +627,6 @@ class InteractionSystem {
             
             this.showMessage(`Mirror rotated to ${userData.rotation}°`);
             
-            // Check if mirror puzzle is solved
             const mirrorPuzzle = mirror.parent;
             if (mirrorPuzzle && mirrorPuzzle.userData.type === 'puzzle') {
                 this.checkMirrorPuzzleSolution(mirrorPuzzle);
@@ -497,7 +668,42 @@ class InteractionSystem {
         );
     }
 
-    // Puzzle-specific methods
+    async handleFuseBoxInteraction(fuseBox, userData) {
+        // Check if already fixed
+        if (this.gameManager.fuseBoxFixed) {
+            this.showMessage("The fuse box is already working.");
+            return;
+        }
+
+        // Check if in stage 2
+        if (this.gameManager.gameStage !== 2) {
+            this.showMessage("The fuse box seems to be working fine.");
+            return;
+        }
+
+        // Inner monologue using narrative manager
+        await window.gameControls.narrativeManager.triggerEvent('stage2.fuse_box_examine');
+
+        // Launch wire puzzle
+        const wirePuzzle = window.gameControls.wirePuzzle;
+        if (wirePuzzle) {
+            if (this.controls) this.controls.freeze();
+            this.currentInteraction = 'wire_puzzle';
+
+            wirePuzzle.show();
+
+            wirePuzzle.onSolve(() => {
+                this.gameManager.fixFuseBox();
+                userData.fixed = true;
+            });
+
+            wirePuzzle.onClose(() => {
+                this.closePuzzleUI();
+            });
+        } else {
+            this.showMessage("Something's wrong with the wiring...");
+        }
+    }
 
     startPuzzle(puzzleData, puzzleObject) {
         switch (puzzleData.type) {
@@ -537,7 +743,6 @@ class InteractionSystem {
     }
 
     startBookCipherPuzzle(bookshelf) {
-        // Show book arrangement interface
         const books = ['Red Book (1823)', 'Blue Book (1834)', 'Green Book (1845)', 'Yellow Book (1856)'];
         
         this.showBookArrangementDialog(
@@ -554,18 +759,33 @@ class InteractionSystem {
         );
     }
 
-    // UI Dialog Methods
-
     showMessage(message, duration = 3000) {
-        this.interactionPrompt.textContent = message;
+        this.messageQueue.push({ message, duration });
+        if (!this.isMessageVisible) {
+            this.processMessageQueue();
+        }
+    }
+
+    processMessageQueue() {
+        if (this.messageQueue.length === 0) {
+            this.isMessageVisible = false;
+            return;
+        }
+
+        this.isMessageVisible = true;
+        const msg = this.messageQueue.shift();
+
+        this.interactionPrompt.textContent = msg.message;
         this.interactionPrompt.style.display = 'block';
         
         setTimeout(() => {
             this.interactionPrompt.style.display = 'none';
-        }, duration);
+            this.processMessageQueue();
+        }, msg.duration);
     }
 
     showConfirmation(message, onConfirm, onCancel = null) {
+        if (this.controls) this.controls.freeze();
         this.currentInteraction = 'confirmation';
         
         this.puzzleUI.innerHTML = `
@@ -591,6 +811,7 @@ class InteractionSystem {
     }
 
     showPuzzleDialog(title, description, options, onChoice) {
+        if (this.controls) this.controls.freeze();
         this.currentInteraction = 'puzzle_dialog';
         
         const optionButtons = options.map((option, index) => 
@@ -624,6 +845,7 @@ class InteractionSystem {
     }
 
     showCombinationDialog(prompt, onSubmit) {
+        if (this.controls) this.controls.freeze();
         this.currentInteraction = 'combination';
         
         this.puzzleUI.innerHTML = `
@@ -737,41 +959,68 @@ class InteractionSystem {
     }
 
     closePuzzleUI() {
-        this.puzzleUI.style.display = 'none';
-        this.currentInteraction = null;
-        
-        // Clean up any global callbacks
-        if (window.puzzleChoiceCallback) {
-            delete window.puzzleChoiceCallback;
+        // Hide the color puzzle if it's open
+        const colorPuzzle = window.gameControls?.colorPuzzle;
+        if (colorPuzzle && colorPuzzle.puzzleContainer.style.display !== 'none') {
+            colorPuzzle.hide();
         }
+    
+        // Hide the clue screen if it's open
+        const clueScreen = this.uiManager.uiElements.clueScreen;
+        if (clueScreen && clueScreen.style.display === 'flex') {
+            clueScreen.style.display = 'none';
+        }
+    
+        // Hide the generic dialog used by other puzzles
+        this.puzzleUI.style.display = 'none';
+    
+        // This is now the single, authoritative place where controls are unfrozen.
+        if (this.controls) this.controls.unfreeze();
+        this.currentInteraction = null; // This is the line that fixes the interaction lock.
     }
-
-    // Utility methods
 
     updateCrosshair() {
         this.raycaster.setFromCamera(new THREE.Vector2(0, 0), this.camera);
         const intersects = this.raycaster.intersectObjects(this.scene.children, true);
-        
+
         let isInteractable = false;
         let interactionPrompt = '';
-        
+
         if (intersects.length > 0) {
             const distance = intersects[0].distance;
             if (distance <= this.interactionRange) {
                 const interactableData = this.findInteractableData(intersects[0].object);
                 if (interactableData) {
-                    isInteractable = true;
-                    const interactionType = this.interactionTypes[interactableData.data.type];
-                    if (interactionType) {
-                        interactionPrompt = interactableData.data.locked ? 
-                            (interactionType.lockedPrompt || interactionType.prompt) : 
-                            interactionType.prompt;
+                    // NEW: Check if this is a page/page_slot and puzzle is completed
+                    const isPagesLocked = this.gameManager.pagesPuzzleCompleted &&
+                        (interactableData.data.type === 'page' || interactableData.data.type === 'page_slot');
+
+                    if (!isPagesLocked) {
+                        isInteractable = true;
+                        const interactionType = this.interactionTypes[interactableData.data.type];
+                        if (interactionType) {
+                            // NEW: Special handling for page_slot to show different prompt based on whether page is placed
+                            if (interactableData.data.type === 'page_slot') {
+                                const slotIndex = interactableData.data.slotIndex;
+                                const hasPage = this.gameManager.placedPages[slotIndex] !== null;
+                                interactionPrompt = hasPage ? interactionType.promptWithPage : interactionType.prompt;
+                            }
+                            // NEW: Special handling for fuse_box to show different prompt if fixed
+                            else if (interactableData.data.type === 'fuse_box') {
+                                interactionPrompt = this.gameManager.fuseBoxFixed ?
+                                    interactionType.fixedPrompt :
+                                    interactionType.prompt;
+                            } else {
+                                interactionPrompt = interactableData.data.locked ?
+                                    (interactionType.lockedPrompt || interactionType.prompt) :
+                                    interactionType.prompt;
+                            }
+                        }
                     }
                 }
             }
         }
-        
-        // Update crosshair appearance
+
         if (isInteractable) {
             this.crosshair.style.background = '#00ff00';
             this.crosshair.style.borderColor = '#00ff00';
@@ -822,7 +1071,6 @@ class InteractionSystem {
         item.userData = itemData;
         container.add(item);
         
-        // Add glowing effect
         const glowAnimation = () => {
             item.material.emissive.setHSL(0.15, 1, Math.sin(Date.now() * 0.005) * 0.2 + 0.2);
             requestAnimationFrame(glowAnimation);
@@ -835,17 +1083,13 @@ class InteractionSystem {
             this.updateCrosshair();
         }
         
-        // Update any ongoing animations or effects
         this.updateInteractionEffects(delta);
     }
 
     updateInteractionEffects(delta) {
-        // Update any glowing or pulsing effects on interactable objects
-        // This could be expanded to highlight nearby interactables
     }
 
     showNearbyInteractables() {
-        // Highlight all nearby interactable objects temporarily
         const nearbyObjects = [];
         
         this.scene.traverse((object) => {
@@ -866,7 +1110,6 @@ class InteractionSystem {
             
             this.showMessage(`Nearby: ${objectList}`, 5000);
             
-            // Temporarily highlight objects
             nearbyObjects.forEach(obj => {
                 if (obj.material) {
                     const originalEmissive = obj.material.emissive.clone();
@@ -883,14 +1126,11 @@ class InteractionSystem {
     }
 
     updateDoorVisual(door, isLocked) {
-        // Update door appearance based on lock status
         const lockIndicator = door.getObjectByName('lock_indicator');
         if (lockIndicator) {
             lockIndicator.material.color.setHex(isLocked ? 0xff0000 : 0x00ff00);
         }
     }
-
-    // Advanced puzzle interactions
 
     handleWeightObjectInteraction(object, userData) {
         if (userData.draggable) {
@@ -902,7 +1142,7 @@ class InteractionSystem {
             });
             
             this.animateItemPickup(object, () => {
-                object.visible = false; // Hide but don't remove for potential replacement
+                object.visible = false; 
             });
             
             this.showMessage(`Picked up ${userData.weight} object`);
@@ -910,7 +1150,6 @@ class InteractionSystem {
     }
 
     handlePressurePlateInteraction(plate, userData) {
-        // Check if player has weight objects in inventory
         const weightObjects = this.gameManager.inventory.filter(item => item.type === 'weight_object');
         
         if (weightObjects.length === 0) {
@@ -918,7 +1157,6 @@ class InteractionSystem {
             return;
         }
         
-        // Show selection dialog for which object to place
         const options = weightObjects.map(obj => `Place ${obj.name}`);
         options.push("Cancel");
         
@@ -937,7 +1175,6 @@ class InteractionSystem {
     }
 
     placeObjectOnPlate(plate, weightObject) {
-        // Create visual representation on the plate
         const objectMesh = new THREE.Mesh(
             new THREE.SphereGeometry(0.2, 8, 8),
             new THREE.MeshLambertMaterial({ 
@@ -954,7 +1191,6 @@ class InteractionSystem {
         
         plate.parent.add(objectMesh);
         
-        // Check if all plates are filled correctly
         this.checkPressurePlatesPuzzle(plate.parent);
     }
 
@@ -966,17 +1202,14 @@ class InteractionSystem {
             }
         });
         
-        // Check if all plates have objects
         const allFilled = plates.every(plate => plate.userData.occupied);
         if (!allFilled) return;
         
-        // Check if weights are in correct order
         const currentOrder = plates.map(plate => plate.userData.objectWeight);
         const correctOrder = ['heavy', 'medium', 'light', 'medium'];
         
         if (JSON.stringify(currentOrder) === JSON.stringify(correctOrder)) {
             this.showMessage("The pressure plates activate! You hear a mechanism turning...");
-            // Trigger puzzle completion
             if (puzzleGroup.userData && puzzleGroup.userData.type === 'puzzle') {
                 puzzleGroup.userData.solved = true;
                 this.gameManager.completeObjective(`puzzle_${this.gameManager.currentRoom.id}_pressure_plate`);
@@ -1027,7 +1260,6 @@ class InteractionSystem {
     }
 
     placeSymbolInSlot(slot, symbol) {
-        // Create visual representation in the slot
         const symbolMesh = this.createSymbolMesh(symbol.symbolName);
         symbolMesh.position.copy(slot.position);
         symbolMesh.position.y += 0.1;
@@ -1037,7 +1269,6 @@ class InteractionSystem {
         
         slot.parent.add(symbolMesh);
         
-        // Check if puzzle is complete
         this.checkSymbolPuzzle(slot.parent);
     }
 
@@ -1081,18 +1312,15 @@ class InteractionSystem {
             }
         });
         
-        // Check if all slots are filled
         const allFilled = slots.every(slot => slot.userData.occupied);
         if (!allFilled) return;
         
-        // Check if symbols are in correct order
         const currentOrder = slots.map(slot => slot.userData.symbolName);
         const correctOrder = ['protection', 'banishment', 'sealing', 'peace'];
         
         if (JSON.stringify(currentOrder) === JSON.stringify(correctOrder)) {
             this.showMessage("The symbols glow and resonate with power! The final seal is broken!");
             
-            // Create the escape portal
             this.createEscapePortal(puzzleGroup);
             
             if (puzzleGroup.userData && puzzleGroup.userData.type === 'puzzle') {
@@ -1120,7 +1348,6 @@ class InteractionSystem {
         
         puzzleGroup.add(portal);
         
-        // Add portal animation
         const animatePortal = () => {
             portal.rotation.z += 0.02;
             portal.material.opacity = 0.7 + Math.sin(Date.now() * 0.005) * 0.2;
@@ -1139,7 +1366,6 @@ class InteractionSystem {
             }
         });
         
-        // Check if all mirrors are at correct angles
         const correctAngles = [0, 45, 90, 135];
         let correct = true;
         
@@ -1152,7 +1378,6 @@ class InteractionSystem {
         if (correct) {
             this.showMessage("The light beam reaches its target! A hidden mechanism activates!");
             
-            // Add light beam visual effect
             this.createLightBeamEffect(mirrorPuzzle);
             
             if (mirrorPuzzle.userData) {
@@ -1177,7 +1402,6 @@ class InteractionSystem {
         
         mirrorPuzzle.add(lightBeam);
         
-        // Animate the beam
         const animateBeam = () => {
             lightBeam.material.opacity = 0.8 + Math.sin(Date.now() * 0.01) * 0.2;
             requestAnimationFrame(animateBeam);
@@ -1188,7 +1412,6 @@ class InteractionSystem {
     showBookArrangementDialog(title, books, onSubmit) {
         this.currentInteraction = 'book_arrangement';
         
-        // Create a simple drag-and-drop like interface
         let currentOrder = [...books];
         
         const renderBooks = () => {
@@ -1223,7 +1446,6 @@ class InteractionSystem {
         
         window.moveBook = (index) => {
             if (index > 0) {
-                // Move book up one position
                 const temp = currentOrder[index];
                 currentOrder[index] = currentOrder[index - 1];
                 currentOrder[index - 1] = temp;
@@ -1261,7 +1483,6 @@ class InteractionSystem {
             (choice) => {
                 switch (choice) {
                     case 0: // Attempt to solve
-                        // Simple probability-based solution for generic puzzles
                         if (Math.random() > 0.6) {
                             this.showMessage("You solve the puzzle through intuition and persistence!");
                             if (this.gameManager.mansion.solvePuzzle(
@@ -1278,7 +1499,6 @@ class InteractionSystem {
                         
                     case 1: // Examine more closely
                         this.showMessage("Looking more closely, you notice some details you missed before. This might help with solving it.");
-                        // Could provide additional hints here
                         break;
                         
                     case 2: // Give up
@@ -1289,9 +1509,7 @@ class InteractionSystem {
         );
     }
 
-    // Cleanup
     dispose() {
-        // Remove event listeners
         document.removeEventListener('click', this.onMouseClick);
         document.removeEventListener('mousemove', this.onMouseMove);
         document.removeEventListener('keydown', this.onKeyDown);
@@ -1299,7 +1517,6 @@ class InteractionSystem {
         document.removeEventListener('touchstart', this.onTouchStart);
         document.removeEventListener('touchend', this.onTouchEnd);
         
-        // Remove UI elements
         if (this.crosshair) {
             document.body.removeChild(this.crosshair);
         }
@@ -1310,7 +1527,6 @@ class InteractionSystem {
             document.body.removeChild(this.puzzleUI);
         }
         
-        // Clean up any global callbacks
         if (window.puzzleChoiceCallback) {
             delete window.puzzleChoiceCallback;
         }
@@ -1321,3 +1537,4 @@ class InteractionSystem {
 }
 
 export { InteractionSystem };
+

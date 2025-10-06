@@ -1,8 +1,9 @@
+// src/puzzles/colorPuzzle/PuzzleResult.js
+
 export class PuzzleResult {
-    // Allow passing custom IDs for the elements
     constructor(
-        overlayId = 'puzzle-result-overlay', 
-        titleId = 'result-title', 
+        overlayId = 'puzzle-result-overlay',
+        titleId = 'result-title',
         subtitleId = 'result-subtitle'
     ) {
         this.resultOverlay = document.getElementById(overlayId);
@@ -10,13 +11,15 @@ export class PuzzleResult {
         this.resultSubtitle = document.getElementById(subtitleId);
     }
 
-    show(isSuccess, onComplete) {
+    // src/puzzles/colorPuzzle/PuzzleResult.js
+
+    show(isSuccess, onComplete, successMessage = 'The mechanism clicks open.') {
         if (!this.resultOverlay) return;
 
         if (isSuccess){
             this.resultOverlay.className = 'success';
             this.resultTitle.textContent = 'Success';
-            this.resultSubtitle.textContent = 'The mechanism clicks open.';
+            this.resultSubtitle.textContent = successMessage;
         } 
         else{
             const failureMessages = [

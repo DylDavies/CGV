@@ -1,8 +1,15 @@
+// src/systems/uiManager.js
+
 export class UIManager {
     constructor(audioManager) { 
         this.uiElements = {};
         this.isInitialized = false;
         this.audioManager = audioManager; 
+        this.controls = null;
+    }
+
+    setControls(controls) {
+        this.controls = controls;
     }
 
     async initialize() {
@@ -14,6 +21,11 @@ export class UIManager {
         await this._loadHTML('src/ui/wirePuzzle/wire-puzzle.html', 'wire-puzzle-container');
         await this._loadHTML('src/ui/creditsScreen/credits-screen.html', 'credits-screen-container');
         await this._loadHTML('src/ui/settingsScreen/settings-screen.html', 'settings-screen-container');
+        await this._loadHTML('src/ui/narrative/narrative-elements.html', 'narrative-container');
+        await this._loadHTML('src/ui/objectiveTracker/objective-tracker.html', 'objective-tracker-container');
+        await this._loadHTML('src/ui/clueScreen/clue-screen.html', 'clue-screen-container');
+        await this._loadHTML('src/ui/resultScreen/result-screen.html', 'result-screen-container');
+
 
         // Now that the HTML is loaded, cache the elements inside it
         this.uiElements = {
@@ -22,7 +34,8 @@ export class UIManager {
             creditsButton: document.getElementById('credits-btn'),
             settingsButton: document.getElementById('settings-btn'),
             loadingScreen: document.getElementById('loading-screen'),
-            loadingContainer: document.getElementById('loading-container'),
+            loadingBar: document.getElementById('loading-bar'),
+            monsterIcon: document.getElementById('monster-icon'), 
             loadingText: document.getElementById('loading-text'),
             puzzleContainer: document.getElementById('puzzle-container'),
             wirePuzzleContainer: document.getElementById('wire-puzzle-container'), 
@@ -32,20 +45,35 @@ export class UIManager {
             closeCreditsButton: document.getElementById('close-credits-btn'),
             settingsScreen: document.getElementById('settings-screen'),
             closeSettingsButton: document.getElementById('close-settings-btn'),
+
+            // Objective Stuff
+            objectiveTracker: document.getElementById('objective-tracker'),
+            objectiveTitle: document.getElementById('objective-title'),
+            objectiveDescription: document.getElementById('objective-description'),
+
+            // Clue Screen
+            clueScreen: document.getElementById('clue-screen'),
+            closeClueButton: document.getElementById('close-clue-btn'),
+
+            resultOverlay: document.getElementById('result-overlay'),
         };
         
         if (!this.uiElements.welcomeScreen || !this.uiElements.playButton) {
-            console.error("UIManager Critical Error: Welcome screen elements (#welcome-screen or #play-btn) not found after loading. Check file paths and the HTML content.");
-            return; // Stop execution to prevent further errors
+            console.error("UIManager Critical Error: Welcome screen elements not found after loading.");
+            return;
         }
+
+        if (this.uiElements.clueScreen) this.uiElements.clueScreen.style.display = 'none';
         
         this._addMenuEventListeners();
         this._setupSettingsTabs();
         this._setupVideoSettings();
         console.log('✅ UI Manager Initialized');
         this.isInitialized = true;
-    }
 
+
+    }
+    
     async _loadHTML(url, targetId) {
         const targetElement = document.getElementById(targetId);
         if (!targetElement) {
@@ -84,6 +112,29 @@ export class UIManager {
             this.uiElements.creditsScreen.classList.add('hidden');
             this.uiElements.welcomeScreen.style.display = 'flex';
         };
+
+               if (this.uiElements.closeClueButton) {
+
+            this.uiElements.closeClueButton.onclick = () => {
+                window.gameControls.interactionSystem.closePuzzleUI();
+            };
+
+            // this.uiElements.closeClueButton.onclick = () => {
+            //     if (this.uiElements.clueScreen) {
+            //         this.uiElements.clueScreen.style.display = 'none';
+            //     }
+            //     if (this.controls) {
+            //         this.controls.unfreeze();
+            //     }
+            // };
+        }
+
+        // This listener stops clicks from passing through to the game
+        if (this.uiElements.clueScreen) {
+            this.uiElements.clueScreen.addEventListener('click', (event) => {
+                event.stopPropagation();
+            });
+        }
     }
 
     _setupSettingsTabs() {
@@ -206,14 +257,13 @@ export class UIManager {
         if (this.uiElements.welcomeScreen && this.uiElements.playButton) {
             this.uiElements.welcomeScreen.style.display = 'flex';
             
-            // Play main menu music
             if (this.audioManager) {
-                this.audioManager.playMusic('public/audio/music/main_menu_audio.mp3');
+                this.audioManager.playMainMenuMusic();
             }
 
             this.uiElements.playButton.onclick = () => {
                 if (this.audioManager) {
-                    this.audioManager.stopMusic(); // Fade out the music
+                    this.audioManager.stopMainMenuMusic(); 
                 }
 
                 this.uiElements.welcomeScreen.style.display = 'none';
@@ -244,40 +294,78 @@ export class UIManager {
         }
     }
 
-    updateObjectives(objectives) {
-        if (this.uiElements.objectivesContainer) {
-            this.uiElements.objectivesContainer.innerHTML = `<h3>Objectives</h3><p>${objectives.length} active</p>`;
+    updateLoadingProgress(percentage, text) {
+        if (this.uiElements.loadingBar && this.uiElements.monsterIcon) {
+            const percent = Math.max(0, Math.min(100, percentage));
+            this.uiElements.loadingBar.style.width = `${percent}%`;
+            this.uiElements.monsterIcon.style.left = `${percent}%`;
         }
-    }
-    
-    updateInventory(inventory) {
-        if (this.uiElements.inventoryContainer) {
-            this.uiElements.inventoryContainer.innerHTML = `<h3>Inventory</h3><p>${inventory.length} items</p>`;
-        }
-    }
-
-    showInteractionPrompt(text) {
-        if (this.uiElements.interactionPrompt) {
-            this.uiElements.interactionPrompt.textContent = text;
-            this.uiElements.interactionPrompt.style.display = 'block';
+        if (text) {
+            this.updateLoadingText(text);
         }
     }
 
-    hideInteractionPrompt() {
-        if (this.uiElements.interactionPrompt) {
-            this.uiElements.interactionPrompt.style.display = 'none';
-        }
-    }
-    
-    showPuzzle() {
-        if (this.uiElements.puzzleContainer) {
-            this.uiElements.puzzleContainer.style.display = 'flex';
+ /**
+     * The single function responsible for displaying an objective.
+     * It will automatically hide any currently visible objective first.
+     */
+    displayObjective(objectiveData) {
+        const tracker = this.uiElements.objectiveTracker;
+        if (!tracker) return;
+
+        const showNewObjective = () => {
+            // Update the text content
+            tracker.setAttribute('data-objective-id', objectiveData.id); // Store ID for completion check
+            this.uiElements.objectiveTitle.textContent = objectiveData.id.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+            this.uiElements.objectiveDescription.textContent = objectiveData.description;
+
+            // Reset all classes and slide the new objective into view
+            tracker.className = 'new-objective'; // Removes 'hidden' and 'completed'
+            
+            // Remove the 'new-objective' class after the banner animation
+            setTimeout(() => {
+                tracker.classList.remove('new-objective');
+            }, 2500);
+        };
+
+        // If an objective is already visible, hide it first, then show the new one.
+        if (!tracker.classList.contains('hidden')) {
+            tracker.classList.add('hidden');
+            setTimeout(showNewObjective, 600); // Wait for slide-out animation
+        } else {
+            showNewObjective(); // Otherwise, show it immediately
         }
     }
 
-    hidePuzzle() {
-        if (this.uiElements.puzzleContainer) {
-            this.uiElements.puzzleContainer.style.display = 'none';
+    /**
+     * Marks the currently visible objective as complete by adding a line-through.
+     * It no longer hides the objective.
+     */
+    markObjectiveComplete(objectiveId) {
+        const tracker = this.uiElements.objectiveTracker;
+        // Only mark it complete if it's the correct objective currently on screen
+        if (tracker && tracker.getAttribute('data-objective-id') === objectiveId) {
+            tracker.classList.add('completed');
+        }
+    }
+
+    showClueScreen(clueText) {
+        if (this.uiElements.clueScreen) {
+            const clueTextElement = this.uiElements.clueScreen.querySelector('.clue-text');
+            if (clueTextElement) {
+                clueTextElement.textContent = clueText;
+            }
+            this.uiElements.clueScreen.style.display = 'flex';
+            
+            // This tiny delay gives the browser time to render the element before focusing
+            setTimeout(() => {
+                this.uiElements.clueScreen.focus();
+            }, 50); // 50ms is a safe, imperceptible delay
+
+            if (this.controls) {
+                this.controls.freeze();
+            }
         }
     }
 }
+
