@@ -98,7 +98,25 @@ class PuzzleSystem {
                 ],
                 solution: () => ['protection', 'banishment', 'sealing', 'peace'],
                 create: (room) => this.createSymbolPuzzle(room)
+            },
+            safe_and_key: {
+                name: "Master Bedroom Safe",
+                description: "A safe that requires a key and a password.",
+                difficulty: 3,
+                hints: [
+                    "The key is hidden near a source of warmth.",
+                    "The password is a time.",
+                    "Look at the grandfather clock."
+                ],
+                solution: () => "1035", // Example time
+                create: (room) => this.createSafeAndKeyPuzzle(room)
+            },
+            createSafeAndKeyPuzzle(room) {
+                // You can add logic here to procedurally generate the safe and keys
+                // if they don't already exist in your Blender model.
+                // For now, since they are in your model, this function can be left empty.
             }
+
         };
     }
 

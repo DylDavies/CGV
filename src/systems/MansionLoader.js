@@ -158,8 +158,52 @@ class MansionLoader {
                 node.userData = { type: 'laptop', interactable: true };
                 console.log(`💻 Found prop: ${node.name}`);
             }
+            if (node.name === 'S_KayBehindFire') {
+                    node.userData = { type: 'key', interactable: true, keyId: 'fireplace_key' };
+                    this.props.set('fireplace_key', node);
+                    console.log(`🔥 Found prop: ${node.name}`);
+                }
+                if (node.name === 'S_Master_BedRoom_Door') {
+                    node.userData = { type: 'door', interactable: true, locked: true, key: 'fireplace_key' };
+                    this.props.set('master_bedroom_door', node);
+                    console.log(`🚪 Found prop: ${node.name}`);
+                }
+                if (node.name === 'S_Safe') {
+                    // Make the entire safe group interactable
+                    node.userData = {
+                        type: 'safe',
+                        interactable: true,
+                        locked: true
+                    };
+                    this.props.set('safe', node);
+
+                    const door = node.getObjectByName('S_Safe_Door');
+                    if (door) {
+                        // Also make the door specifically interactable
+                        door.userData = {
+                            type: 'safe',
+                            interactable: true,
+                            locked: true,
+                            parentSafeName: 'safe'
+                        };
+                        this.props.set('safe_door', door);
+                        console.log(`🔒 Found prop and assigned interaction to: S_Safe and S_Safe_Door`);
+                    }
+                }
+                if (node.name === 'S_KeyInSafe') {
+                    node.userData = { type: 'key', interactable: true, keyId: 'safe_key' };
+                    this.props.set('safe_key', node);
+                    node.visible = false;
+                    console.log(`🔑 Found prop: ${node.name}`);
+                }
+                if (node.name === 'S_PendulumClock.001') {
+                    node.userData = { type: 'clock', interactable: true };
+                    this.props.set('grandfather_clock', node);
+                    console.log(`🕰️ Found prop: ${node.name}`);
+                }
             
             if (node.isMesh) {
+                
 
                 totalMeshes++;
                 node.castShadow = false;
@@ -998,6 +1042,31 @@ class MansionLoader {
         });
         console.table(collections);
         return collections;
+    }
+    openDoor(doorObject) {
+        console.log(`Swinging door: ${doorObject.name}`);
+        
+        // Animate the door's rotation directly.
+        // This assumes the door's origin is at its hinge.
+        const startRotation = doorObject.rotation.y;
+        const endRotation = startRotation - Math.PI / 2; // 90-degree swing
+        const duration = 1000; // 1 second animation
+        let startTime = null;
+
+        function animate(currentTime) {
+            if (startTime === null) startTime = currentTime;
+            const elapsedTime = currentTime - startTime;
+            const progress = Math.min(elapsedTime / duration, 1);
+
+            // Apply the rotation
+            doorObject.rotation.y = startRotation + (endRotation - startRotation) * progress;
+
+            if (progress < 1) {
+                requestAnimationFrame(animate);
+            }
+        }
+
+        requestAnimationFrame(animate);
     }
     dispose() {
         console.log('🧹 Disposing mansion loader...');

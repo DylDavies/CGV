@@ -25,7 +25,7 @@ export class UIManager {
         await this._loadHTML('src/ui/objectiveTracker/objective-tracker.html', 'objective-tracker-container');
         await this._loadHTML('src/ui/clueScreen/clue-screen.html', 'clue-screen-container');
         await this._loadHTML('src/ui/resultScreen/result-screen.html', 'result-screen-container');
-
+         await this._loadHTML('src/ui/safeKeypad/keypad.html', 'keypad-container-wrapper');
 
         // Now that the HTML is loaded, cache the elements inside it
         this.uiElements = {
@@ -56,6 +56,9 @@ export class UIManager {
             closeClueButton: document.getElementById('close-clue-btn'),
 
             resultOverlay: document.getElementById('result-overlay'),
+
+            keypadContainer: document.getElementById('keypad-container'),
+            keypadDisplay: document.getElementById('keypad-display'),
         };
         
         if (!this.uiElements.welcomeScreen || !this.uiElements.playButton) {

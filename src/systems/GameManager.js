@@ -25,6 +25,8 @@ class GameManager {
         this.currentRoom = null;
         this.previousRoom = null;
         this.gameState = 'playing'; // 'playing', 'won', 'lost', 'paused'
+        this.safePassword = null; // To store the password from the clock
+        this.isSafeOpen = false;
 
         this.objectives = [];
 
@@ -45,6 +47,10 @@ class GameManager {
         this.nextAmbientSoundTime = this.getRandomAmbientTime();
         
         this.initializeGame();
+    }
+    setSafePassword(password) {
+        this.safePassword = password;
+        console.log(`Safe password set to: ${this.safePassword}`);
     }
 
     getRandomAmbientTime() {
@@ -879,6 +885,9 @@ class GameManager {
 
     hasItem(itemName) {
         return this.inventory.some(item => item.name === itemName);
+    }
+    hasItemById(itemId) {
+        return this.inventory.some(item => item.id === itemId);
     }
 
     useItem(itemIndex) {
