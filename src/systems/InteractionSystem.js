@@ -1021,9 +1021,9 @@ class InteractionSystem {
 
             // Mark both fireplace objects as fire out
             userData.fireOut = true;
-            const fireplace = this.gameManager.mansion.props.get('fireplace');
-            if (fireplace && fireplace.userData) {
-                fireplace.userData.fireOut = true;
+            const fireplaceObj = this.gameManager.mansion.props.get('fireplace');
+            if (fireplaceObj && fireplaceObj.userData) {
+                fireplaceObj.userData.fireOut = true;
             }
             const fireplaceFire = this.gameManager.mansion.props.get('fireplace_fire');
             if (fireplaceFire && fireplaceFire.userData) {
@@ -1032,11 +1032,8 @@ class InteractionSystem {
 
             this.showMessage("You pour the water on the fire...");
 
-            // Turn off the fire particles/lights for this fireplace
-            // Try to extinguish using the fire object (S_Fire001) which is what setupFireplace uses
-            if (fireplaceFire) {
-                this.gameManager.mansion.extinguishFireplace(fireplaceFire);
-            }
+            // Extinguish ALL fires in the mansion (same method as when lights go out)
+            this.gameManager.mansion.setFireplacesEnabled(false);
 
             // Remove bucket from inventory
             this.gameManager.removeFromInventory('Bucket');
@@ -1044,16 +1041,31 @@ class InteractionSystem {
             // Complete put out fire objective
             this.gameManager.completeObjective('put_out_fire');
 
-            // Change objective to inspect fireplace
-            await window.gameControls.narrativeManager.triggerEvent('stage1.inspect_fireplace_objective');
+            // Set monster to BOLD (level 4) after putting out fire
+            if (window.gameControls.monsterAI) {
+                window.gameControls.monsterAI.setAggressionLevel(4); // BOLD
+                console.log('👾 Monster is now BOLD after fire was extinguished');
+            }
+
+            // Show message that they found the key
+            await window.gameControls.narrativeManager.triggerEvent('stage1.found_key');
+
+            // Add the key to inventory (S_KeyBehindFire - note: Key not Kay)
+            this.gameManager.addToInventory({
+                name: 'S_KeyBehindFire',
+                type: 'key',
+                description: 'A key found behind the fireplace ashes.'
+            });
+
+            // Add new objective to find what the key unlocks
+            await window.gameControls.narrativeManager.triggerEvent('stage1.find_what_key_unlocks');
 
             return;
         }
 
-        // If fire is out, allow inspection
+        // If fire is out, show message
         if (userData.fireOut) {
-            this.showMessage("You inspect the ashes...");
-            // TODO: Add inspection logic here
+            this.showMessage("The fireplace is empty now.");
             return;
         }
 
@@ -1061,9 +1073,9 @@ class InteractionSystem {
         if (!userData.inspected) {
             // Mark both fireplace objects as inspected
             userData.inspected = true;
-            const fireplace = this.gameManager.mansion.props.get('fireplace');
-            if (fireplace && fireplace.userData) {
-                fireplace.userData.inspected = true;
+            const fireplaceObj = this.gameManager.mansion.props.get('fireplace');
+            if (fireplaceObj && fireplaceObj.userData) {
+                fireplaceObj.userData.inspected = true;
             }
             const fireplaceFire = this.gameManager.mansion.props.get('fireplace_fire');
             if (fireplaceFire && fireplaceFire.userData) {
@@ -1079,13 +1091,13 @@ class InteractionSystem {
                 bucket.userData.interactable = true;
             }
 
-            await window.gameControls.narrativeManager.triggerEvent('stage1.put_out_fire_objective');
+            await window.gameControls.narrativeManager.triggerEvent('stage1.find_something_to_put_out_fire_objective');
         } else {
             this.showMessage("I still need water to put out the fire.");
         }
     }
 
-    handleBucketInteraction(bucket, userData) {
+    async handleBucketInteraction(bucket, userData) {
         if (!userData.interactable) {
             this.showMessage("It's just a bucket.");
             return;
@@ -1104,6 +1116,12 @@ class InteractionSystem {
                 bucket.parent.remove(bucket);
             }
         });
+
+        // Complete the find something to put out fire objective
+        this.gameManager.completeObjective('find_something_to_put_out_fire');
+
+        // Add the put out fire objective
+        await window.gameControls.narrativeManager.triggerEvent('stage1.put_out_fire_objective');
     }
 
     startPuzzle(puzzleData, puzzleObject) {

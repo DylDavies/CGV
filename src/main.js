@@ -186,6 +186,7 @@ async function main() {
                     setTimeout(async () => {
                         uiManager.hideLoadingScreen();
                         document.body.classList.add('game-active');
+                        await gameManager.showStage1Title(); // Show Stage 1 title
                         await narrativeManager.playIntroSequence();
                         console.log('✅ Game ready! Click to begin.');
                     }, 500);
