@@ -30,7 +30,7 @@ export class ColorPuzzle {
     setControls(controls) { this.controls = controls; }
 
     async loadLevels() {
-        const response = await fetch('public/puzzles/colorPuzzle/levels.json');
+        const response = await fetch('~s2652330/public/puzzles/colorPuzzle/levels.json');
         this.allLevels = await response.json();
 
         this.allLevels = this.allLevels.filter(level => !level.levelData.board.flat().includes(-1));

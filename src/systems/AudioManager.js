@@ -13,20 +13,20 @@ class AudioManager {
 
         // Centralized sound paths
         this.soundPaths = {
-            mainMenuMusic: 'public/audio/music/main_menu_audio.mp3',
-            heartbeat: 'public/audio/sfx/heartbeat.mp3',
-            rotaryPhone: 'public/audio/sfx/rotary-phone-ring.mp3',
-            whispering: 'public/audio/ambience/creepy-whispering.mp3', 
-            violentDoorSlam: 'public/audio/ambience/violent-door-slam.mp3',
-            hitSound: 'public/audio/sfx/hit_sound.mp3',
+            mainMenuMusic: '~s2652330/public/audio/music/main_menu_audio.mp3',
+            heartbeat: '~s2652330/public/audio/sfx/heartbeat.mp3',
+            rotaryPhone: '~s2652330/public/audio/sfx/rotary-phone-ring.mp3',
+            whispering: '~s2652330/public/audio/ambience/creepy-whispering.mp3', 
+            violentDoorSlam: '~s2652330/public/audio/ambience/violent-door-slam.mp3',
+            hitSound: '~s2652330/public/audio/sfx/hit_sound.mp3',
 
             //ambient sound effects - to be used for random sound generation
             ambientSounds: [
-                'public/audio/ambience/creaking-knocking.mp3',
-                'public/audio/ambience/ghost-sound.mp3',
-                'public/audio/ambience/horror-warning.mp3',
-                'public/audio/ambience/paranormal-horror-sound.mp3',
-                'public/audio/ambience/creepy-whispering.mp3', 
+                '~s2652330/public/audio/ambience/creaking-knocking.mp3',
+                '~s2652330/public/audio/ambience/ghost-sound.mp3',
+                '~s2652330/public/audio/ambience/horror-warning.mp3',
+                '~s2652330/public/audio/ambience/paranormal-horror-sound.mp3',
+                '~s2652330/public/audio/ambience/creepy-whispering.mp3', 
             ]
 
         };

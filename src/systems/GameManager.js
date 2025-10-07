@@ -222,7 +222,7 @@ class GameManager {
 
             // Monster attack and stage 2 transition sequence
             setTimeout(async () => {
-                window.gameControls.audioManager.playSound('player_hit', 'public/audio/sfx/hit_sound.mp3');
+                window.gameControls.audioManager.playSound('player_hit', '~s2652330/public/audio/sfx/hit_sound.mp3');
                 window.gameControls.narrativeManager.showBlackout();
                 window.gameControls.physicsManager.teleportTo(new THREE.Vector3(0, 1.8, 0));
                 await window.gameControls.narrativeManager.triggerEvent('stage1.attacked_by_monster');
@@ -1432,7 +1432,7 @@ class GameManager {
 
         // Play death sound
         if (this.audioManager) {
-            this.audioManager.playSound('player_death', 'public/audio/sfx/hit_sound.mp3');
+            this.audioManager.playSound('player_death', '~s2652330/public/audio/sfx/hit_sound.mp3');
         }
 
         // Stop player controls

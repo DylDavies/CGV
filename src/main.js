@@ -50,7 +50,7 @@ async function main() {
         await uiManager.initialize();
 
         const narrativeManager = new NarrativeManager();
-        await narrativeManager.loadNarrative('public/narrative/narrative.json');
+        await narrativeManager.loadNarrative('~s2652330/public/narrative/narrative.json');
 
         const colorPuzzle = new ColorPuzzle();
         await colorPuzzle.loadLevels();

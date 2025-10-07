@@ -31,7 +31,7 @@ export class WirePuzzle {
 
     async loadLevels() {
         try {
-            const response = await fetch('/public/puzzles/wirePuzzle/levels.json');
+            const response = await fetch('~s2652330/public/puzzles/wirePuzzle/levels.json');
             this.levels = await response.json();
         } catch (error) {
             console.error('Failed to load wire puzzle levels:', error);
