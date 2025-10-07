@@ -1,6 +1,6 @@
 /*====THE FAILURE OR SUCCESS MESSAGE===*/
 #puzzle-result-overlay {
-  position: absolute;
+  position: fixed;
   top: 0;
   left: 0;
   width: 100%;

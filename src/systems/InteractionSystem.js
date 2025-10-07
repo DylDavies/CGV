@@ -23,7 +23,8 @@ class InteractionSystem {
         this.messageQueue = []; // NEW: A queue for interaction messages.
         this.isMessageVisible = false; // NEW: A flag to check visibility.
         this.isColorPuzzleSolved = false;
-        
+        this.justClosedUI = false; // Prevent immediate re-interaction after closing UI
+
         // UI Elements
         this.crosshair = null;
         this.interactionPrompt = null;
@@ -237,9 +238,15 @@ class InteractionSystem {
         if (this.controls && this.controls.isFrozen) {
             return;
         }
-        
+
         if (this.currentInteraction) return;
-        
+
+        // Prevent immediate re-interaction after closing UI
+        if (this.justClosedUI) {
+            console.log('[InteractionSystem] Ignoring click - just closed UI');
+            return;
+        }
+
         this.checkInteraction();
     }
 
@@ -1382,6 +1389,12 @@ class InteractionSystem {
         // This is now the single, authoritative place where controls are unfrozen.
         if (this.controls) this.controls.unfreeze();
         this.currentInteraction = null;
+
+        // Set flag to prevent immediate re-interaction
+        this.justClosedUI = true;
+        setTimeout(() => {
+            this.justClosedUI = false;
+        }, 100); // 100ms debounce
     }
 
     updateCrosshair() {

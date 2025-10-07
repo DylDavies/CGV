@@ -8,7 +8,7 @@ export class KeypadPuzzle {
         this.currentInput = "";
         this.onSolveCallback = null;
         this.onCloseCallback = null;
-        this.result = new PuzzleResult();
+        this.result = new PuzzleResult('puzzle-result-overlay', 'result-title', 'result-subtitle');
         this.controls = null; // To hold a reference to the player controls
         this.initialize();
     }
@@ -26,6 +26,8 @@ export class KeypadPuzzle {
     }
 
     show(onSolve, onClose) {
+        console.log('[KeypadPuzzle] show() called');
+        console.trace('[KeypadPuzzle] show() call stack');
         if (this.controls) this.controls.freeze(); // Freeze player movement
         this.onSolveCallback = onSolve;
         this.onCloseCallback = onClose;
@@ -34,25 +36,31 @@ export class KeypadPuzzle {
         this.uiManager.showKeypad();
     }
 
-    hide() {
+    hide(skipCallback = false) {
+        console.log('[KeypadPuzzle] hide() called, skipCallback:', skipCallback);
         if (this.controls) this.controls.unfreeze(); // Unfreeze player movement
         this.uiManager.hideKeypad(); // Hide the puzzle UI
-        
+
         // Notify the InteractionSystem that the puzzle is closed
-        if (this.onCloseCallback) {
+        if (this.onCloseCallback && !skipCallback) {
+            console.log('[KeypadPuzzle] Calling onCloseCallback');
             this.onCloseCallback();
         }
     }
 
     handleClose() {
+        console.log('[KeypadPuzzle] handleClose() called');
+        // Manual close by user - call hide normally
         this.hide();
     }
 
     handleKeyPress(key) {
         if (key === "E") {
             if (this.currentInput === this.solution) {
-                // On success, show the result screen.
+                // On success, show the result screen first
                 this.result.show(true, () => {
+                    // After result is shown, hide and trigger solve callback
+                    this.hide(true); // Skip onCloseCallback to avoid double-triggering closePuzzleUI
                     if (this.onSolveCallback) {
                         this.onSolveCallback(); // This calls the logic in InteractionSystem
                     }

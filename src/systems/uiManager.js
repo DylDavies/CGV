@@ -1,11 +1,12 @@
 // src/systems/uiManager.js
 
 export class UIManager {
-    constructor(audioManager) { 
+    constructor(audioManager) {
         this.uiElements = {};
         this.isInitialized = false;
-        this.audioManager = audioManager; 
+        this.audioManager = audioManager;
         this.controls = null;
+        this.keypadListenersSetup = false;
     }
 
     setControls(controls) {
@@ -55,7 +56,7 @@ export class UIManager {
             clueScreen: document.getElementById('clue-screen'),
             closeClueButton: document.getElementById('close-clue-btn'),
 
-            resultOverlay: document.getElementById('result-overlay'),
+            resultOverlay: document.getElementById('puzzle-result-overlay'),
 
             // Keypad
             keypadContainer: document.getElementById('keypad-container'),
@@ -382,6 +383,7 @@ export class UIManager {
     }
 
     hideKeypad() {
+        console.log(this.uiElements.keypadContainer)
         if (this.uiElements.keypadContainer) {
             this.uiElements.keypadContainer.style.display = 'none';
         }
@@ -394,18 +396,35 @@ export class UIManager {
     }
 
     setupKeypad(onKeyPress, onClose) {
-        if (this.uiElements.keypadButtons) {
-            this.uiElements.keypadButtons.forEach(button => {
-                button.addEventListener('click', () => {
-                    onKeyPress(button.textContent);
-                });
-            });
+        if (this.keypadListenersSetup) {
+            console.warn('Keypad listeners already set up, skipping...');
+            return;
         }
-        if (this.uiElements.keypadCloseButton) {
-            this.uiElements.keypadCloseButton.addEventListener('click', () => {
-                onClose();
-            });
+
+        // Validate elements exist before setting up listeners
+        if (!this.uiElements.keypadButtons || this.uiElements.keypadButtons.length === 0) {
+            console.error('Keypad buttons not found, cannot setup listeners');
+            return;
         }
+
+        if (!this.uiElements.keypadCloseButton) {
+            console.error('Keypad close button not found, cannot setup listeners');
+            return;
+        }
+
+        // Setup button listeners
+        this.uiElements.keypadButtons.forEach(button => {
+            button.addEventListener('click', () => {
+                onKeyPress(button.textContent);
+            });
+        });
+
+        // Setup close button listener
+        this.uiElements.keypadCloseButton.addEventListener('click', () => {
+            onClose();
+        });
+
+        this.keypadListenersSetup = true;
     }  
 }
 
