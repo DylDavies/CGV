@@ -13,6 +13,10 @@ class Minimap {
         this.minimapScene = new THREE.Scene();
         this.minimapScene.background = new THREE.Color(0x000000);
 
+        // Performance optimization: render throttling
+        this.lastRenderTime = 0;
+        this.renderInterval = 100; // Render every 100ms (10 FPS for minimap)
+
         const frustumSize = 40;
         const aspect = 1;
         this.minimapCamera = new THREE.OrthographicCamera(
@@ -30,8 +34,7 @@ class Minimap {
             format: THREE.RGBAFormat
         });
 
-        this.roomMeshes = new Map(); // CHANGED: Now stores an array of meshes per room
-        this.exploredRooms = new Set();
+        this.roomMeshes = new Map();
 
         this.createPlayerIndicator();
         this.createMinimapGeometry();
@@ -52,69 +55,178 @@ class Minimap {
     }
 
     createPlayerIndicator() {
-        const geometry = new THREE.CircleGeometry(0.5, 8);
-        const material = new THREE.MeshBasicMaterial({ color: 0x00ff00, side: THREE.DoubleSide });
-        this.playerIndicator = new THREE.Mesh(geometry, material);
-        this.playerIndicator.rotation.x = -Math.PI / 2;
+        // Create a group to hold the player indicator
+        this.playerIndicator = new THREE.Group();
         this.playerIndicator.position.y = 0.1;
         this.playerIndicator.renderOrder = 2;
+
+        // Circle base
+        const circleGeometry = new THREE.CircleGeometry(0.5, 8);
+        const circleMaterial = new THREE.MeshBasicMaterial({ color: 0x00ff00, side: THREE.DoubleSide });
+        const circle = new THREE.Mesh(circleGeometry, circleMaterial);
+        circle.rotation.x = -Math.PI / 2;
+        this.playerIndicator.add(circle);
+
+        // Direction arrow (triangle pointing forward)
+        const arrowShape = new THREE.Shape();
+        arrowShape.moveTo(0, 0.6);
+        arrowShape.lineTo(-0.3, -0.3);
+        arrowShape.lineTo(0.3, -0.3);
+        arrowShape.lineTo(0, 0.6);
+
+        const arrowGeometry = new THREE.ShapeGeometry(arrowShape);
+        const arrowMaterial = new THREE.MeshBasicMaterial({ color: 0xffffff, side: THREE.DoubleSide });
+        const arrow = new THREE.Mesh(arrowGeometry, arrowMaterial);
+        arrow.rotation.x = -Math.PI / 2;
+        arrow.position.y = 0.01;
+        this.playerIndicator.add(arrow);
+
         this.minimapScene.add(this.playerIndicator);
     }
 
    createMinimapGeometry() {
-        if (this.rooms.length === 0) {
-            console.warn('⚠️ No rooms found for minimap');
+        // Get the mansion model from the loader
+        const mansionModel = this.mansionLoader.model;
+
+        if (!mansionModel) {
+            console.warn('⚠️ No mansion model found for minimap');
             return;
         }
 
-        const totalBounds = new THREE.Box3();
-        this.rooms.forEach(room => totalBounds.union(room.bounds));
-
+        // Calculate bounds of entire mansion
+        const totalBounds = new THREE.Box3().setFromObject(mansionModel);
         const mansionSize = new THREE.Vector3();
         totalBounds.getSize(mansionSize);
         const mansionCenter = new THREE.Vector3();
         totalBounds.getCenter(mansionCenter);
 
-        // --- FIX 1: Make map bigger by removing padding ---
-        const frustumSize = Math.max(mansionSize.x, mansionSize.z);
+        // Set up orthographic camera to view from above with padding
+        const frustumSize = Math.max(mansionSize.x, mansionSize.z) * 1.1;
         this.minimapCamera.left = frustumSize / -2;
         this.minimapCamera.right = frustumSize / 2;
         this.minimapCamera.top = frustumSize / 2;
         this.minimapCamera.bottom = frustumSize / -2;
         this.minimapCamera.position.set(mansionCenter.x, 50, mansionCenter.z);
-        this.minimapCamera.lookAt(mansionCenter);
+        this.minimapCamera.lookAt(mansionCenter.x, 0, mansionCenter.z);
         this.minimapCamera.updateProjectionMatrix();
 
-        this.rooms.forEach(room => {
-            // --- FIX 2: A better approach - create a mesh for each wall ---
-            const wallMeshes = [];
-            if (room.children) {
-                room.children.forEach(child => {
-                    if (child.name.toLowerCase().includes('wall')) {
-                        const box = new THREE.Box3().setFromObject(child);
-                        const size = new THREE.Vector3();
-                        box.getSize(size);
-                        const center = new THREE.Vector3();
-                        box.getCenter(center);
-                        
-                        // Create a simple plane for this wall
-                        const wallGeometry = new THREE.PlaneGeometry(size.x, size.z);
-                        const wallMaterial = new THREE.MeshBasicMaterial({ color: 0x000000 });
-                        const wallMesh = new THREE.Mesh(wallGeometry, wallMaterial);
-                        
-                        wallMesh.position.set(center.x, 0, center.z);
-                        wallMesh.rotation.x = -Math.PI / 2;
-                        
-                        this.minimapScene.add(wallMesh);
-                        wallMeshes.push(wallMesh);
+        console.log(`🗺️ Minimap camera setup: frustum=${frustumSize.toFixed(2)}, center=(${mansionCenter.x.toFixed(2)}, ${mansionCenter.z.toFixed(2)})`);
+
+        // Traverse entire model and create minimap meshes for walls and floors
+        let wallCount = 0;
+        let floorCount = 0;
+
+        mansionModel.traverse((node) => {
+            if (!node.isMesh) return;
+
+            const meshName = node.name.toLowerCase();
+
+            // Check if it's a special S_Door object (these should be included)
+            const isSpecialDoor = meshName.includes('s_door');
+
+            // Check for door exclusion in mesh or parent hierarchy
+            // BUT: Don't exclude S_Door objects
+            let isDoor = !isSpecialDoor && meshName.includes('walldoor');
+            if (!isDoor && !isSpecialDoor) {
+                let parent = node.parent;
+                while (parent) {
+                    const parentName = parent.name.toLowerCase();
+                    if (parentName.includes('walldoor')) {
+                        isDoor = true;
+                        break;
                     }
-                });
+                    parent = parent.parent;
+                }
             }
-            // Store the array of wall meshes for this room
-            this.roomMeshes.set(room.name, wallMeshes);
+
+            // Skip doors entirely (except S_Door objects)
+            if (isDoor) return;
+
+            // Check parent hierarchy for wall/floor/column designation
+            let isWall = meshName.includes('wall');
+            let isFloor = meshName.includes('floor');
+            let isColumn = meshName.includes('columnangle');
+
+            // If not found in mesh name, check parent chain
+            if (!isWall && !isFloor && !isColumn) {
+                let parent = node.parent;
+                while (parent) {
+                    const parentName = parent.name.toLowerCase();
+                    if (parentName.includes('wall')) {
+                        isWall = true;
+                        break;
+                    } else if (parentName.includes('floor')) {
+                        isFloor = true;
+                        break;
+                    } else if (parentName.includes('columnangle')) {
+                        isColumn = true;
+                        break;
+                    }
+                    parent = parent.parent;
+                }
+            }
+
+            // Create minimap representation for walls, floors, and columns
+            if (isWall || isFloor || isColumn) {
+                // Get world bounding box
+                node.updateMatrixWorld(true);
+                const box = new THREE.Box3().setFromObject(node);
+                const size = new THREE.Vector3();
+                box.getSize(size);
+                const center = new THREE.Vector3();
+                box.getCenter(center);
+
+                // Skip tiny objects (likely decorative or errors)
+                if (size.x < 0.1 || size.z < 0.1) {
+                    return;
+                }
+
+                // For walls and columns, only include floor-level ones (skip elevated walls above doors)
+                if (isWall || isColumn) {
+                    // Check if the bottom of the wall is above floor level
+                    // Floor level is considered Y < 3 (adjust this threshold as needed)
+                    const bottomY = box.min.y;
+                    if (bottomY > 2.0) {
+                        return; // Skip elevated walls
+                    }
+                }
+
+                // Determine color based on type
+                let color;
+                if (isWall || isColumn) {
+                    color = 0xaaaaaa; // Light gray for walls and columns
+                    wallCount++;
+                } else {
+                    color = 0x444444; // Dark gray for floors
+                    floorCount++;
+                }
+
+                // Create a top-down representation using the actual XZ footprint
+                // For better gap filling, slightly increase the size
+                const minimapGeometry = new THREE.PlaneGeometry(size.x * 1.01, size.z * 1.01);
+                const minimapMaterial = new THREE.MeshBasicMaterial({
+                    color: color,
+                    side: THREE.DoubleSide,
+                    depthTest: false
+                });
+                const minimapMesh = new THREE.Mesh(minimapGeometry, minimapMaterial);
+
+                // Position at the center of the original mesh, on the XZ plane
+                minimapMesh.position.set(center.x, 0.05, center.z);
+                minimapMesh.rotation.x = -Math.PI / 2; // Lay flat on XZ plane
+
+                // Render floors below walls
+                if (isFloor) {
+                    minimapMesh.renderOrder = 0;
+                } else {
+                    minimapMesh.renderOrder = 1;
+                }
+
+                this.minimapScene.add(minimapMesh);
+            }
         });
 
-        console.log(`🗺️ Created minimap geometry for ${this.rooms.length} rooms`);
+        console.log(`🗺️ Created minimap: ${wallCount} walls, ${floorCount} floors`);
     }
 
     createMinimapUI() {
@@ -138,55 +250,19 @@ class Minimap {
         this.minimapContext = this.minimapCanvas.getContext('2d');
     }
 
-    getCurrentRoomForMinimap(playerPosition) {
-        const playerPos2D = new THREE.Vector3(playerPosition.x, 0, playerPosition.z);
-
-        for (const room of this.rooms) {
-            const roomBounds2D = room.bounds.clone();
-            roomBounds2D.min.y = -Infinity;
-            roomBounds2D.max.y = Infinity;
-
-            if (roomBounds2D.containsPoint(playerPos2D)) {
-                return room;
-            }
-        }
-        return null;
-    }
-
-    updateExploration(playerPosition) {
-        const currentRoom = this.getCurrentRoomForMinimap(playerPosition);
-
-        if (currentRoom && !this.exploredRooms.has(currentRoom.name)) {
-            this.exploredRooms.add(currentRoom.name);
-
-            // Get the array of wall meshes for the current room
-            const meshesToReveal = this.roomMeshes.get(currentRoom.name);
-            
-            if (meshesToReveal && meshesToReveal.length > 0) {
-                console.log(`%cREVEALING ROOM: ${currentRoom.name}`, 'color: #00ff00; font-weight: bold;');
-                
-                // Animate each wall mesh in the room from black to grey
-                meshesToReveal.forEach(mesh => {
-                    const startColor = new THREE.Color(0x000000);
-                    const endColor = new THREE.Color(0x333333); // Explored color
-                    let progress = 0;
-
-                    const revealMesh = () => {
-                        progress += 0.05;
-                        mesh.material.color.lerpColors(startColor, endColor, Math.min(progress, 1.0));
-                        if (progress < 1.0) {
-                            requestAnimationFrame(revealMesh);
-                        }
-                    };
-                    revealMesh();
-                });
-            }
-        }
-    }
 
     updatePlayerIndicator(playerPosition) {
         this.playerIndicator.position.x = playerPosition.x;
         this.playerIndicator.position.z = playerPosition.z;
+
+        // Rotate the player indicator to match camera direction
+        // Get the camera's direction in world space
+        const direction = new THREE.Vector3();
+        this.mainCamera.getWorldDirection(direction);
+
+        // Calculate rotation around Y axis (for top-down view)
+        const angle = Math.atan2(direction.x, direction.z);
+        this.playerIndicator.rotation.y = -angle;
     }
 
     render() {
@@ -213,9 +289,16 @@ class Minimap {
 
     tick() {
         if (!this.enabled) return;
+
+        // Always update player indicator (lightweight operation)
         this.updatePlayerIndicator(this.mainCamera.position);
-        this.updateExploration(this.mainCamera.position);
-        this.render();
+
+        // Performance: Only render minimap every 100ms instead of every frame
+        const now = performance.now();
+        if (now - this.lastRenderTime >= this.renderInterval) {
+            this.render();
+            this.lastRenderTime = now;
+        }
     }
 
     toggle() {

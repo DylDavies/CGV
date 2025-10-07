@@ -369,11 +369,11 @@ class PauseMenu {
     getQualityPreset() {
         const presets = {
             low: {
-                dustParticles: 150,
-                fireParticles: 15,
-                lampUpdateRate: 4, // Update every 4th frame
-                fireplaceUpdateRate: 4,
-                maxVisibleDistance: 12
+                dustParticles: 100, // Reduced from 150 for better low-end performance
+                fireParticles: 10, // Reduced from 15
+                lampUpdateRate: 6, // Reduced from 4 (update less frequently)
+                fireplaceUpdateRate: 6, // Reduced from 4
+                maxVisibleDistance: 10 // Reduced from 12 for less rendering
             },
             medium: {
                 dustParticles: 250,
@@ -390,11 +390,11 @@ class PauseMenu {
                 maxVisibleDistance: 20
             },
             ultra: {
-                dustParticles: 1000,
-                fireParticles: 100,
+                dustParticles: 1500, // Increased from 1000 for high-end showcase
+                fireParticles: 150, // Increased from 100
                 lampUpdateRate: 1, // Update every frame
                 fireplaceUpdateRate: 1,
-                maxVisibleDistance: 25
+                maxVisibleDistance: 30 // Increased from 25 for more visible rooms
             }
         };
 

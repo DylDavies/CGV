@@ -179,12 +179,22 @@ class MansionLoader {
                 console.log(`📖 Found prop: ${node.name} (Diary)`);
             }
             if (node.name === 'S_Fire001') {
+                this.props.set('fireplace_fire', node);
+                node.userData = { type: 'fireplace', interactable: false }; // Not interactable until diary is read
+                console.log(`🔥 Found prop: ${node.name} (Fireplace Fire)`);
+            }
+            if (node.name === 'S_Fireplace001') {
                 this.props.set('fireplace', node);
                 node.userData = { type: 'fireplace', interactable: false }; // Not interactable until diary is read
                 console.log(`🔥 Found prop: ${node.name} (Fireplace)`);
             }
+            
+            if (node.name === 'S_Bucket001') {
+                this.props.set('bucket', node);
+                node.userData = { type: 'bucket', interactable: false }; // Not interactable until fireplace is inspected
+                console.log(`🪣 Found prop: ${node.name} (Bucket)`);
+            }
 
-            // Get master bedroom door
             if(node.name === 'S_Door001'){
                 this.props.set('master_bedroom_door', node);
                 node.userData = { 
@@ -412,10 +422,9 @@ class MansionLoader {
             return;
         }
 
-        console.log('✨ Enabling diary glow');
+        console.log('✨ Enabling diary glow (NOT making interactable yet)');
 
-        // Make diary interactable
-        diary.userData.interactable = true;
+        // Don't make diary interactable here - that happens when the objective is triggered
 
         // Apply glow effect to all meshes in the diary
         diary.traverse((node) => {
@@ -423,6 +432,29 @@ class MansionLoader {
                 node.material = node.material.clone();
                 node.material.emissive = new THREE.Color(0xffaa00);
                 this.glowingSymbols.push(node);
+            }
+        });
+    }
+
+    disableDiaryGlow() {
+        const diary = this.props.get('diary');
+        if (!diary) {
+            return;
+        }
+
+        console.log('✨ Disabling diary glow');
+
+        // Remove glow effect from all meshes in the diary
+        diary.traverse((node) => {
+            if (node.isMesh && node.material) {
+                node.material.emissive = new THREE.Color(0x000000);
+                node.material.emissiveIntensity = 0;
+
+                // Remove from glowing symbols array
+                const index = this.glowingSymbols.indexOf(node);
+                if (index > -1) {
+                    this.glowingSymbols.splice(index, 1);
+                }
             }
         });
     }
@@ -520,17 +552,26 @@ class MansionLoader {
                 const center = new THREE.Vector3();
                 box.getCenter(center);
 
-                // This part of your original logic was perfect, no changes needed here
+                // Collect all descendant meshes (not just direct children)
+                const allMeshes = [];
+                node.traverse((child) => {
+                    if (child.isMesh) {
+                        allMeshes.push(child);
+                    }
+                });
+
                 const roomData = {
                     name: roomName,
-                    children: node.children, // Store children for the minimap
+                    group: node, // Store the group node itself
+                    children: node.children, // Direct children
+                    meshes: allMeshes, // All meshes in the room hierarchy
                     bounds: box,
                     center: center,
-                    // The rest of the properties from your original object can go here too
+                    visible: true
                 };
 
                 this.rooms.set(roomName, roomData);
-                logger.log(`✅ Room "${roomName}" registered successfully.`);
+                logger.log(`✅ Room "${roomName}" registered with ${allMeshes.length} meshes.`);
             }
         });
 
@@ -592,25 +633,35 @@ class MansionLoader {
 
             // --- START: Integrated Exclusion Logic from hideDebugObjects() ---
             const nodeName = node.name.toLowerCase();
+
+            // Check if it's a special S_Door object (these should be included in physics)
+            const isSpecialDoor = nodeName.includes('s_door');
+
             const isDebugObject = nodeName.includes('helper') || nodeName.includes('debug') || nodeName.includes('marker') || nodeName.includes('guide') || nodeName.includes('gizmo') || nodeName.includes('temp');
             const isPortrait = nodeName.includes('portrait') || nodeName.includes('painting') || nodeName.includes('picture') || nodeName.includes('frame');
-            const isDoor = nodeName.includes('door') || nodeName.includes('doors') || nodeName.includes('doorway') || nodeName.includes('opening');
+            const isDoor = !isSpecialDoor && (nodeName.includes('door') || nodeName.includes('doors') || nodeName.includes('doorway') || nodeName.includes('opening'));
             const isNoCollision = nodeName.includes('nocollision');
 
-            // Check parent hierarchy for door/nocollision flags
+            // Check parent hierarchy for door/nocollision flags (but skip if it's an S_Door)
             let shouldSkipByHierarchy = false;
-            let currentNode = node.parent;
-            while (currentNode) {
-                const currentName = currentNode.name.toLowerCase();
-                if (currentName.includes('door') ||
-                    currentName.includes('doors') ||
-                    currentName.includes('doorway') ||
-                    currentName.includes('opening') ||
-                    currentName.includes('nocollision')) {
-                    shouldSkipByHierarchy = true;
-                    break;
+            if (!isSpecialDoor) {
+                let currentNode = node.parent;
+                while (currentNode) {
+                    const currentName = currentNode.name.toLowerCase();
+                    // Don't skip if parent is S_Door
+                    if (currentName.includes('s_door')) {
+                        break; // Stop checking, this is a special door
+                    }
+                    if (currentName.includes('door') ||
+                        currentName.includes('doors') ||
+                        currentName.includes('doorway') ||
+                        currentName.includes('opening') ||
+                        currentName.includes('nocollision')) {
+                        shouldSkipByHierarchy = true;
+                        break;
+                    }
+                    currentNode = currentNode.parent;
                 }
-                currentNode = currentNode.parent;
             }
 
             let hasDebugMaterial = false;
@@ -928,6 +979,7 @@ toggleNavMeshNodesVisualizer() {
 
         const fireParticles = new THREE.Points(geometry, material);
         fireParticles.position.copy(firePosition);
+        fireParticles.raycast = () => {}; // Make fire particles non-raycastable so clicks go through
         this.scene.add(fireParticles);
         const fireLight = new THREE.PointLight(0xff6600, 4.0, 6, 2);
         fireLight.position.copy(firePosition);
@@ -1093,16 +1145,25 @@ toggleNavMeshNodesVisualizer() {
         if (playerPosSet) {
             let activeLights = 0;
 
-            const lampDistances = this.lamps.map(lamp => ({
-                lamp,
-                distance: lamp.light.position.distanceTo(playerPos)
-            }));
+            // Performance: Pre-filter lamps within reasonable distance before expensive sort
+            const maxConsiderDistance = 25; // Only consider lamps within 25 units
+            const nearbyLamps = [];
 
-            lampDistances.sort((a, b) => a.distance - b.distance);
-            for (const {
-                    lamp,
-                    distance
-                } of lampDistances) {
+            for (const lamp of this.lamps) {
+                const distance = lamp.light.position.distanceTo(playerPos);
+                // Early skip for far lamps
+                if (distance < maxConsiderDistance) {
+                    nearbyLamps.push({ lamp, distance });
+                } else {
+                    // Far lamps are simply turned off
+                    lamp.light.visible = false;
+                }
+            }
+
+            // Only sort nearby lamps (much smaller array)
+            nearbyLamps.sort((a, b) => a.distance - b.distance);
+
+            for (const { lamp, distance } of nearbyLamps) {
                 if (distance < lamp.light.distance * 2.5 && activeLights < this.maxActiveLights) {
                     lamp.light.visible = true;
 
@@ -1215,6 +1276,20 @@ toggleNavMeshNodesVisualizer() {
         }
 
         logger.log(`🔥 Fireplaces ${enabled ? 'enabled' : 'disabled'}`);
+    }
+
+    extinguishFireplace(fireplaceNode) {
+        // Find the fireplace data that matches this node
+        for (const fireplace of this.fireplaces) {
+            if (fireplace.mesh === fireplaceNode || fireplace.mesh.name === fireplaceNode?.name) {
+                // Hide particles and light
+                fireplace.particles.visible = false;
+                fireplace.light.visible = false;
+                fireplace.extinguished = true;
+                console.log('🔥 Fireplace extinguished');
+                return;
+            }
+        }
     }
     toggleFireplaces() {
         this.setFireplacesEnabled(!this.fireplacesEnabled);
