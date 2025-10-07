@@ -220,6 +220,10 @@ class InteractionSystem {
             fireplace: {
                 prompt: "Press E to inspect the fireplace",
                 handler: this.handleFireplaceInteraction.bind(this)
+            },
+            bucket: {
+                prompt: "Press E to pick up bucket",
+                handler: this.handleBucketInteraction.bind(this)
             }
         };
     }
@@ -751,6 +755,12 @@ class InteractionSystem {
             await window.gameControls.narrativeManager.triggerEvent('stage2.lights_out');
             await window.gameControls.narrativeManager.triggerEvent('stage2.need_power');
 
+            // Make fuse box interactable
+            const fuseBox = this.gameManager.mansion.props.get('fuse_box');
+            if (fuseBox) {
+                fuseBox.userData.interactable = true;
+            }
+
             // Add the fuse box objective
             await window.gameControls.narrativeManager.triggerEvent('stage2.fix_fuse_box_objective');
 
@@ -772,6 +782,7 @@ class InteractionSystem {
         }
 
         if (userData.hasRead) {
+            // Already read, just show the page again without changing objectives
             this.showDiaryPage();
             return;
         }
@@ -779,22 +790,37 @@ class InteractionSystem {
         // Mark as read first
         userData.hasRead = true;
 
+        // Make diary non-interactable after reading to prevent re-triggering objectives
+        diary.userData.interactable = false;
+
+        // Stop the diary from glowing
+        if (this.gameManager.mansion) {
+            this.gameManager.mansion.disableDiaryGlow();
+        }
+
         // Show the diary page
         this.showDiaryPage();
 
         // Wait a moment for the user to see the diary, then trigger the objective change
         setTimeout(async () => {
-            // Complete read diary objective
-            this.gameManager.completeObjective('read_diary');
-
-            // Make fireplace interactable
+            // Make both fireplace objects interactable
             const fireplace = this.gameManager.mansion.props.get('fireplace');
             if (fireplace) {
                 fireplace.userData.interactable = true;
             }
+            const fireplaceFire = this.gameManager.mansion.props.get('fireplace_fire');
+            if (fireplaceFire) {
+                fireplaceFire.userData.interactable = true;
+            }
 
-            // Add fireplace inspection objective
-            await window.gameControls.narrativeManager.triggerEvent('stage1.inspect_fireplace_objective');
+            // Complete read diary objective - this will mark it complete visually
+            this.gameManager.completeObjective('read_diary');
+
+            // Small delay before showing new objective to ensure completion registers
+            setTimeout(async () => {
+                // Add fireplace inspection objective
+                await window.gameControls.narrativeManager.triggerEvent('stage1.inspect_fireplace_objective');
+            }, 300);
         }, 500);
     }
 
@@ -895,16 +921,95 @@ class InteractionSystem {
             return;
         }
 
-        if (userData.inspected) {
-            this.showMessage("I still need water to put out the fire.");
+        // Check if player has bucket and fire is not out yet
+        if (this.gameManager.hasItem('Bucket') && !userData.fireOut) {
+            console.log('🔥 Player has bucket, putting out fire...');
+
+            // Mark both fireplace objects as fire out
+            userData.fireOut = true;
+            const fireplace = this.gameManager.mansion.props.get('fireplace');
+            if (fireplace && fireplace.userData) {
+                fireplace.userData.fireOut = true;
+            }
+            const fireplaceFire = this.gameManager.mansion.props.get('fireplace_fire');
+            if (fireplaceFire && fireplaceFire.userData) {
+                fireplaceFire.userData.fireOut = true;
+            }
+
+            this.showMessage("You pour the water on the fire...");
+
+            // Turn off the fire particles/lights for this fireplace
+            // Try to extinguish using the fire object (S_Fire001) which is what setupFireplace uses
+            if (fireplaceFire) {
+                this.gameManager.mansion.extinguishFireplace(fireplaceFire);
+            }
+
+            // Remove bucket from inventory
+            this.gameManager.removeFromInventory('Bucket');
+
+            // Complete put out fire objective
+            this.gameManager.completeObjective('put_out_fire');
+
+            // Change objective to inspect fireplace
+            await window.gameControls.narrativeManager.triggerEvent('stage1.inspect_fireplace_objective');
+
             return;
         }
 
-        userData.inspected = true;
+        // If fire is out, allow inspection
+        if (userData.fireOut) {
+            this.showMessage("You inspect the ashes...");
+            // TODO: Add inspection logic here
+            return;
+        }
 
-        await window.gameControls.narrativeManager.triggerEvent('stage1.fireplace_too_hot');
-        this.gameManager.completeObjective('inspect_fireplace');
-        await window.gameControls.narrativeManager.triggerEvent('stage1.put_out_fire_objective');
+        // First time inspecting with fire still burning
+        if (!userData.inspected) {
+            // Mark both fireplace objects as inspected
+            userData.inspected = true;
+            const fireplace = this.gameManager.mansion.props.get('fireplace');
+            if (fireplace && fireplace.userData) {
+                fireplace.userData.inspected = true;
+            }
+            const fireplaceFire = this.gameManager.mansion.props.get('fireplace_fire');
+            if (fireplaceFire && fireplaceFire.userData) {
+                fireplaceFire.userData.inspected = true;
+            }
+
+            await window.gameControls.narrativeManager.triggerEvent('stage1.fireplace_too_hot');
+            this.gameManager.completeObjective('inspect_fireplace');
+
+            // Make bucket interactable
+            const bucket = this.gameManager.mansion.props.get('bucket');
+            if (bucket) {
+                bucket.userData.interactable = true;
+            }
+
+            await window.gameControls.narrativeManager.triggerEvent('stage1.put_out_fire_objective');
+        } else {
+            this.showMessage("I still need water to put out the fire.");
+        }
+    }
+
+    handleBucketInteraction(bucket, userData) {
+        if (!userData.interactable) {
+            this.showMessage("It's just a bucket.");
+            return;
+        }
+
+        // Add bucket to inventory
+        this.gameManager.addToInventory({
+            name: 'Bucket',
+            type: 'tool',
+            description: 'A bucket that could hold water.'
+        });
+
+        // Animate bucket pickup and remove from scene
+        this.animateItemPickup(bucket, () => {
+            if (bucket.parent) {
+                bucket.parent.remove(bucket);
+            }
+        });
     }
 
     startPuzzle(puzzleData, puzzleObject) {
@@ -1208,12 +1313,22 @@ class InteractionSystem {
                     const isPagesBlocked = interactableData.data.type === 'page' &&
                         !this.gameManager.telephoneAnswered;
 
+                    // Check if item is interactable (for diary, fireplace, bucket, fuse_box)
+                    const isNotYetInteractable = (interactableData.data.type === 'diary' ||
+                                                  interactableData.data.type === 'fireplace' ||
+                                                  interactableData.data.type === 'bucket' ||
+                                                  interactableData.data.type === 'fuse_box') &&
+                                                 !interactableData.data.interactable;
+
                     if (isPagesLocked) {
                         blockedMessage = "The pages are sealed in place by ancient magic";
                     } else if (isPageSlotBlocked) {
                         blockedMessage = "These symbols don't make sense yet";
                     } else if (isPagesBlocked) {
                         blockedMessage = "I should focus on what's important first";
+                    } else if (isNotYetInteractable) {
+                        // Don't show any prompt for items that aren't interactable yet
+                        isInteractable = false;
                     } else {
                         isInteractable = true;
                         if (interactionType) {
