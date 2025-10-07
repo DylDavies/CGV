@@ -58,17 +58,13 @@ class ImprovedFlashlight {
     }
     
     setupControls() {
-        document.addEventListener('keydown', (e) => {
-            if (e.code === 'KeyF' && this.currentBattery > 0) {
-                this.toggle();
-            }
-        });
+        // Flashlight is now always on - no toggle needed
+        // F key functionality removed
     }
-    
+
     toggle() {
-        this.isOn = !this.isOn;
-        this.updateVisibility();
-        console.log(`🔦 Flashlight ${this.isOn ? 'ON' : 'OFF'} | Battery: ${Math.round(this.currentBattery)}%`);
+        // Flashlight is always on - toggle disabled
+        console.log(`🔦 Flashlight is always ON`);
     }
     
     updateVisibility() {

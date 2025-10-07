@@ -38,7 +38,7 @@ class MonsterAI {
         this.aggressionLevels = {
             1: { name: 'DOCILE', speed: 1.5, color: 0x00ff00 },
             2: { name: 'CAUTIOUS', speed: 2.0, color: 0xADD8E6 }, // Light Blue
-            3: { name: 'CURIOUS', speed: 2.5, color: 0xffff00, distance: 10, fleeDistance: 4 },
+            3: { name: 'CURIOUS', speed: 2.5, color: 0xffff00, distance: 12, fleeDistance: 10 }, // Increased flee distance to 10 (runs away earlier)
             4: { name: 'BOLD', speed: 3.0, color: 0xffa500, distance: 1 },
             5: { name: 'HOSTILE', speed: 4, color: 0xff0000, distance: 0 }
         };
@@ -46,7 +46,7 @@ class MonsterAI {
         this.lastWander = 0;
         this.isFleeing = false;
         this.fleeTimer = 0;
-        this.fleeDuration = 2000; // 2 seconds in milliseconds
+        this.fleeDuration = 4000; // 2 seconds in milliseconds
 
         this.mixer = monsterMesh.mixer;
         this.animations = monsterMesh.animations;
@@ -64,6 +64,15 @@ class MonsterAI {
         console.log(`🧠 Monster aggression level set to: ${this.aggressionLevel} (${this.aggressionLevels[this.aggressionLevel].name})`);
         this.path = []; // Clear path on state change
         this.wanderTarget = null; // Clear wander target
+    }
+
+    setAggressionLevel(level) {
+        if (level >= 1 && level <= Object.keys(this.aggressionLevels).length) {
+            this.aggressionLevel = level;
+            console.log(`🧠 Monster aggression level set to: ${this.aggressionLevel} (${this.aggressionLevels[this.aggressionLevel].name})`);
+            this.path = []; // Clear path on state change
+            this.wanderTarget = null; // Clear wander target
+        }
     }
 
     togglePathVisualization() {
@@ -202,7 +211,7 @@ class MonsterAI {
 
             if (path) {
                 this.path = path;
-                this.visualizePath();
+                // this.visualizePath(); // Commented out - causing bugs
             }
         }
         this.followPath(delta);
@@ -414,7 +423,7 @@ class MonsterAI {
             const path = this.pathfinding.findPath(closestMonsterNode.centroid, closestPlayerNode.centroid, this.ZONE, groupID);
             if (path && path.length > 0) {
                 this.path = path;
-                this.visualizePath();
+                // this.visualizePath(); // Commented out - causing bugs
             } else {
                 this.path = [];
             }
@@ -435,9 +444,9 @@ class MonsterAI {
             const path = this.pathfinding.findPath(closestMonsterNode.centroid, closestFleeNode.centroid, this.ZONE, groupID);
             if (path && path.length > 0) {
                 this.path = path;
-                this.visualizePath();
+                // this.visualizePath(); // Commented out - causing bugs
             } else {
-                this.path = []; 
+                this.path = [];
             }
         } else {
              this.path = [];
@@ -505,7 +514,7 @@ class MonsterAI {
             const path = this.pathfinding.findPath(closestMonsterNode.centroid, bestSpot, this.ZONE, groupID);
             if (path) {
                 this.path = path;
-                this.visualizePath();
+                // this.visualizePath(); // Commented out - causing bugs
             }
         }
     }

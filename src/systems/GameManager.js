@@ -45,12 +45,14 @@ class GameManager {
         this.hintQueue = []; // NEW: A queue to hold pending hints.
         this.isHintVisible = false; // NEW: A flag to check if a hint is on screen.
         this.allPagesPlaced = false;
+        this.puzzleFailureCount = 0; // Track wrong puzzle attempts
+        this.maxPuzzleFailures = 3; // Die after 3 failures
 
-        
+
         this.ui = this.createUI();
         this.audioEnabled = true;
         this.nextAmbientSoundTime = this.getRandomAmbientTime();
-        
+
         this.initializeGame();
     }
 
@@ -60,13 +62,19 @@ class GameManager {
 
     initializeGame() {
         console.log("🎮 Initializing game...");
-         // Make phone start ringing 30 seconds into the game
+
+        // Make phone start ringing 30 seconds into the game
         setTimeout(() => {
             this.startPhoneRingEvent();
         }, 30000); // 30 seconds
 
         this.updateUI();
         this.showWelcomeMessage();
+    }
+
+    async showStage1Title() {
+        // Called from main.js after all systems are initialized
+        await window.gameControls.narrativeManager.triggerEvent('intro.stage_1_title');
     }
 
     startPhoneRingEvent() {
@@ -210,9 +218,18 @@ class GameManager {
             }, 5000);
 
         } else if (!isCorrect) {
-            // Wrong order - show red screen effect and message
-            this.showWrongPageOrderEffect();
-            await window.gameControls.narrativeManager.triggerEvent('stage1.wrong_page_order');
+            // Wrong order - increment failure count
+            this.puzzleFailureCount++;
+            console.log(`❌ Puzzle failure ${this.puzzleFailureCount}/${this.maxPuzzleFailures}`);
+
+            if (this.puzzleFailureCount >= this.maxPuzzleFailures) {
+                // Player dies after 3 failures
+                await this.onPlayerDeath('puzzle');
+            } else {
+                // Show red screen effect and message
+                this.showWrongPageOrderEffect();
+                await window.gameControls.narrativeManager.triggerEvent('stage1.wrong_page_order');
+            }
         }
     }
 
@@ -1171,6 +1188,9 @@ class GameManager {
         // --- Objective progress checks ---
         this.checkTimedObjectives();
 
+        // Check for monster collision (player death)
+        this.checkMonsterCollision();
+
         this.nextAmbientSoundTime -= delta;
         if (this.nextAmbientSoundTime <= 0) {
             if (this.audioManager) {
@@ -1294,6 +1314,9 @@ class GameManager {
         console.log('🎭 Starting Stage 2...');
         this.gameStage = 2;
 
+        // Show Stage 2 title screen
+        await window.gameControls.narrativeManager.triggerEvent('stage2.stage_2_title');
+
         // Inner monologue using narrative manager
         await window.gameControls.narrativeManager.triggerEvent('stage2.transition_start');
 
@@ -1365,9 +1388,16 @@ class GameManager {
         await window.gameControls.narrativeManager.triggerEvent('stage2.lights_restored');
         await window.gameControls.narrativeManager.triggerEvent('stage2.not_alone');
 
-        // Make the diary glow but NOT interactable yet
+        // Set monster to CURIOUS (level 3) after fuse box is fixed
+        if (window.gameControls.monsterAI) {
+            window.gameControls.monsterAI.setAggressionLevel(3); // CURIOUS
+            console.log('👾 Monster is now CURIOUS');
+        }
+
+        // Make the diary glow immediately after fuse box is complete
         if (this.mansion) {
             this.mansion.enableDiaryGlow();
+            console.log('✨ Diary glow enabled immediately after fuse box');
         }
         await window.gameControls.narrativeManager.triggerEvent('stage1.notice_diary');
 
@@ -1379,6 +1409,52 @@ class GameManager {
             }
         }
         await window.gameControls.narrativeManager.triggerEvent('stage1.read_diary_objective');
+    }
+
+    async onPlayerDeath(deathType = 'monster_curious') {
+        console.log(`💀 Player died: ${deathType}`);
+        this.gameState = 'lost';
+
+        // Play death sound
+        if (this.audioManager) {
+            this.audioManager.playSound('player_death', 'public/audio/sfx/hit_sound.mp3');
+        }
+
+        // Stop player controls
+        if (this.controls) {
+            this.controls.freeze();
+        }
+
+        // Show appropriate death screen based on death type
+        const deathEvent = `endings.death_${deathType}`;
+        await window.gameControls.narrativeManager.triggerEvent(deathEvent);
+
+        // R key restart is handled by PlayerControls.js onKeyDown handler
+        console.log('💀 Press R to restart the game');
+    }
+
+    checkMonsterCollision() {
+        if (this.gameState !== 'playing') return;
+        if (!window.gameControls.monsterAI) return;
+
+        // Only check collision if we're in Stage 2 (monster is spawned)
+        if (this.gameStage !== 2) return;
+
+        const monster = window.gameControls.monsterAI.monster;
+        if (!monster) return;
+
+        const playerPos = this.camera.position;
+        const monsterPos = monster.position;
+
+        const distance = playerPos.distanceTo(monsterPos);
+
+        // If player touches monster (within 1.5 units), they die
+        if (distance < 1.5) {
+            // Determine death message based on monster aggression level
+            const aggressionLevel = window.gameControls.monsterAI.aggressionLevel;
+            const deathType = aggressionLevel >= 4 ? 'monster_bold' : 'monster_curious';
+            this.onPlayerDeath(deathType);
+        }
     }
 
     // Cleanup
