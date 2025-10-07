@@ -109,7 +109,7 @@ async function main() {
             scene.add(camera);
 
             uiManager.updateLoadingProgress(75, "Preparing the experience...");
-            const monster = await createMonster('/blender/monster.glb');
+            const monster = await createMonster('blender/monster.glb');
             scene.add(monster);
 
             const monsterAI = new MonsterAI(monster, camera, mansionLoader.pathfinding, scene, audioManager);
