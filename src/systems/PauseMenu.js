@@ -201,8 +201,15 @@ class PauseMenu {
         // Listen for pointer lock changes - when ESC is pressed and pointer unlocks, show pause menu
         document.addEventListener('pointerlockchange', () => {
             // If pointer was unlocked and we're not already paused, show pause menu
-            if (!document.pointerLockElement && !this.isPaused) {
-                this.show();
+            // BUT: Don't show if controls are frozen (puzzle/interaction is active)
+            // Add a small delay to handle cases where the pointer is being relocked after a puzzle closes
+            if (!document.pointerLockElement && !this.isPaused && !this.controls.isFrozen) {
+                setTimeout(() => {
+                    // Double-check after delay - if pointer is still unlocked and controls still not frozen, show menu
+                    if (!document.pointerLockElement && !this.isPaused && !this.controls.isFrozen) {
+                        this.show();
+                    }
+                }, 150); // Wait slightly longer than the unfreeze delay
             }
         });
 

@@ -380,7 +380,12 @@ class FirstPersonControls {
 
     unfreeze() {
         this.isFrozen = false;
-        this.controls.lock(); // Re-lock the mouse pointer for gameplay
+        // Small delay before relocking to prevent pause menu from showing
+        setTimeout(() => {
+            if (!this.isFrozen) { // Only lock if still not frozen
+                this.controls.lock();
+            }
+        }, 100);
     }
 
     resetInputs() {
