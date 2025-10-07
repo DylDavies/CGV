@@ -8,7 +8,7 @@ export class KeypadPuzzle {
         this.currentInput = "";
         this.onSolveCallback = null;
         this.onCloseCallback = null;
-        this.result = new PuzzleResult('puzzle-result-overlay', 'result-title', 'result-subtitle');
+        this.result = new PuzzleResult('keypad-result-overlay', 'keypad-result-title', 'keypad-result-subtitle');
         this.controls = null; // To hold a reference to the player controls
         this.initialize();
     }
