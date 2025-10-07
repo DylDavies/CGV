@@ -1186,7 +1186,7 @@ class GameManager {
 
         // Show a hint only on the very first visit
         if (!this.gameStats.roomsVisited.has(room.name)) {
-            this.handleFirstRoomEntry(room);
+            // this.handleFirstRoomEntry(room); // Room hints disabled
         }
 
         // Add to visited rooms list (moved here for better logic)

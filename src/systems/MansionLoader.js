@@ -509,17 +509,26 @@ class MansionLoader {
                 const center = new THREE.Vector3();
                 box.getCenter(center);
 
-                // This part of your original logic was perfect, no changes needed here
+                // Collect all descendant meshes (not just direct children)
+                const allMeshes = [];
+                node.traverse((child) => {
+                    if (child.isMesh) {
+                        allMeshes.push(child);
+                    }
+                });
+
                 const roomData = {
                     name: roomName,
-                    children: node.children, // Store children for the minimap
+                    group: node, // Store the group node itself
+                    children: node.children, // Direct children
+                    meshes: allMeshes, // All meshes in the room hierarchy
                     bounds: box,
                     center: center,
-                    // The rest of the properties from your original object can go here too
+                    visible: true
                 };
 
                 this.rooms.set(roomName, roomData);
-                logger.log(`✅ Room "${roomName}" registered successfully.`);
+                logger.log(`✅ Room "${roomName}" registered with ${allMeshes.length} meshes.`);
             }
         });
 
@@ -581,25 +590,35 @@ class MansionLoader {
 
             // --- START: Integrated Exclusion Logic from hideDebugObjects() ---
             const nodeName = node.name.toLowerCase();
+
+            // Check if it's a special S_Door object (these should be included in physics)
+            const isSpecialDoor = nodeName.includes('s_door');
+
             const isDebugObject = nodeName.includes('helper') || nodeName.includes('debug') || nodeName.includes('marker') || nodeName.includes('guide') || nodeName.includes('gizmo') || nodeName.includes('temp');
             const isPortrait = nodeName.includes('portrait') || nodeName.includes('painting') || nodeName.includes('picture') || nodeName.includes('frame');
-            const isDoor = nodeName.includes('door') || nodeName.includes('doors') || nodeName.includes('doorway') || nodeName.includes('opening');
+            const isDoor = !isSpecialDoor && (nodeName.includes('door') || nodeName.includes('doors') || nodeName.includes('doorway') || nodeName.includes('opening'));
             const isNoCollision = nodeName.includes('nocollision');
 
-            // Check parent hierarchy for door/nocollision flags
+            // Check parent hierarchy for door/nocollision flags (but skip if it's an S_Door)
             let shouldSkipByHierarchy = false;
-            let currentNode = node.parent;
-            while (currentNode) {
-                const currentName = currentNode.name.toLowerCase();
-                if (currentName.includes('door') ||
-                    currentName.includes('doors') ||
-                    currentName.includes('doorway') ||
-                    currentName.includes('opening') ||
-                    currentName.includes('nocollision')) {
-                    shouldSkipByHierarchy = true;
-                    break;
+            if (!isSpecialDoor) {
+                let currentNode = node.parent;
+                while (currentNode) {
+                    const currentName = currentNode.name.toLowerCase();
+                    // Don't skip if parent is S_Door
+                    if (currentName.includes('s_door')) {
+                        break; // Stop checking, this is a special door
+                    }
+                    if (currentName.includes('door') ||
+                        currentName.includes('doors') ||
+                        currentName.includes('doorway') ||
+                        currentName.includes('opening') ||
+                        currentName.includes('nocollision')) {
+                        shouldSkipByHierarchy = true;
+                        break;
+                    }
+                    currentNode = currentNode.parent;
                 }
-                currentNode = currentNode.parent;
             }
 
             let hasDebugMaterial = false;
