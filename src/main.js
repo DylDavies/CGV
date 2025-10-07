@@ -82,10 +82,10 @@ async function main() {
 
             uiManager.updateLoadingProgress(40, "Loading mansion model...");
             const mansionLoader = new MansionLoader(scene, physicsManager, settings.quality || 'medium');
-            await mansionLoader.loadMansion('/blender/Mansion.glb');
+            await mansionLoader.loadMansion('blender/Mansion.glb');
 
             uiManager.updateLoadingProgress(60, "Analyzing walkable areas...");
-            await mansionLoader.loadNavMesh(`/blender/NavMesh.glb?v=${Date.now()}`);
+            await mansionLoader.loadNavMesh(`blender/NavMesh.glb?v=${Date.now()}`);
 
             const doorSpawnPoint = mansionLoader.getEntranceDoorSpawnPoint();
             let spawnPosition;
