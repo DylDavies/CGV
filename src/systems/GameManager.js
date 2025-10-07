@@ -1309,11 +1309,19 @@ class GameManager {
         await window.gameControls.narrativeManager.triggerEvent('stage2.lights_restored');
         await window.gameControls.narrativeManager.triggerEvent('stage2.not_alone');
 
-        // Make the diary glow and show message
+        // Make the diary glow but NOT interactable yet
         if (this.mansion) {
             this.mansion.enableDiaryGlow();
         }
         await window.gameControls.narrativeManager.triggerEvent('stage1.notice_diary');
+
+        // Now make diary interactable and show objective
+        if (this.mansion) {
+            const diary = this.mansion.props.get('diary');
+            if (diary) {
+                diary.userData.interactable = true;
+            }
+        }
         await window.gameControls.narrativeManager.triggerEvent('stage1.read_diary_objective');
     }
 
