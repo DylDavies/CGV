@@ -27,7 +27,7 @@ canvas {
   background-color: #000; /* Fallback color */
   background-image:
     linear-gradient(rgba(0, 0, 0, 0.6), rgba(0, 0, 0, 0.6)), 
-    url('public/images/main-menu-background.PNG'); 
+    url('/~s2652330/public/images/main-menu-background.PNG'); 
   background-size: cover;
   background-position: center;
   
