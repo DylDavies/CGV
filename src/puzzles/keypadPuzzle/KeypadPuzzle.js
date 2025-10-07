@@ -4,7 +4,7 @@ export class KeypadPuzzle {
     constructor(uiManager, onSolve) {
         this.uiManager = uiManager;
         this.onSolve = onSolve;
-        this.solution = "107";
+        this.solution = "107"; // Time from clock : hour hand is 10, and minute hand is 7 past 
         this.currentInput = "";
         this.initialize();
     }
