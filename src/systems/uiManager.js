@@ -56,6 +56,11 @@ export class UIManager {
             closeClueButton: document.getElementById('close-clue-btn'),
 
             resultOverlay: document.getElementById('result-overlay'),
+
+            // Keypad
+            keypadContainer: document.getElementById('keypad-container'),
+            keypadDisplay: document.getElementById('keypad-display'),
+            keypadButtons: document.querySelectorAll('.keypad-button, #keypad-enter-button'),            
         };
         
         if (!this.uiElements.welcomeScreen || !this.uiElements.playButton) {
@@ -367,5 +372,34 @@ export class UIManager {
             }
         }
     }
+
+    // Keypad stuff
+    showKeypad() {
+        if (this.uiElements.keypadContainer) {
+            this.uiElements.keypadContainer.style.display = 'flex';
+        }
+    }
+
+    hideKeypad() {
+        if (this.uiElements.keypadContainer) {
+            this.uiElements.keypadContainer.style.display = 'none';
+        }
+    }
+
+    updateKeypadDisplay(text) {
+        if (this.uiElements.keypadDisplay) {
+            this.uiElements.keypadDisplay.textContent = text;
+        }
+    }
+
+    setupKeypad(onKeyPress) {
+        if (this.uiElements.keypadButtons) {
+            this.uiElements.keypadButtons.forEach(button => {
+                button.addEventListener('click', () => {
+                    onKeyPress(button.textContent);
+                });
+            });
+        }
+    }    
 }
 

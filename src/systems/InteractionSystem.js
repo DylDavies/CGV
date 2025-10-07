@@ -216,6 +216,10 @@ class InteractionSystem {
             fireplace: {
                 prompt: "Press E to inspect the fireplace",
                 handler: this.handleFireplaceInteraction.bind(this)
+            },
+            keypad: {
+                prompt: "Press E to use keypad",
+                handler: this.handleKeypadInteraction.bind(this)
             }
         };
     }
@@ -466,30 +470,25 @@ class InteractionSystem {
             }, 50);
         }
     }
+    
     handleDoorInteraction(door, userData) {
-        const doorData = this.gameManager.mansion.doors.find(d => 
-            d.mesh === door || d.mesh === door.parent
-        );
-        
-        if (doorData) {
-            if (doorData.locked) {
-                const requiredKey = doorData.key;
-                if (this.gameManager.hasItem(requiredKey)) {
-                    this.showConfirmation(
-                        `Use ${requiredKey} to unlock door?`,
-                        () => {
-                            this.gameManager.removeFromInventory(requiredKey);
-                            doorData.locked = false;
-                            this.updateDoorVisual(door, false);
-                            this.showMessage("Door unlocked!");
-                        }
-                    );
-                } else {
-                    this.showMessage("This door is locked. You need a key.");
-                }
-            } else {
-                this.showMessage("Door is already unlocked.");
+        if (userData.locked) {
+            if (this.gameManager.hasItem('master_bedroom_key')) {
+                this.showConfirmation("Unlock the master bedroom door?", () => {
+                    userData.locked = false;
+                    this.gameManager.removeFromInventory('master_bedroom_key');
+                    this.showMessage("The door unlocks with a loud click.");
+                    // Animate the door opening right after unlocking
+                    this.animateDoorOpen(door); 
+                });
+            } 
+            else {
+                this.showMessage("The door is locked. You need a key.");
             }
+        } 
+        else {
+            // If the door is not locked, just open it
+            this.animateDoorOpen(door);
         }
     }
 
@@ -507,6 +506,69 @@ class InteractionSystem {
                 }
             });
         }
+    }
+
+    animateDoorOpen(door) {
+        if (door.userData.isOpening || door.userData.isOpen) {
+            this.showMessage("The door is already open.");
+            return;
+        }
+        door.userData.isOpening = true;
+
+        // --- FINALIZED PIVOT METHOD ---
+
+        if (!door.userData.pivot) {
+            const box = new THREE.Box3().setFromObject(door);
+            const size = new THREE.Vector3();
+            box.getSize(size);
+
+            // Create an invisible pivot object
+            const pivot = new THREE.Group();
+            this.scene.add(pivot); // Add pivot to the scene
+
+            // 1. Calculate the hinge position in the door's LOCAL space.
+            // We assume the hinge is on the door's left side (negative X).
+            const hingeOffset = new THREE.Vector3(-size.x / 2, 0, 0);
+
+            // 2. Convert this local hinge point to its WORLD position.
+            door.localToWorld(hingeOffset);
+            
+            // 3. Set the pivot's position and rotation to match the hinge point and the door's orientation.
+            pivot.position.copy(hingeOffset);
+            pivot.rotation.copy(door.rotation);
+
+            // 4. Attach the door to the pivot. Three.js handles the complex math to keep it in place.
+            pivot.attach(door);
+
+            // Store the pivot for future use
+            door.userData.pivot = pivot;
+        }
+
+        const pivot = door.userData.pivot;
+
+        // Animate the PIVOT's rotation
+        const startRotationY = pivot.rotation.y;
+        const targetRotationY = startRotationY + (Math.PI / 2); // Open 90 degrees inwards
+        const duration = 1500; // 1.5 seconds
+        const startTime = Date.now();
+
+        const animate = () => {
+            const elapsedTime = Date.now() - startTime;
+            const progress = Math.min(elapsedTime / duration, 1);
+            const easedProgress = 1 - Math.pow(1 - progress, 4); // Ease-out quint
+
+            // Interpolate the rotation from the start to the target angle
+            pivot.rotation.y = startRotationY + (targetRotationY - startRotationY) * easedProgress;
+
+            if (progress < 1) {
+                requestAnimationFrame(animate);
+            } else {
+                door.userData.isOpening = false;
+                door.userData.isOpen = true;
+            }
+        };
+
+        requestAnimationFrame(animate);
     }
 
     handleBookInteraction(book, userData) {
@@ -620,18 +682,10 @@ class InteractionSystem {
             this.showMessage("The safe is already open.");
             return;
         }
+
+        this.showMessage("There's a note on the safe: 'The old clock holds the key to my secrets.'");
         
-        this.showCombinationDialog(
-            "Enter 4-digit combination:",
-            (combination) => {
-                if (this.gameManager.mansion.puzzleSystem?.solveCombinationSafe(safe, combination)) {
-                    this.showMessage("Safe opened! You hear something dropping inside.");
-                    userData.solved = true;
-                } else {
-                    this.showMessage("Incorrect combination. Look around for clues.");
-                }
-            }
-        );
+        this.gameManager.puzzleSystem.startKeypadPuzzle();
     }
 
     handleMirrorInteraction(mirror, userData) {
@@ -793,6 +847,17 @@ class InteractionSystem {
             await window.gameControls.narrativeManager.triggerEvent('stage1.inspect_fireplace_objective');
         }, 500);
     }
+
+    handleKeypadInteraction(keypad, userData) {
+        if (this.gameManager.safePuzzleSolved) {
+            this.showMessage("The safe is already open.");
+            return;
+        }
+
+        this.controls.freeze();
+        this.currentInteraction = 'keypad';
+        this.uiManager.showKeypad();
+    } 
 
     showDiaryPage() {
         if (this.controls) this.controls.freeze();

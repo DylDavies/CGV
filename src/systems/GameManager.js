@@ -31,6 +31,8 @@ class GameManager {
         this.fuseBoxFixed = false; // NEW: Track if fuse box puzzle is complete
         this.telephoneAnswered = false; // NEW: Track if phone has been answered
         this.laptopPuzzleCompleted = false; // NEW: Track if laptop puzzle is complete
+        this.masterBedroomKey = false;
+        this.safePuzzleSolved = false;
 
         this.objectives = [];
 

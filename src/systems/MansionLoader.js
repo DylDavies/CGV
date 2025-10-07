@@ -183,6 +183,17 @@ class MansionLoader {
                 node.userData = { type: 'fireplace', interactable: false }; // Not interactable until diary is read
                 console.log(`🔥 Found prop: ${node.name} (Fireplace)`);
             }
+
+            // Get master bedroom door
+            if(node.name === 'S_Door001'){
+                this.props.set('master_bedroom_door', node);
+                node.userData = { 
+                    type: 'door', 
+                    interactable: true,
+                    locked: true // Start the door in a locked state
+                };
+                console.log(`🚪 Found prop: ${node.name} (Master Bedroom Door)`);
+            }
             
             if (node.isMesh) {
 
