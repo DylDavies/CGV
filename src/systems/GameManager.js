@@ -21,7 +21,7 @@ class GameManager {
         this.inventory = [];
         this.collectedPages = [];
         this.placedPages = new Array(6).fill(null); // Tracks pages placed on the wall
-        this.pageSolution = ['S_Page1', 'S_Page3', 'S_Page5', 'S_Page4', 'S_Page6', 'S_Page2'];
+        this.pageSolution = ['S_Page1', 'S_Page2', 'S_Page3', 'S_Page4', 'S_Page5', 'S_Page6'];
         this.pagesPuzzleCompleted = false; // NEW: Track if pages puzzle is solved
         this.currentRoom = null;
         this.previousRoom = null;
@@ -145,14 +145,11 @@ class GameManager {
             symbol: pageData.symbol
         });
 
-        // Show the message on the page
-        this.showHint(pageData.message, 5000);
-
         if (this.collectedPages.length >= 6) {
             // After collecting all pages, trigger speech and objective to decipher them.
             await window.gameControls.narrativeManager.triggerEvent('stage1.all_pages_found');
-            window.gameControls.narrativeManager.triggerEvent('stage1.decipher_pages');
-            this.completeObjective('collect_pages'); 
+            await window.gameControls.narrativeManager.triggerEvent('stage1.decipher_pages');
+            this.completeObjective('collect_pages');
         }
 
         this.updateUI();
@@ -171,7 +168,6 @@ class GameManager {
             this.mansion.displayPageOnSlot(slotIndex, pageItem.pageId);
         }
 
-        this.showHint(`You placed the ${pageItem.symbol} page.`);
         this.checkPageOrder();
     }
 
@@ -181,31 +177,78 @@ class GameManager {
             return; // Exit if not all slots are filled.
         }
 
-        let isCorrect = true; // Placeholder for your actual solution logic
+
+        let isCorrect = this.placedPages.every((pageId, index) => pageId === this.pageSolution[index]);
 
         if (isCorrect && !this.allPagesPlaced) {
             this.allPagesPlaced = true; // Prevent this from running again.
-            
-            this.completeObjective('all_pages_placed');
+
+            this.completeObjective('place_pages');
+
+            // Make all placed pages glow
+            this.pageSolution.forEach((pageId) => {
+                if (this.mansion) {
+                    this.mansion.activatePageSymbolGlow(pageId);
+                }
+            });
+
             await window.gameControls.narrativeManager.triggerEvent('stage1.truth_is_found');
 
-           // Trigger attack sequence
-            await window.gameControls.narrativeManager.triggerEvent('stage1.escape_monster');
+            // Trigger warning about monster awakening
             window.gameControls.narrativeManager.triggerEvent('stage1.monster_awaken_warning');
-            window.gameControls.narrativeManager.triggerEvent('stage1.run_away_from_monster');
 
-            // Monster attack and teleport sequence
+            // Monster attack and stage 2 transition sequence
             setTimeout(async () => {
                 window.gameControls.audioManager.playSound('player_hit', 'public/audio/sfx/hit_sound.mp3');
                 window.gameControls.narrativeManager.showBlackout();
                 window.gameControls.physicsManager.teleportTo(new THREE.Vector3(0, 1.8, 0));
                 await window.gameControls.narrativeManager.triggerEvent('stage1.attacked_by_monster');
                 await window.gameControls.narrativeManager.triggerEvent('intro.wake_up');
+
+                // Start Stage 2
+                this.startStage2();
             }, 5000);
 
         } else if (!isCorrect) {
-            this.showHint("Nothing happens... the order must be wrong.", 4000);
+            // Wrong order - show red screen effect and message
+            this.showWrongPageOrderEffect();
+            await window.gameControls.narrativeManager.triggerEvent('stage1.wrong_page_order');
         }
+    }
+
+    showWrongPageOrderEffect() {
+        // Create red overlay
+        const redOverlay = document.createElement('div');
+        redOverlay.style.cssText = `
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            z-index: 9999;
+            border: 20px solid red;
+            box-sizing: border-box;
+            animation: redPulse 1s ease-out;
+        `;
+
+        // Add animation
+        const style = document.createElement('style');
+        style.textContent = `
+            @keyframes redPulse {
+                0% { border-color: rgba(255, 0, 0, 0); }
+                50% { border-color: rgba(255, 0, 0, 0.8); }
+                100% { border-color: rgba(255, 0, 0, 0); }
+            }
+        `;
+        document.head.appendChild(style);
+        document.body.appendChild(redOverlay);
+
+        // Remove overlay after animation
+        setTimeout(() => {
+            document.body.removeChild(redOverlay);
+            document.head.removeChild(style);
+        }, 1000);
     }
 
     createUI() {
@@ -273,16 +316,17 @@ class GameManager {
         // Hint UI
         ui.hint.style.cssText = `
             position: fixed;
-            bottom: 20px;
-            left: 20px;
-            background: rgba(0,0,0,0.9);
-            padding: 20px;
-            border: 2px solid #888;
-            border-radius: 8px;
-            max-width: 400px;
+            top: 20px;
+            right: 20px;
+            background: rgba(0,0,0,0.8);
+            padding: 12px 18px;
+            border: 1px solid #666;
+            border-radius: 5px;
+            max-width: 300px;
             display: none;
             backdrop-filter: blur(5px);
-            animation: slideIn 0.3s ease-out;
+            animation: slideInRight 0.3s ease-out;
+            font-size: 13px;
         `;
 
         // Interaction UI
@@ -326,32 +370,32 @@ class GameManager {
         // Add CSS animations
         const style = document.createElement('style');
         style.textContent = `
-            @keyframes slideIn {
-                from { transform: translateY(100%); opacity: 0; }
-                to { transform: translateY(0); opacity: 1; }
+            @keyframes slideInRight {
+                from { transform: translateX(100%); opacity: 0; }
+                to { transform: translateX(0); opacity: 1; }
             }
-            
+
             @keyframes pulse {
                 0%, 100% { opacity: 0.8; }
                 50% { opacity: 1.0; }
             }
-            
+
             @keyframes glow {
                 0%, 100% { text-shadow: 2px 2px 4px rgba(0,0,0,0.8); }
                 50% { text-shadow: 2px 2px 4px rgba(0,0,0,0.8), 0 0 10px #00ff00; }
             }
-            
+
             .objective-completed {
                 color: #00ff00 !important;
                 animation: glow 2s infinite;
             }
-            
+
             .inventory-item {
                 transition: all 0.3s ease;
                 cursor: pointer;
                 padding: 2px 0;
             }
-            
+
             .inventory-item:hover {
                 color: #ffff00;
                 text-shadow: 0 0 5px #ffff00;
@@ -515,7 +559,6 @@ class GameManager {
             this.mansion.hidePageOnSlot(slotIndex);
         }
 
-        this.showHint(`You took back the page with the ${this.getPageSymbol(pageId)} symbol.`);
         this.checkPageOrder(); // Re-check the solution.
     }
 
@@ -655,10 +698,10 @@ class GameManager {
     }
 
     showWelcomeMessage() {
-        this.showHint("Welcome to the mansion. Find a way to escape... if you can. Press TAB to highlight nearby objects.", 8000);
+        // Welcome message removed - no longer showing hints except for inventory
     }
 
-   showHint(text, duration = 5000) {
+   showHint(text, duration = 2000) {
         this.hintQueue.push({ text, duration });
         if (!this.isHintVisible) {
             this.processHintQueue();
@@ -806,7 +849,6 @@ class GameManager {
     toggleAudio() {
         this.audioEnabled = !this.audioEnabled;
         this.showGameMenu(); // Refresh menu to show updated audio status
-        this.showHint(`Audio ${this.audioEnabled ? 'enabled' : 'disabled'}`);
     }
 
     showControls() {
@@ -856,10 +898,9 @@ class GameManager {
     // Inventory management
     addToInventory(item) {
         if (this.inventory.length >= 10) {
-            this.showHint("Inventory is full! Drop something first.");
             return false;
         }
-        
+
         // Check if item already exists (for stackable items)
         const existingItem = this.inventory.find(inv => inv.name === item.name);
         if (existingItem && item.stackable) {
@@ -871,10 +912,10 @@ class GameManager {
                 addedTime: Date.now()
             });
         }
-        
+
         this.gameStats.itemsCollected++;
         this.updateUI();
-        this.showHint(`Added ${item.name} to inventory (Press I to view)`, 2000);
+        this.showHint(`${item.name}`);
 
         // Update popup if it's visible
         if (this.ui.inventoryPopup && this.ui.inventoryPopup.style.display === 'block') {
@@ -909,10 +950,6 @@ class GameManager {
             const item = this.inventory[itemIndex];
             
             switch (item.type) {
-                case 'key':
-                    this.showHint(`${item.name} - Use this on locked doors`);
-                    break;
-                    
                 case 'scroll':
                     this.showInteraction(
                         item.name,
@@ -921,7 +958,7 @@ class GameManager {
                         () => {}
                     );
                     break;
-                    
+
                 case 'potion':
                     this.showInteraction(
                         `Use ${item.name}?`,
@@ -934,9 +971,6 @@ class GameManager {
                         }
                     );
                     break;
-                    
-                default:
-                    this.showHint(`${item.name} - ${item.description || "A mysterious item"}`);
             }
         }
     }
@@ -951,21 +985,14 @@ class GameManager {
             this.updateInventoryPopup();
         }
 
-        // Apply potion effects
+        // Apply potion effects (silently)
         switch (potion.effect) {
-            case 'healing':
-                this.showHint("You feel refreshed and more alert!");
-                break;
             case 'vision':
-                this.showHint("Your vision becomes clearer. Hidden things may be revealed!");
                 // Could temporarily increase interaction range or reveal hidden objects
                 break;
             case 'courage':
-                this.showHint("You feel braver. The darkness seems less threatening.");
                 // Could temporarily reduce scare event frequency
                 break;
-            default:
-                this.showHint("The potion tastes bitter. You're not sure what it did...");
         }
     }
 
@@ -981,10 +1008,7 @@ class GameManager {
             }
             
             this.updateUI();
-            
-            // Show completion effect
-            this.showHint(`✅ Objective completed: ${objective.description}`, 4000);
-            
+
             // Special effects for main objectives
             if (objective.type === 'main') {
                 this.ui.objectives.style.boxShadow = '0 0 30px rgba(0, 255, 0, 0.5)';
@@ -1032,7 +1056,6 @@ class GameManager {
                 ...objective
             });
             this.updateUI();
-            this.showHint(`New objective: ${objective.description}`, 5000);
         }
     }
 
@@ -1225,21 +1248,7 @@ class GameManager {
     }
 
     triggerRoomSpecialEvents(room) {
-        // Random room events based on room type and visit count
-        const visitCount = this.gameStats.roomsVisited.size;
-        const roomType = room.name.toLowerCase();
-
-        if (visitCount > 10 && Math.random() < 0.1) {
-            this.showHint("You feel like you're being watched...", 3000);
-        }
-
-        if (roomType.includes('attic') && Math.random() < 0.2) {
-            this.showHint("You hear creaking floorboards above... but you're already in the attic.", 4000);
-        }
-
-        if (roomType.includes('basement') && Math.random() < 0.3) {
-            this.showHint("The temperature drops noticeably. Your breath becomes visible.", 3000);
-        }
+        // Room special events removed - no longer showing hints except for inventory
     }
 
     // Save/Load system (basic localStorage implementation)
@@ -1255,10 +1264,8 @@ class GameManager {
         
         try {
             localStorage.setItem('mansion_escape_save', JSON.stringify(saveData));
-            this.showHint("Game saved successfully!", 2000);
             return true;
         } catch (error) {
-            this.showHint("Failed to save game. Storage may be full.", 3000);
             return false;
         }
     }
@@ -1272,13 +1279,12 @@ class GameManager {
                 this.inventory = parsed.inventory || [];
                 this.objectives = parsed.objectives || [];
                 this.gameStats = parsed.gameStats || this.gameStats;
-                
+
                 this.updateUI();
-                this.showHint("Game loaded successfully!", 2000);
                 return true;
             }
         } catch (error) {
-            this.showHint("Failed to load game save.", 3000);
+            return false;
         }
         return false;
     }
@@ -1291,25 +1297,11 @@ class GameManager {
         // Inner monologue using narrative manager
         await window.gameControls.narrativeManager.triggerEvent('stage2.transition_start');
 
-        // Turn off all lights
-        this.lightsOn = false;
-        if (this.mansion) {
-            this.mansion.setAllLightsEnabled(false);
-        }
+        // Add objective to escape the mansion
+        await window.gameControls.narrativeManager.triggerEvent('stage2.escape_objective');
 
-        await window.gameControls.narrativeManager.triggerEvent('stage2.lights_out');
-
-        await window.gameControls.narrativeManager.triggerEvent('stage2.need_power');
-
-        // Add objective to fix fuse box
-        await window.gameControls.narrativeManager.triggerEvent('stage2.fix_fuse_box_objective');
-
-        // Spawn the monster near the study
-        setTimeout(() => {
-            if (window.gameControls.monsterAI) {
-                this.spawnMonsterNearStudy();
-            }
-        }, 2000);
+        // Player must now try to interact with the entrance door
+        // The lights will go out when they try the door (handled in InteractionSystem)
     }
 
     spawnMonsterNearStudy() {
@@ -1346,6 +1338,12 @@ class GameManager {
                 monsterAI.monster.visible = true; // Make monster visible
             }
 
+            // Start heartbeat when monster spawns
+            if (!monsterAI.heartbeatStarted) {
+                monsterAI.audioManager.playHeartbeat();
+                monsterAI.heartbeatStarted = true;
+            }
+
             window.gameControls.narrativeManager.triggerEvent('stage2.something_moving');
         } catch (error) {
             console.error("Failed to spawn monster near study:", error);
@@ -1366,6 +1364,13 @@ class GameManager {
 
         await window.gameControls.narrativeManager.triggerEvent('stage2.lights_restored');
         await window.gameControls.narrativeManager.triggerEvent('stage2.not_alone');
+
+        // Make the diary glow and show message
+        if (this.mansion) {
+            this.mansion.enableDiaryGlow();
+        }
+        await window.gameControls.narrativeManager.triggerEvent('stage1.notice_diary');
+        await window.gameControls.narrativeManager.triggerEvent('stage1.read_diary_objective');
     }
 
     // Cleanup

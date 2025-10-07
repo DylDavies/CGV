@@ -168,6 +168,21 @@ class MansionLoader {
                 node.userData = { type: 'fuse_box', interactable: true };
                 console.log(`⚡ Found prop: ${node.name} (Fuse Box)`);
             }
+            if (node.name === 'S_Entrance001') {
+                this.props.set('entrance_door', node);
+                node.userData = { type: 'entrance_door', interactable: true };
+                console.log(`🚪 Found prop: ${node.name} (Entrance Door)`);
+            }
+            if (node.name === 'S_Book017') {
+                this.props.set('diary', node);
+                node.userData = { type: 'diary', interactable: false }; // Not interactable until laptop puzzle is solved
+                console.log(`📖 Found prop: ${node.name} (Diary)`);
+            }
+            if (node.name === 'S_Fire001') {
+                this.props.set('fireplace', node);
+                node.userData = { type: 'fireplace', interactable: false }; // Not interactable until diary is read
+                console.log(`🔥 Found prop: ${node.name} (Fireplace)`);
+            }
             
             if (node.isMesh) {
 
@@ -368,15 +383,37 @@ class MansionLoader {
             console.log(`✨ Activating glow for symbol: ${symbolName}`);
             // Clone the material to ensure we're not affecting other objects.
             symbolMesh.material = symbolMesh.material.clone();
-            
+
             // Set the emissive (glow) color to red.
             symbolMesh.material.emissive.setHex(0xff0000);
-            
+
             // Add it to our array for animation in the tick method.
             this.glowingSymbols.push(symbolMesh);
         } else {
             console.warn(`Could not find a symbol mesh named "${symbolName}" inside ${pageId}.`);
         }
+    }
+
+    enableDiaryGlow() {
+        const diary = this.props.get('diary');
+        if (!diary) {
+            console.warn('Could not find diary to enable glow');
+            return;
+        }
+
+        console.log('✨ Enabling diary glow');
+
+        // Make diary interactable
+        diary.userData.interactable = true;
+
+        // Apply glow effect to all meshes in the diary
+        diary.traverse((node) => {
+            if (node.isMesh) {
+                node.material = node.material.clone();
+                node.material.emissive = new THREE.Color(0xffaa00);
+                this.glowingSymbols.push(node);
+            }
+        });
     }
 
     tick(delta, cameraPosition) {

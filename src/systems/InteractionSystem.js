@@ -204,6 +204,18 @@ class InteractionSystem {
                 prompt: "Press E to fix the fuse box",
                 fixedPrompt: "The fuse box is working",
                 handler: this.handleFuseBoxInteraction.bind(this)
+            },
+            entrance_door: {
+                prompt: "Press E to open the door",
+                handler: this.handleEntranceDoorInteraction.bind(this)
+            },
+            diary: {
+                prompt: "Press E to read the diary",
+                handler: this.handleDiaryInteraction.bind(this)
+            },
+            fireplace: {
+                prompt: "Press E to inspect the fireplace",
+                handler: this.handleFireplaceInteraction.bind(this)
             }
         };
     }
@@ -401,7 +413,10 @@ class InteractionSystem {
 
     async handleLaptopInteraction(laptopObject, userData) {
         console.log("Interacting with laptop");
-        const clue = "> The pages must be placed in the order of the cosmos: Sun, Star, Eye, Hand, Spiral, Moon.";
+        const clue = "> The first light reveals the path\n>But the second shadow conceals it.\n> A pin-prick Star follows, a diamond set high,\n>A fourth hand offers a false choice.\n>Only then can we see the truth\n> As the spiral unravels destiny"
+
+        // const clueSourceElement = document.getElementById('clue-text-source');
+        // const clue = clueSourceElement ? clueSourceElement.textContent.trim() : "Error: Clue text not found in HTML.";
 
         await window.gameControls.narrativeManager.triggerEvent('stage1.laptop_puzzle_speech');
 
@@ -418,14 +433,15 @@ class InteractionSystem {
 
             colorPuzzle.show(4, () => this.closePuzzleUI());
 
-            colorPuzzle.onSolve(() => {
+            colorPuzzle.onSolve(async () => {
                 this.isColorPuzzleSolved = true;
+                this.gameManager.laptopPuzzleCompleted = true; // Mark laptop puzzle as complete
                 this.showClueScreenDialog(clue);
-                
+
                 // After getting the clue, mark deciphering as complete...
                 window.gameControls.gameManager.completeObjective('decipher_pages');
                 // ...and give the new objective to place the pages.
-                window.gameControls.narrativeManager.triggerEvent('stage1.all_pages_placed');
+                await window.gameControls.narrativeManager.triggerEvent('stage1.all_pages_placed');
 
             }, 'ACCESS GRANTED');
 
@@ -442,7 +458,7 @@ class InteractionSystem {
         if (clueScreen) {
             const clueTextElement = clueScreen.querySelector('.clue-text');
             if (clueTextElement) {
-                clueTextElement.textContent = clueText;
+               // clueTextElement.textContent = clueText;
             }
             clueScreen.style.display = 'flex';
             setTimeout(() => {
@@ -703,6 +719,188 @@ class InteractionSystem {
         } else {
             this.showMessage("Something's wrong with the wiring...");
         }
+    }
+
+    async handleEntranceDoorInteraction(door, userData) {
+        // Only allow interaction in stage 2 and if escape objective is active
+        if (this.gameManager.gameStage !== 2) {
+            this.showMessage("The door is closed.");
+            return;
+        }
+
+        // Check if this is the first time trying the door
+        if (!userData.triedToEscape) {
+            userData.triedToEscape = true;
+
+            // Show door locked message
+            await window.gameControls.narrativeManager.triggerEvent('stage2.door_locked');
+
+            // Complete the escape objective
+            this.gameManager.completeObjective('escape_mansion');
+
+            // Turn off the lights
+            this.gameManager.lightsOn = false;
+            if (this.gameManager.mansion) {
+                this.gameManager.mansion.setAllLightsEnabled(false);
+            }
+
+            await window.gameControls.narrativeManager.triggerEvent('stage2.lights_out');
+            await window.gameControls.narrativeManager.triggerEvent('stage2.need_power');
+
+            // Add the fuse box objective
+            await window.gameControls.narrativeManager.triggerEvent('stage2.fix_fuse_box_objective');
+
+            // Spawn the monster after a short delay
+            setTimeout(() => {
+                if (window.gameControls.monsterAI) {
+                    this.gameManager.spawnMonsterNearStudy();
+                }
+            }, 2000);
+        } else {
+            this.showMessage("The door is locked from the outside.");
+        }
+    }
+
+    async handleDiaryInteraction(diary, userData) {
+        if (!userData.interactable) {
+            this.showMessage("It's just an old book.");
+            return;
+        }
+
+        if (userData.hasRead) {
+            this.showDiaryPage();
+            return;
+        }
+
+        // Mark as read first
+        userData.hasRead = true;
+
+        // Show the diary page
+        this.showDiaryPage();
+
+        // Wait a moment for the user to see the diary, then trigger the objective change
+        setTimeout(async () => {
+            // Complete read diary objective
+            this.gameManager.completeObjective('read_diary');
+
+            // Make fireplace interactable
+            const fireplace = this.gameManager.mansion.props.get('fireplace');
+            if (fireplace) {
+                fireplace.userData.interactable = true;
+            }
+
+            // Add fireplace inspection objective
+            await window.gameControls.narrativeManager.triggerEvent('stage1.inspect_fireplace_objective');
+        }, 500);
+    }
+
+    showDiaryPage() {
+        if (this.controls) this.controls.freeze();
+        this.currentInteraction = 'diary';
+
+        const diaryOverlay = document.createElement('div');
+        diaryOverlay.id = 'diary-overlay';
+        diaryOverlay.style.cssText = `
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.95);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 2000;
+            pointer-events: auto;
+        `;
+
+        const diaryPage = document.createElement('div');
+        diaryPage.style.cssText = `
+            width: 600px;
+            height: 700px;
+            background: #f4e8d0;
+            padding: 60px;
+            box-shadow: 0 0 50px rgba(0, 0, 0, 0.8);
+            border: 2px solid #8b7355;
+            position: relative;
+            overflow: hidden;
+        `;
+
+        const closeFunc = () => {
+            if (document.body.contains(diaryOverlay)) {
+                document.body.removeChild(diaryOverlay);
+            }
+            if (this.controls) this.controls.unfreeze();
+            this.currentInteraction = null;
+        };
+
+        diaryPage.innerHTML = `
+            <div style="
+                font-family: 'Brush Script MT', cursive, serif;
+                font-size: 24px;
+                line-height: 1.8;
+                color: #2c1810;
+                text-align: left;
+            ">
+                <p style="margin-bottom: 30px;">Dear Diary,</p>
+                <p style="margin-bottom: 25px;">They're coming. I can hear them getting closer each day.</p>
+                <p style="margin-bottom: 25px;">I must destroy my research before they find it. The truth must not fall into the wrong hands.</p>
+                <p style="margin-bottom: 25px;">I've hidden the pages, but I must burn my notes. Too late now, they're at the d</p>
+                <p style="
+                    font-size: 20px;
+                    opacity: 0.5;
+                    transform: skew(-2deg);
+                ">oor... the</p>
+            </div>
+        `;
+
+        // Create close button separately and add event listener properly
+        const closeButton = document.createElement('button');
+        closeButton.textContent = 'Close';
+        closeButton.style.cssText = `
+            position: absolute;
+            bottom: 30px;
+            right: 30px;
+            padding: 10px 20px;
+            background: #8b7355;
+            color: #f4e8d0;
+            border: none;
+            cursor: pointer;
+            font-family: 'Courier New', monospace;
+            font-size: 14px;
+            border-radius: 3px;
+        `;
+        closeButton.addEventListener('click', (e) => {
+            e.stopPropagation();
+            closeFunc();
+        });
+
+        diaryPage.appendChild(closeButton);
+        diaryOverlay.appendChild(diaryPage);
+        document.body.appendChild(diaryOverlay);
+
+        // Stop propagation on the page itself
+        diaryPage.addEventListener('click', (e) => {
+            e.stopPropagation();
+        });
+    }
+
+    async handleFireplaceInteraction(fireplace, userData) {
+        if (!userData.interactable) {
+            this.showMessage("The fireplace is crackling peacefully.");
+            return;
+        }
+
+        if (userData.inspected) {
+            this.showMessage("I still need water to put out the fire.");
+            return;
+        }
+
+        userData.inspected = true;
+
+        await window.gameControls.narrativeManager.triggerEvent('stage1.fireplace_too_hot');
+        this.gameManager.completeObjective('inspect_fireplace');
+        await window.gameControls.narrativeManager.triggerEvent('stage1.put_out_fire_objective');
     }
 
     startPuzzle(puzzleData, puzzleObject) {
@@ -985,27 +1183,43 @@ class InteractionSystem {
 
         let isInteractable = false;
         let interactionPrompt = '';
+        let blockedMessage = '';
 
         if (intersects.length > 0) {
             const distance = intersects[0].distance;
             if (distance <= this.interactionRange) {
                 const interactableData = this.findInteractableData(intersects[0].object);
                 if (interactableData) {
-                    // NEW: Check if this is a page/page_slot and puzzle is completed
+                    const interactionType = this.interactionTypes[interactableData.data.type];
+
+                    // Check if this is a page/page_slot and puzzle is completed
                     const isPagesLocked = this.gameManager.pagesPuzzleCompleted &&
                         (interactableData.data.type === 'page' || interactableData.data.type === 'page_slot');
 
-                    if (!isPagesLocked) {
+                    // Check if page slot is blocked because laptop puzzle not complete
+                    const isPageSlotBlocked = interactableData.data.type === 'page_slot' &&
+                        !this.gameManager.laptopPuzzleCompleted;
+
+                    // Check if phone puzzle not completed (for pages)
+                    const isPagesBlocked = interactableData.data.type === 'page' &&
+                        !this.gameManager.telephoneAnswered;
+
+                    if (isPagesLocked) {
+                        blockedMessage = "The pages are sealed in place by ancient magic";
+                    } else if (isPageSlotBlocked) {
+                        blockedMessage = "These symbols don't make sense yet";
+                    } else if (isPagesBlocked) {
+                        blockedMessage = "I should focus on what's important first";
+                    } else {
                         isInteractable = true;
-                        const interactionType = this.interactionTypes[interactableData.data.type];
                         if (interactionType) {
-                            // NEW: Special handling for page_slot to show different prompt based on whether page is placed
+                            // Special handling for page_slot to show different prompt based on whether page is placed
                             if (interactableData.data.type === 'page_slot') {
                                 const slotIndex = interactableData.data.slotIndex;
                                 const hasPage = this.gameManager.placedPages[slotIndex] !== null;
                                 interactionPrompt = hasPage ? interactionType.promptWithPage : interactionType.prompt;
                             }
-                            // NEW: Special handling for fuse_box to show different prompt if fixed
+                            // Special handling for fuse_box to show different prompt if fixed
                             else if (interactableData.data.type === 'fuse_box') {
                                 interactionPrompt = this.gameManager.fuseBoxFixed ?
                                     interactionType.fixedPrompt :
@@ -1027,6 +1241,14 @@ class InteractionSystem {
             this.crosshair.style.width = '8px';
             this.crosshair.style.height = '8px';
             this.interactionPrompt.textContent = interactionPrompt;
+            this.interactionPrompt.style.display = 'block';
+        } else if (blockedMessage) {
+            // Show blocked message with red crosshair
+            this.crosshair.style.background = '#ff6666';
+            this.crosshair.style.borderColor = '#ff6666';
+            this.crosshair.style.width = '6px';
+            this.crosshair.style.height = '6px';
+            this.interactionPrompt.textContent = blockedMessage;
             this.interactionPrompt.style.display = 'block';
         } else {
             this.crosshair.style.background = 'white';

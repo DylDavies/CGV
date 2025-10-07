@@ -51,28 +51,6 @@
       "text": "Hmmm, the line was cut.",
       "duration": 4000
     },
-    "all_pages_found": {
-      "type": "speechBubble",
-      "title": "You",
-      "text": "I have all the pages... but these symbols don't make any sense.",
-      "duration": 4000
-    },
-    "laptop_suggestion": {
-      "type": "speechBubble",
-      "title": "You",
-      "text": "Maybe that laptop I saw earlier could help decipher them...",
-      "duration": 4000
-    },
-    "objective_decipher_pages": {
-      "type": "objective",
-      "id": "decipher_pages",
-      "description": "Use the laptop to decipher the page symbols"
-    },
-    "objective_place_pages": {
-      "type": "objective",
-      "id": "place_pages",
-      "description": "Place the deciphered pages in the correct order"
-    },
     "collect_pages_speech": {
       "type": "speechBubble",
       "title": "You",
@@ -85,22 +63,10 @@
       "text": "That's all of them. Now I need to figure out what they mean, and where they go.",
       "duration": 4500
     },
-    "all_pages_placed": {
+    "objective_find_pages": {
       "type": "objective",
-      "id": "all_pages_placed",
-      "description": "Place the pages on the wall in the correct order"
-    },
-    "truth_is_found": {
-      "type": "speechBubble",
-      "title": "You",
-      "text": "It worked... Wait, the pages are glowing. The text is changing... 'it wakes when the truth is found'… what does that mean—",
-      "duration": 6000
-    },
-    "all_pages_placed_speech": {
-      "type": "speechBubble",
-      "title": "You",
-      "text": "The pages seem to fit perfectly on the wall",
-      "duration": 4500
+      "id": "collect_pages",
+      "description": "Find and collect all 6 research pages"
     },
     "decipher_pages": {
       "type": "objective",
@@ -113,21 +79,49 @@
       "text": "This old laptop... maybe it has some information.",
       "duration": 4000
     },
-    "escape_monster": {
-      "type": "blackScreen",
-      "text": "Press 'SHIFT' to run",
-      "duration": 2000
+    "all_pages_placed": {
+      "type": "objective",
+      "id": "place_pages",
+      "description": "Place the pages on the wall in the correct order"
     },
-    "pages_deciphered": {
+    "wrong_page_order": {
       "type": "speechBubble",
       "title": "You",
-      "text": "Hold on,  the writing says 'it wakes when the truth is found'… what—",
+      "text": "I feel like I've lost something important...",
       "duration": 4000
     },
-    "run_away_from_monster": {
+    "truth_is_found": {
+      "type": "speechBubble",
+      "title": "You",
+      "text": "It worked... Wait, the pages are glowing. The text is changing... 'it wakes when the truth is found'… what does that mean—",
+      "duration": 6000
+    },
+    "notice_diary": {
+      "type": "speechBubble",
+      "title": "You",
+      "text": "I didn't notice that before... That book is glowing. It looks like a diary. Maybe it has clues to escape.",
+      "duration": 8000
+    },
+    "read_diary_objective": {
       "type": "objective",
-      "id": "get_away_from_monster",
-      "description": "Get as far away as possible!"
+      "id": "read_diary",
+      "description": "Read the glowing diary"
+    },
+    "inspect_fireplace_objective": {
+      "type": "objective",
+      "id": "inspect_fireplace",
+      "description": "Look for the previous owners burnt belongings"
+    },
+    "fireplace_too_hot": {
+      "type": "speechBubble",
+      "title": "You",
+      "text": "I think I see somthing behind the fire.",
+      "duration": 4000
+    },
+    "put_out_fire_objective": {
+      "type": "objective",
+      "id": "put_out_fire",
+      "description": "Find a way to put out the fire in the fireplace"
     },
     "attacked_by_monster": {
       "type": "blackScreen",
@@ -140,6 +134,17 @@
     }
   },
   "stage2": {
+    "escape_objective": {
+      "type": "objective",
+      "id": "escape_mansion",
+      "description": "Find a way to escape the mansion"
+    },
+    "door_locked": {
+      "type": "speechBubble",
+      "title": "You",
+      "text": "The door won't budge. It's locked from the outside!",
+      "duration": 4000
+    },
     "fix_fuse_box_objective": {
       "type": "objective",
       "id": "fix_fuse_box",
