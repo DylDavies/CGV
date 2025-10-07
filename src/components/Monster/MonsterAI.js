@@ -9,7 +9,7 @@ class MonsterAI {
         this.pathfinding = pathfinding;
         this.scene = scene;
         this.audioManager = audioManager;
-        this.audioManager.playHeartbeat();
+        this.heartbeatStarted = false; // Track if heartbeat has started
         
         this.speed = 3; // Adjusted for delta-time based movement
         this.path = [];
@@ -121,6 +121,12 @@ class MonsterAI {
                 console.log(`👾 Monster spawned at random NavMesh node ID: ${randomNode.id}`);
             } else {
                 throw new Error("Selected random node is invalid or missing a centroid.");
+            }
+
+            // Start heartbeat when monster spawns
+            if (!this.heartbeatStarted) {
+                this.audioManager.playHeartbeat();
+                this.heartbeatStarted = true;
             }
         } catch (error) {
             console.error("Could not find a valid node to spawn the monster.", error);

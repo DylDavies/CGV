@@ -177,7 +177,7 @@ class GameManager {
             return; // Exit if not all slots are filled.
         }
 
-        
+
         let isCorrect = this.placedPages.every((pageId, index) => pageId === this.pageSolution[index]);
 
         if (isCorrect && !this.allPagesPlaced) {
@@ -209,7 +209,46 @@ class GameManager {
                 this.startStage2();
             }, 5000);
 
+        } else if (!isCorrect) {
+            // Wrong order - show red screen effect and message
+            this.showWrongPageOrderEffect();
+            await window.gameControls.narrativeManager.triggerEvent('stage1.wrong_page_order');
         }
+    }
+
+    showWrongPageOrderEffect() {
+        // Create red overlay
+        const redOverlay = document.createElement('div');
+        redOverlay.style.cssText = `
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            z-index: 9999;
+            border: 20px solid red;
+            box-sizing: border-box;
+            animation: redPulse 1s ease-out;
+        `;
+
+        // Add animation
+        const style = document.createElement('style');
+        style.textContent = `
+            @keyframes redPulse {
+                0% { border-color: rgba(255, 0, 0, 0); }
+                50% { border-color: rgba(255, 0, 0, 0.8); }
+                100% { border-color: rgba(255, 0, 0, 0); }
+            }
+        `;
+        document.head.appendChild(style);
+        document.body.appendChild(redOverlay);
+
+        // Remove overlay after animation
+        setTimeout(() => {
+            document.body.removeChild(redOverlay);
+            document.head.removeChild(style);
+        }, 1000);
     }
 
     createUI() {
@@ -1202,25 +1241,11 @@ class GameManager {
         // Inner monologue using narrative manager
         await window.gameControls.narrativeManager.triggerEvent('stage2.transition_start');
 
-        // Turn off all lights
-        this.lightsOn = false;
-        if (this.mansion) {
-            this.mansion.setAllLightsEnabled(false);
-        }
+        // Add objective to escape the mansion
+        await window.gameControls.narrativeManager.triggerEvent('stage2.escape_objective');
 
-        await window.gameControls.narrativeManager.triggerEvent('stage2.lights_out');
-
-        await window.gameControls.narrativeManager.triggerEvent('stage2.need_power');
-
-        // Add objective to fix fuse box
-        await window.gameControls.narrativeManager.triggerEvent('stage2.fix_fuse_box_objective');
-
-        // Spawn the monster near the study
-        setTimeout(() => {
-            if (window.gameControls.monsterAI) {
-                this.spawnMonsterNearStudy();
-            }
-        }, 2000);
+        // Player must now try to interact with the entrance door
+        // The lights will go out when they try the door (handled in InteractionSystem)
     }
 
     spawnMonsterNearStudy() {
@@ -1257,6 +1282,12 @@ class GameManager {
                 monsterAI.monster.visible = true; // Make monster visible
             }
 
+            // Start heartbeat when monster spawns
+            if (!monsterAI.heartbeatStarted) {
+                monsterAI.audioManager.playHeartbeat();
+                monsterAI.heartbeatStarted = true;
+            }
+
             window.gameControls.narrativeManager.triggerEvent('stage2.something_moving');
         } catch (error) {
             console.error("Failed to spawn monster near study:", error);
@@ -1277,6 +1308,13 @@ class GameManager {
 
         await window.gameControls.narrativeManager.triggerEvent('stage2.lights_restored');
         await window.gameControls.narrativeManager.triggerEvent('stage2.not_alone');
+
+        // Make the diary glow and show message
+        if (this.mansion) {
+            this.mansion.enableDiaryGlow();
+        }
+        await window.gameControls.narrativeManager.triggerEvent('stage1.notice_diary');
+        await window.gameControls.narrativeManager.triggerEvent('stage1.read_diary_objective');
     }
 
     // Cleanup
