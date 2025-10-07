@@ -131,6 +131,15 @@ class FirstPersonControls {
                         console.log("Testing: Added master_bedroom_key to inventory.");
                     }
                     break;
+                case 'KeyR': // Restart game when dead
+                    if (window.gameControls && window.gameControls.gameManager) {
+                        const gameState = window.gameControls.gameManager.gameState;
+                        if (gameState === 'lost') {
+                            console.log('🔄 Restarting game...');
+                            location.reload();
+                        }
+                    }
+                    break;
                 }
         };
 

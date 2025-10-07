@@ -41,6 +41,8 @@ export class NarrativeManager {
         switch (eventData.type) {
             case 'blackScreen':
                 return this.showNarrativeScreen(eventData.text, eventData.duration);
+            case 'deathScreen':
+                return this.showDeathScreen(eventData.text, eventData.duration);
             case 'speechBubble':
                 return this.showSpeechBubble(eventData.title, eventData.text, eventData.duration);
             case 'wakeUp':
@@ -79,6 +81,24 @@ export class NarrativeManager {
                 this.elements.narrativeScreen.classList.add('hidden');
                 setTimeout(resolve, 1000);
             }, duration);
+        });
+    }
+
+    showDeathScreen(text, duration = -1) {
+        return new Promise(resolve => {
+            // Use narrative screen for death screen - same black/white style as other screens
+            this.elements.narrativeText.innerHTML = text.replace(/\n/g, '<br>');
+            this.elements.narrativeScreen.classList.remove('hidden');
+            // No special styling - uses default black/white from CSS
+
+            // Duration -1 means stay forever (until restart)
+            if (duration > 0) {
+                setTimeout(() => {
+                    this.elements.narrativeScreen.classList.add('hidden');
+                    setTimeout(resolve, 1000);
+                }, duration);
+            }
+            // If duration is -1, never resolve (stays until page reload)
         });
     }
 

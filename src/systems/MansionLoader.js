@@ -204,6 +204,12 @@ class MansionLoader {
                 };
                 console.log(`🚪 Found prop: ${node.name} (Master Bedroom Door)`);
             }
+            if (node.name === 'S_KeyBehindFire') {
+                this.props.set('key_behind_fire', node);
+                node.userData = { type: 'key', interactable: false }; // Hidden until fire is out
+                node.visible = false; // Start hidden
+                console.log(`🔑 Found prop: ${node.name} (Key Behind Fire)`);
+            }
             
             if (node.isMesh) {
 
@@ -416,24 +422,43 @@ class MansionLoader {
     }
 
     enableDiaryGlow() {
-        const diary = this.props.get('diary');
+        let diary = this.props.get('diary');
+
         if (!diary) {
-            console.warn('Could not find diary to enable glow');
-            return;
+            console.warn('Could not find diary prop, searching for S_Book017 directly...');
+            // Try to find it directly in the scene
+            this.model.traverse((node) => {
+                if (node.name === 'S_Book017') {
+                    diary = node;
+                }
+            });
+            if (!diary) {
+                console.error('❌ Could not find S_Book017 in the scene!');
+                return;
+            }
+            console.log('✅ Found S_Book017 directly in scene');
         }
 
-        console.log('✨ Enabling diary glow (NOT making interactable yet)');
+        const bookToGlow = diary;
+        console.log('✨ Enabling diary glow (using same method as pages)');
+        console.log('✨ Diary object:', bookToGlow.name, 'Type:', bookToGlow.type);
 
-        // Don't make diary interactable here - that happens when the objective is triggered
+        // Apply glow effect to all meshes in the diary - SAME AS PAGES
+        let glowCount = 0;
+        bookToGlow.traverse((node) => {
+            if (node.isMesh && node.material) {
+                console.log(`✨ Found mesh in diary: ${node.name}. Applying glow effect.`);
 
-        // Apply glow effect to all meshes in the diary
-        diary.traverse((node) => {
-            if (node.isMesh) {
+                // Use the EXACT same approach as pages
                 node.material = node.material.clone();
-                node.material.emissive = new THREE.Color(0xffaa00);
+                node.material.emissive = new THREE.Color(0xffaa00); // Orange glow for diary
+                node.material.emissiveIntensity = 0; // Start at 0, will be animated
+
                 this.glowingSymbols.push(node);
+                glowCount++;
             }
         });
+        console.log(`✨ Applied glow to ${glowCount} meshes in diary (S_Book017)`);
     }
 
     disableDiaryGlow() {
@@ -1311,25 +1336,33 @@ toggleNavMeshNodesVisualizer() {
     setFireplacesEnabled(enabled) {
         this.fireplacesEnabled = enabled;
         for (const fireplace of this.fireplaces) {
-            fireplace.particles.visible = enabled;
-            fireplace.light.visible = enabled;
+            // Don't re-enable extinguished fireplaces
+            if (!fireplace.extinguished) {
+                fireplace.particles.visible = enabled;
+                fireplace.light.visible = enabled;
+            }
         }
 
         logger.log(`🔥 Fireplaces ${enabled ? 'enabled' : 'disabled'}`);
     }
 
     extinguishFireplace(fireplaceNode) {
+        console.log('🔥 extinguishFireplace called with node:', fireplaceNode?.name);
+        console.log('🔥 Total fireplaces:', this.fireplaces.length);
+
         // Find the fireplace data that matches this node
         for (const fireplace of this.fireplaces) {
+            console.log('🔥 Checking fireplace mesh:', fireplace.mesh?.name);
             if (fireplace.mesh === fireplaceNode || fireplace.mesh.name === fireplaceNode?.name) {
                 // Hide particles and light
                 fireplace.particles.visible = false;
                 fireplace.light.visible = false;
                 fireplace.extinguished = true;
-                console.log('🔥 Fireplace extinguished');
+                console.log('🔥 Fireplace extinguished successfully!');
                 return;
             }
         }
+        console.warn('🔥 Could not find matching fireplace to extinguish');
     }
     toggleFireplaces() {
         this.setFireplacesEnabled(!this.fireplacesEnabled);
