@@ -225,7 +225,7 @@ body.game-active::after {
     left: 0;
     width: 100%;
     height: 100%;
-    background-image: url('public/images/haunted-house-loading-screen-test.png'); 
+    background-image: url('/~s2652330/public/images/haunted-house-loading-screen-test.png'); 
     background-size: cover;
     background-position: center;
     background-repeat: no-repeat;
