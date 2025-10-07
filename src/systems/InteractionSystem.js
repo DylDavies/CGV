@@ -424,6 +424,12 @@ class InteractionSystem {
     }
 
     async handleLaptopInteraction(laptopObject, userData) {
+        // Check if all 6 pages have been collected
+        if (this.gameManager.collectedPages.length < 6) {
+            this.showMessage("I should focus on collecting the pages first.");
+            return;
+        }
+
         console.log("Interacting with laptop");
         const clue = "> The first light reveals the path\n>But the second shadow conceals it.\n> A pin-prick Star follows, a diamond set high,\n>A fourth hand offers a false choice.\n>Only then can we see the truth\n> As the spiral unravels destiny"
 
@@ -479,21 +485,35 @@ class InteractionSystem {
         }
     }
     
-    handleDoorInteraction(door, userData) {
+    async handleDoorInteraction(door, userData) {
         if (userData.locked) {
-            if (this.gameManager.hasItem('master_bedroom_key')) {
-                this.showConfirmation("Unlock the master bedroom door?", () => {
+            if (this.gameManager.hasItem('S_KeyBehindFire')) {
+                this.showConfirmation("Unlock the master bedroom door?", async () => {
                     userData.locked = false;
-                    this.gameManager.removeFromInventory('master_bedroom_key');
+                    this.gameManager.removeFromInventory('S_KeyBehindFire');
                     this.showMessage("The door unlocks with a loud click.");
+
                     // Animate the door opening right after unlocking
-                    this.animateDoorOpen(door); 
+                    this.animateDoorOpen(door);
+
+                    // Complete the find lock objective
+                    this.gameManager.completeObjective('find_lock');
+
+                    // Set monster to curious (level 3)
+                    if (window.gameControls.monsterAI) {
+                        window.gameControls.monsterAI.setAggressionLevel(3);
+                        console.log('👾 Monster set to CURIOUS after door opened');
+                    }
+
+                    // Trigger door opened speech and new objective
+                    await window.gameControls.narrativeManager.triggerEvent('stage1.door_opened');
+                    await window.gameControls.narrativeManager.triggerEvent('stage1.open_safe_objective');
                 });
-            } 
+            }
             else {
                 this.showMessage("The door is locked. You need a key.");
             }
-        } 
+        }
         else {
             // If the door is not locked, just open it
             this.animateDoorOpen(door);
@@ -1405,6 +1425,10 @@ class InteractionSystem {
                     const isPagesBlocked = interactableData.data.type === 'page' &&
                         !this.gameManager.telephoneAnswered;
 
+                    // Check if laptop is blocked (need all 6 pages first)
+                    const isLaptopBlocked = interactableData.data.type === 'laptop' &&
+                                           this.gameManager.collectedPages.length < 6;
+
                     // Check if item is interactable (for diary, fireplace, bucket, fuse_box)
                     const isNotYetInteractable = (interactableData.data.type === 'diary' ||
                                                   interactableData.data.type === 'fireplace' ||
@@ -1418,6 +1442,9 @@ class InteractionSystem {
                         blockedMessage = "These symbols don't make sense yet";
                     } else if (isPagesBlocked) {
                         blockedMessage = "I should focus on what's important first";
+                    } else if (isLaptopBlocked) {
+                        // Don't show any prompt for laptop until all pages collected
+                        isInteractable = false;
                     } else if (isNotYetInteractable) {
                         // Don't show any prompt for items that aren't interactable yet
                         isInteractable = false;

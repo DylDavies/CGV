@@ -1454,7 +1454,14 @@ class GameManager {
         if (distance < 1.5) {
             // Determine death message based on monster aggression level
             const aggressionLevel = window.gameControls.monsterAI.aggressionLevel;
-            const deathType = aggressionLevel >= 4 ? 'monster_bold' : 'monster_curious';
+            let deathType;
+            if (aggressionLevel >= 5) {
+                deathType = 'monster_hostile';
+            } else if (aggressionLevel >= 4) {
+                deathType = 'monster_bold';
+            } else {
+                deathType = 'monster_curious';
+            }
             this.onPlayerDeath(deathType);
         }
     }

@@ -144,6 +144,15 @@
       "id": "find_lock",
       "description": "Find what the key unlocks"
     },
+    "door_opened": {
+      "type": "speech",
+      "text": "The door creaks open... I hear something moving."
+    },
+    "open_safe_objective": {
+      "type": "objective",
+      "id": "open_safe",
+      "description": "Open the safe in the master bedroom"
+    },
     "attacked_by_monster": {
       "type": "blackScreen",
       "text": "Something struck from the shadows. Your head throbs. The air feels wrong. You need to get out—now. You need to E S C A P E.",
@@ -238,6 +247,11 @@
     "death_monster_bold": {
       "type": "deathScreen",
       "text": "YOU DIED\n\nThe creature won't move while you're watching it. Use this to your advantage.\n\nPress R to restart",
+      "duration": -1
+    },
+    "death_monster_hostile": {
+      "type": "deathScreen",
+      "text": "YOU DIED\n\nNo one likes to be chased, least of all monsters.\n\nPress R to restart",
       "duration": -1
     }
   }

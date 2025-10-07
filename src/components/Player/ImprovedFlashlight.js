@@ -24,27 +24,27 @@ class ImprovedFlashlight {
         // Main spotlight with better settings
         this.light = new THREE.SpotLight(
             0xffffff,    // color
-            4,           // intensity
-            50,          // distance
-            Math.PI / 6, // angle (30 degrees)
+            8,           // intensity - Increased from 4 to 8
+            70,          // distance - Increased from 50 to 70
+            Math.PI / 5, // angle (36 degrees) - Increased from PI/6 (30 degrees)
             0.2,         // penumbra (softer edges)
             1            // decay
         );
 
         // Disable shadows for performance (prevents lag spikes when toggling)
         this.light.castShadow = false;
-        
+
         // IMPORTANT: Add light to scene, not camera
         this.scene.add(this.light);
-        
+
         // Create target in scene
         this.target = new THREE.Object3D();
         this.target.name = 'flashlight_target';
         this.scene.add(this.target);
         this.light.target = this.target;
-        
+
         // Optional: Add a subtle ambient boost when flashlight is on
-        this.ambientBoost = new THREE.AmbientLight(0x111111, 0.2);
+        this.ambientBoost = new THREE.AmbientLight(0x222222, 0.4); // Increased from 0x111111, 0.2
         this.scene.add(this.ambientBoost);
         
         // Visual cone helper (for debugging flashlight issues)
@@ -83,16 +83,16 @@ class ImprovedFlashlight {
     
     updateIntensity() {
         const batteryRatio = this.currentBattery / this.maxBattery;
-        let intensity = 2 * batteryRatio;
-        
+        let intensity = 8 * batteryRatio; // Increased from 2 to 8 to match new base intensity
+
         // Add flickering when battery is low
         if (this.currentBattery < 20) {
             const flicker = 0.7 + Math.random() * 0.3;
             intensity *= flicker;
         }
-        
+
         this.light.intensity = Math.max(intensity, 0.1);
-        this.ambientBoost.intensity = 0.2 * batteryRatio;
+        this.ambientBoost.intensity = 0.4 * batteryRatio; // Increased from 0.2 to 0.4
     }
     
     tick(delta) {
