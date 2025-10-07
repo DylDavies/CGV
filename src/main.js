@@ -20,6 +20,7 @@ import { createMonster } from './components/Monster/Monster.js';
 import { MonsterAI } from './components/Monster/MonsterAI.js';
 import { ColorPuzzle } from './puzzles/colorPuzzle/ColorPuzzle.js';
 import { WirePuzzle } from './puzzles/wirePuzzle/WirePuzzle.js';
+import { KeypadPuzzle } from './puzzles/keypadPuzzle/KeypadPuzzle.js';
 import { PauseMenu } from './systems/PauseMenu.js';
 import { AudioManager } from './systems/AudioManager.js';
 import { Minimap } from './systems/Minimap.js';
@@ -33,7 +34,7 @@ async function main() {
         logger.log('噫 Initializing Project HER...');
         await RAPIER.init();
         logger.log(`📊 Logger initialized - File logging: ${logger.fileLoggingEnabled ? 'ENABLED' : 'DISABLED'}`);
-        
+
         const canvas = document.querySelector('#game-canvas');
 
         // --- Initialize Core Systems that EXIST OUTSIDE the loading screen ---
@@ -42,8 +43,8 @@ async function main() {
         const renderer = createRenderer(canvas);
         const stats = createStats();
         // We will now declare 'loop' here but define it INSIDE the callback.
-        let loop; 
-        
+        let loop;
+
         const audioManager = new AudioManager(camera);
         const uiManager = new UIManager(audioManager);
         await uiManager.initialize();
@@ -53,13 +54,16 @@ async function main() {
 
         const colorPuzzle = new ColorPuzzle();
         await colorPuzzle.loadLevels();
-        
+
         const wirePuzzle = new WirePuzzle();
         await wirePuzzle.loadLevels();
-        
+
+        const keypadPuzzle = new KeypadPuzzle(uiManager);
+
+
         // --- UI Manager loading --- 
         uiManager.showWelcomeScreen(async () => {
-            
+
             const savedSettings = localStorage.getItem('gameSettings');
             const settings = savedSettings ? JSON.parse(savedSettings) : { quality: 'medium' };
 
@@ -79,7 +83,7 @@ async function main() {
             uiManager.updateLoadingProgress(40, "Loading mansion model...");
             const mansionLoader = new MansionLoader(scene, physicsManager, settings.quality || 'medium');
             await mansionLoader.loadMansion('/blender/Mansion.glb');
-            
+
             uiManager.updateLoadingProgress(60, "Analyzing walkable areas...");
             await mansionLoader.loadNavMesh(`/blender/NavMesh.glb?v=${Date.now()}`);
 
@@ -110,24 +114,26 @@ async function main() {
 
             const monsterAI = new MonsterAI(monster, camera, mansionLoader.pathfinding, scene, audioManager);
             monster.visible = false;
-            
+
             uiManager.updateLoadingProgress(85, "Preparing your escape...");
-            const controls = new FirstPersonControls(camera, renderer.domElement, physicsManager, { colorPuzzle, wirePuzzle }, monsterAI, mansionLoader);
+            const controls = new FirstPersonControls(camera, renderer.domElement, physicsManager, { colorPuzzle, wirePuzzle, keypadPuzzle }, monsterAI, mansionLoader);
             uiManager.setControls(controls);
             const flashlight = new ImprovedFlashlight(camera, scene);
             // Pass the loop to the PauseMenu
-            const pauseMenu = new PauseMenu(renderer, controls, loop); 
-            
+            const pauseMenu = new PauseMenu(renderer, controls, loop);
+
             const gameManager = new GameManager(mansionLoader, camera, scene, uiManager, audioManager, controls);
             const puzzleSystem = new PuzzleSystem(scene, gameManager);
             const interactionSystem = new InteractionSystem(camera, scene, gameManager, uiManager, controls);
-            
-            controls.puzzles = { colorPuzzle, wirePuzzle };
+
+            controls.puzzles = { colorPuzzle, wirePuzzle, keypadPuzzle };
             colorPuzzle.setControls(controls);
             wirePuzzle.setControls(controls);
+            keypadPuzzle.setControls(controls);
 
             puzzleSystem.registerPuzzle('colorPuzzle', colorPuzzle);
             puzzleSystem.registerPuzzle('wirePuzzle', wirePuzzle);
+            puzzleSystem.registerPuzzle('keypadPuzzle', keypadPuzzle);
 
             uiManager.updateLoadingText("Creating minimap...");
             const minimap = new Minimap(scene, camera, mansionLoader, renderer);
@@ -148,14 +154,14 @@ async function main() {
 
             window.gameControls = {
                 camera, scene, flashlight, physicsManager, mansionLoader, gameManager,
-                interactionSystem, puzzleSystem, atmosphere, colorPuzzle, wirePuzzle,
+                interactionSystem, puzzleSystem, atmosphere, colorPuzzle, wirePuzzle, keypadPuzzle,
                 audioManager, monsterAI, narrativeManager, uiManager, minimap,
                 toggleNavMesh: () => mansionLoader.toggleNavMeshVisualizer(),
                 toggleMansion: () => mansionLoader.toggleMansionVisibility(),
                 toggleNavMeshNodes: () => mansionLoader.toggleNavMeshNodesVisualizer(),
                 toggleMinimap: () => minimap.toggle(),
             };
-            
+
             window.game = { mansionLoader, logger };
             logger.log('🔧 Debug controls available in `window.gameControls`.');
             logger.log("庁 To toggle the navigation mesh visualizer, type `gameControls.toggleNavMesh()` in the console.");
@@ -169,7 +175,7 @@ async function main() {
             logger.log('');
 
             uiManager.updateLoadingProgress(95, "Preparing spawn point...");
-            
+
             loop.start();
 
             setTimeout(() => {
@@ -177,7 +183,7 @@ async function main() {
                 logger.log(`📍 Teleported and stabilizing...`);
                 setTimeout(() => {
                     uiManager.updateLoadingProgress(100, "Ready to play!");
-                    setTimeout(async () => { 
+                    setTimeout(async () => {
                         uiManager.hideLoadingScreen();
                         document.body.classList.add('game-active');
                         await narrativeManager.playIntroSequence();

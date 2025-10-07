@@ -25,7 +25,7 @@ export class UIManager {
         await this._loadHTML('src/ui/objectiveTracker/objective-tracker.html', 'objective-tracker-container');
         await this._loadHTML('src/ui/clueScreen/clue-screen.html', 'clue-screen-container');
         await this._loadHTML('src/ui/resultScreen/result-screen.html', 'result-screen-container');
-
+        await this._loadHTML('src/ui/keypad/keypad.html', 'keypad-container');
 
         // Now that the HTML is loaded, cache the elements inside it
         this.uiElements = {
@@ -60,7 +60,8 @@ export class UIManager {
             // Keypad
             keypadContainer: document.getElementById('keypad-container'),
             keypadDisplay: document.getElementById('keypad-display'),
-            keypadButtons: document.querySelectorAll('.keypad-button, #keypad-enter-button'),            
+            keypadButtons: document.querySelectorAll('.keypad-button, #keypad-enter-button'),
+            keypadCloseButton: document.getElementById('keypad-close-button'),       
         };
         
         if (!this.uiElements.welcomeScreen || !this.uiElements.playButton) {
@@ -392,7 +393,7 @@ export class UIManager {
         }
     }
 
-    setupKeypad(onKeyPress) {
+    setupKeypad(onKeyPress, onClose) {
         if (this.uiElements.keypadButtons) {
             this.uiElements.keypadButtons.forEach(button => {
                 button.addEventListener('click', () => {
@@ -400,6 +401,11 @@ export class UIManager {
                 });
             });
         }
-    }    
+        if (this.uiElements.keypadCloseButton) {
+            this.uiElements.keypadCloseButton.addEventListener('click', () => {
+                onClose();
+            });
+        }
+    }  
 }
 

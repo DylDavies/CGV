@@ -57,3 +57,22 @@
 #keypad-enter-button {
     background: #2a5d2a;
 }
+
+/* src/ui/keypad/keypad.css */
+
+#keypad-close-button {
+    background: #5d2a2a;
+    border: 1px solid #888;
+    border-radius: 5px;
+    color: white;
+    cursor: pointer;
+    font-size: 16px;
+    padding: 10px;
+    margin-top: 15px;
+    width: 100%;
+    transition: background-color 0.2s;
+}
+
+#keypad-close-button:hover {
+    background: #7a3a3a;
+}

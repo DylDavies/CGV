@@ -71,6 +71,18 @@ class GameManager {
         this.showWelcomeMessage();
     }
 
+
+    solveSafePuzzle() {
+        this.safePuzzleSolved = true;
+        this.addToInventory({
+            name: 'Entrance Key',
+            type: 'key',
+            id: 'entrance_key',
+            description: 'A key that might open the entrance door.'
+        });
+        this.showHint("You found a key inside the safe!");
+    }
+
     startPhoneRingEvent() {
         console.log("☎️ Starting phone ring event...");
         

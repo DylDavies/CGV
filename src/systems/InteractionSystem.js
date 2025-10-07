@@ -695,14 +695,27 @@ class InteractionSystem {
     }
 
     handleSafeInteraction(safe, userData) {
-        if (userData.solved) {
+        if (this.gameManager.safePuzzleSolved) {
             this.showMessage("The safe is already open.");
             return;
         }
 
-        this.showMessage("There's a note on the safe: 'The old clock holds the key to my secrets.'");
-        
-        this.gameManager.puzzleSystem.startKeypadPuzzle();
+        const keypadPuzzle = window.gameControls.keypadPuzzle;
+        if (keypadPuzzle) {
+            this.controls.freeze();
+            this.currentInteraction = 'keypad_puzzle';
+            keypadPuzzle.show(
+                () => { // onSolve
+                    this.gameManager.solveSafePuzzle();
+                    this.closePuzzleUI();
+                },
+                () => { // onClose
+                    this.closePuzzleUI();
+                }
+            );
+        } else {
+            this.showMessage("The safe is locked by a keypad.");
+        }
     }
 
     handleMirrorInteraction(mirror, userData) {
@@ -1339,25 +1352,36 @@ class InteractionSystem {
         document.getElementById('close-scroll').onclick = () => this.closePuzzleUI();
     }
 
-    closePuzzleUI() {
+     closePuzzleUI() {
         // Hide the color puzzle if it's open
         const colorPuzzle = window.gameControls?.colorPuzzle;
         if (colorPuzzle && colorPuzzle.puzzleContainer.style.display !== 'none') {
             colorPuzzle.hide();
         }
-    
+
+        // Hide the wire puzzle if it's open
+        const wirePuzzle = window.gameControls?.wirePuzzle;
+        if (wirePuzzle && wirePuzzle.container.style.display !== 'none') {
+            wirePuzzle.hide();
+        }
+
+        // Hide the keypad puzzle if it's open
+        if (this.uiManager.uiElements.keypadContainer && this.uiManager.uiElements.keypadContainer.style.display !== 'none') {
+            this.uiManager.hideKeypad();
+        }
+
         // Hide the clue screen if it's open
         const clueScreen = this.uiManager.uiElements.clueScreen;
         if (clueScreen && clueScreen.style.display === 'flex') {
             clueScreen.style.display = 'none';
         }
-    
+
         // Hide the generic dialog used by other puzzles
         this.puzzleUI.style.display = 'none';
-    
+
         // This is now the single, authoritative place where controls are unfrozen.
         if (this.controls) this.controls.unfreeze();
-        this.currentInteraction = null; // This is the line that fixes the interaction lock.
+        this.currentInteraction = null;
     }
 
     updateCrosshair() {
