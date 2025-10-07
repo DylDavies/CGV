@@ -943,16 +943,16 @@ toggleNavMeshNodesVisualizer() {
                 let lightColor, lightIntensity, lightDistance;
                 if (nodeName.includes('chandelier')) {
                     lightColor = 0xffaa55;
-                    lightIntensity = 2.0;
-                    lightDistance = 4;
+                    lightIntensity = 4.0; // Increased from 2.0
+                    lightDistance = 6; // Increased from 4
                 } else if (nodeName.includes('walllamp')) {
                     lightColor = 0xffbb66;
-                    lightIntensity = 1.5;
-                    lightDistance = 3;
+                    lightIntensity = 3.0; // Increased from 1.5
+                    lightDistance = 5; // Increased from 3
                 } else {
                     lightColor = 0xffcc77;
-                    lightIntensity = 1.5;
-                    lightDistance = 4;
+                    lightIntensity = 3.0; // Increased from 1.5
+                    lightDistance = 6; // Increased from 4
                 }
                 const lampLight = new THREE.PointLight(lightColor, lightIntensity, lightDistance, 3);
                 if (nodeName.includes('walllamp')) {
@@ -1052,14 +1052,14 @@ toggleNavMeshNodesVisualizer() {
         fireParticles.position.copy(firePosition);
         fireParticles.raycast = () => {}; // Make fire particles non-raycastable so clicks go through
         this.scene.add(fireParticles);
-        const fireLight = new THREE.PointLight(0xff6600, 4.0, 6, 2);
+        const fireLight = new THREE.PointLight(0xff6600, 8.0, 10, 2); // Increased intensity from 4.0 to 8.0, distance from 6 to 10
         fireLight.position.copy(firePosition);
         this.scene.add(fireLight);
         const fireplaceData = {
             mesh: fireNode,
             particles: fireParticles,
             light: fireLight,
-            baseIntensity: 3.0,
+            baseIntensity: 6.0, // Increased from 3.0
             flickerPhase: Math.random() * Math.PI * 2,
         };
         this.fireplaces.push(fireplaceData);

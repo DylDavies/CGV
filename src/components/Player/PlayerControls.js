@@ -124,11 +124,11 @@ class FirstPersonControls {
                 case 'KeyK': // Temporary key for testing
                     if (window.gameControls && window.gameControls.gameManager) {
                         window.gameControls.gameManager.addToInventory({
-                            name: 'master_bedroom_key',
+                            name: 'S_KeyBehindFire',
                             type: 'key',
-                            id: 'master_bedroom_key'
+                            id: 'S_KeyBehindFire'
                         });
-                        console.log("Testing: Added master_bedroom_key to inventory.");
+                        console.log("Testing: Added S_KeyBehindFire to inventory.");
                     }
                     break;
                 case 'KeyR': // Restart game when dead

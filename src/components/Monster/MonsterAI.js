@@ -61,7 +61,7 @@ class MonsterAI {
         this.lastWander = 0;
         this.isFleeing = false;
         this.fleeTimer = 0;
-        this.fleeDuration = 4000; // 2 seconds in milliseconds
+        this.fleeDuration = 8000; // 8 seconds in milliseconds - increased time before becoming hostile
 
         this.mixer = monsterMesh.mixer;
         this.animations = monsterMesh.animations;
@@ -107,50 +107,8 @@ class MonsterAI {
     }
 
     updateVisuals() {
-        // Performance: Only recreate geometry if pursuit state changed
-        const pursuitStateChanged = this.directPursuit !== this.lastDirectPursuit;
-
-        if (!pursuitStateChanged && this.sightLine) {
-            // Just update positions without recreating geometry
-            const positions = this.sightLine.geometry.attributes.position.array;
-
-            // Update start point (monster)
-            positions[0] = this.monster.position.x;
-            positions[1] = this.monster.position.y;
-            positions[2] = this.monster.position.z;
-
-            // Update end point (player) - tube geometry has multiple segments
-            const lastIndex = positions.length - 3;
-            positions[lastIndex] = this.player.position.x;
-            positions[lastIndex + 1] = this.player.position.y;
-            positions[lastIndex + 2] = this.player.position.z;
-
-            this.sightLine.geometry.attributes.position.needsUpdate = true;
-            return;
-        }
-
-        // Only recreate geometry when pursuit state changes
-        if (this.sightLine) {
-            this.scene.remove(this.sightLine);
-            this.sightLine.geometry.dispose();
-            this.sightLine.material.dispose();
-        }
-
-        const startPoint = this.monster.position.clone();
-        const endPoint = this.player.position.clone();
-        const sightPath = new THREE.LineCurve3(startPoint, endPoint);
-
-        const sightGeometry = new THREE.TubeGeometry(sightPath, 1, 0.02, 8, false);
-        const sightMaterial = new THREE.MeshBasicMaterial({
-            color: this.directPursuit ? 0xff0000 : 0x00ffff
-        });
-
-        this.sightLine = new THREE.Mesh(sightGeometry, sightMaterial);
-        this.scene.add(this.sightLine);
-
-        this.lastDirectPursuit = this.directPursuit;
-
-        // Status element update removed - no longer displaying aggro level
+        // Sight line visualization disabled - no longer showing red/blue lines
+        // This method is kept for potential future debugging needs
     }
 
     spawn() {
