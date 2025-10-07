@@ -480,7 +480,11 @@ class RapierPhysicsManager {
         if (index !== -1) {
             this.physicsBodies.splice(index, 1);
         }
-        this.world.removeRigidBody(body);
+        
+        if (this.world.getRigidBody(body.handle)) {
+            this.world.removeRigidBody(body);
+            console.log(`🧹 Removed physics body (handle: ${body.handle})`);
+        }
     }
 
     // Create a static box body (for walls, floors)

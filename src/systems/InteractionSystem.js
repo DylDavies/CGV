@@ -16,6 +16,10 @@ class InteractionSystem {
         this.currentInteraction = null;
         this.interactionRange = 5; // Maximum interaction distance
 
+        // Performance: Throttle crosshair raycasting
+        this.crosshairUpdateCounter = 0;
+        this.crosshairUpdateInterval = 2; // Update every 2nd frame
+
         this.messageQueue = []; // NEW: A queue for interaction messages.
         this.isMessageVisible = false; // NEW: A flag to check visibility.
         this.isColorPuzzleSolved = false;
@@ -216,6 +220,10 @@ class InteractionSystem {
             fireplace: {
                 prompt: "Press E to inspect the fireplace",
                 handler: this.handleFireplaceInteraction.bind(this)
+            },
+            keypad: {
+                prompt: "Press E to use keypad",
+                handler: this.handleKeypadInteraction.bind(this)
             },
             bucket: {
                 prompt: "Press E to pick up bucket",
@@ -470,30 +478,25 @@ class InteractionSystem {
             }, 50);
         }
     }
+    
     handleDoorInteraction(door, userData) {
-        const doorData = this.gameManager.mansion.doors.find(d => 
-            d.mesh === door || d.mesh === door.parent
-        );
-        
-        if (doorData) {
-            if (doorData.locked) {
-                const requiredKey = doorData.key;
-                if (this.gameManager.hasItem(requiredKey)) {
-                    this.showConfirmation(
-                        `Use ${requiredKey} to unlock door?`,
-                        () => {
-                            this.gameManager.removeFromInventory(requiredKey);
-                            doorData.locked = false;
-                            this.updateDoorVisual(door, false);
-                            this.showMessage("Door unlocked!");
-                        }
-                    );
-                } else {
-                    this.showMessage("This door is locked. You need a key.");
-                }
-            } else {
-                this.showMessage("Door is already unlocked.");
+        if (userData.locked) {
+            if (this.gameManager.hasItem('master_bedroom_key')) {
+                this.showConfirmation("Unlock the master bedroom door?", () => {
+                    userData.locked = false;
+                    this.gameManager.removeFromInventory('master_bedroom_key');
+                    this.showMessage("The door unlocks with a loud click.");
+                    // Animate the door opening right after unlocking
+                    this.animateDoorOpen(door); 
+                });
+            } 
+            else {
+                this.showMessage("The door is locked. You need a key.");
             }
+        } 
+        else {
+            // If the door is not locked, just open it
+            this.animateDoorOpen(door);
         }
     }
 
@@ -511,6 +514,78 @@ class InteractionSystem {
                 }
             });
         }
+    }
+
+    animateDoorOpen(door) {
+        console.log(door);
+        if (door.userData.isOpening || door.userData.isOpen) {
+            this.showMessage("The door is already open.");
+            return;
+        }
+        door.userData.isOpening = true;
+
+        // --- FINAL, ROBUST PIVOT METHOD ---
+
+        // 1. We only set up the pivot ONCE.
+        if (!door.userData.pivot) {
+            // Get the door's size from its bounding box.
+            const box = new THREE.Box3().setFromObject(door);
+            const size = new THREE.Vector3();
+            box.getSize(size);
+
+            // Create an invisible pivot object.
+            const pivot = new THREE.Group();
+            this.scene.add(pivot); // Add the pivot to the main scene.
+
+            // 2. Create an offset vector for the hinge in the door's LOCAL space.
+            // We assume the hinge is on the door's left edge (the -X axis of the door model).
+            const hingeOffset = new THREE.Vector3(-size.x / 2, 0, 0);
+
+            // 3. Apply the door's WORLD rotation to this local offset.
+            hingeOffset.applyQuaternion(door.quaternion);
+
+            // 4. Add the rotated offset to the door's WORLD position.
+            // This gives us the exact world coordinate for the pivot.
+            pivot.position.copy(door.position).add(hingeOffset);
+
+            // 5. Use pivot.attach(door). This is the crucial step. It re-parents the door
+            // to the pivot while maintaining its current world position, rotation, and scale.
+            pivot.attach(door);
+
+            // Store the pivot in the door's data so we don't repeat this setup.
+            door.userData.pivot = pivot;
+        }
+
+        const pivot = door.userData.pivot;
+
+        // 6. Animate the PIVOT's rotation. The door will now swing perfectly.
+        const startRotationY = pivot.rotation.y;
+        const targetRotationY = startRotationY - (Math.PI / 2); // Open 90 degrees inward.
+        const duration = 1500; // 1.5 seconds.
+        const startTime = Date.now();
+
+        const animate = () => {
+            const elapsedTime = Date.now() - startTime;
+            const progress = Math.min(elapsedTime / duration, 1);
+            const easedProgress = 1 - Math.pow(1 - progress, 4); // A smooth ease-out effect.
+
+            // Interpolate the pivot's rotation.
+            pivot.rotation.y = startRotationY + (targetRotationY - startRotationY) * easedProgress;
+
+            if (progress < 1) {
+                requestAnimationFrame(animate);
+            } else {
+                pivot.rotation.y = targetRotationY; // Snap to the final rotation.
+                door.userData.isOpening = false;
+                door.userData.isOpen = true;
+
+                for (const child of door.children) {
+                    this.gameManager.mansion.recalculatePhysicsForObject(child.name);
+                }
+            }
+        };
+
+        requestAnimationFrame(animate);
     }
 
     handleBookInteraction(book, userData) {
@@ -624,18 +699,10 @@ class InteractionSystem {
             this.showMessage("The safe is already open.");
             return;
         }
+
+        this.showMessage("There's a note on the safe: 'The old clock holds the key to my secrets.'");
         
-        this.showCombinationDialog(
-            "Enter 4-digit combination:",
-            (combination) => {
-                if (this.gameManager.mansion.puzzleSystem?.solveCombinationSafe(safe, combination)) {
-                    this.showMessage("Safe opened! You hear something dropping inside.");
-                    userData.solved = true;
-                } else {
-                    this.showMessage("Incorrect combination. Look around for clues.");
-                }
-            }
-        );
+        this.gameManager.puzzleSystem.startKeypadPuzzle();
     }
 
     handleMirrorInteraction(mirror, userData) {
@@ -819,6 +886,17 @@ class InteractionSystem {
             }, 300);
         }, 500);
     }
+
+    handleKeypadInteraction(keypad, userData) {
+        if (this.gameManager.safePuzzleSolved) {
+            this.showMessage("The safe is already open.");
+            return;
+        }
+
+        this.controls.freeze();
+        this.currentInteraction = 'keypad';
+        this.uiManager.showKeypad();
+    } 
 
     showDiaryPage() {
         if (this.controls) this.controls.freeze();
@@ -1435,9 +1513,14 @@ class InteractionSystem {
 
     tick(delta) {
         if (!this.currentInteraction) {
-            this.updateCrosshair();
+            // Performance: Only update crosshair every 2nd frame
+            this.crosshairUpdateCounter++;
+            if (this.crosshairUpdateCounter >= this.crosshairUpdateInterval) {
+                this.updateCrosshair();
+                this.crosshairUpdateCounter = 0;
+            }
         }
-        
+
         this.updateInteractionEffects(delta);
     }
 

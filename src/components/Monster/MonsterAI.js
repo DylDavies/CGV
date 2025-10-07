@@ -33,6 +33,21 @@ class MonsterAI {
         this.statusElement = null;
         this.createVisuals(); // Set up our visuals
 
+        // Performance: Cache previous states to avoid unnecessary updates
+        this.lastDirectPursuit = false;
+        this.lastPathLength = 0;
+
+        // Performance: Raycast throttling
+        this.raycastFrameCounter = 0;
+        this.raycastInterval = 3; // Only raycast every 3rd frame
+        this.lastCanSeePlayer = false;
+        this.cachedObstacles = null; // Cache obstacles array
+
+        // Performance: Cache hiding spots
+        this.cachedHidingSpots = null;
+        this.lastHidingSpotCacheTime = 0;
+        this.hidingSpotCacheDuration = 10000; // Recalculate hiding spots every 10 seconds
+
         // --- REVISED: Aggression System ---
         this.aggressionLevel = 1; // Start at docile
         this.aggressionLevels = {
@@ -92,14 +107,37 @@ class MonsterAI {
     }
 
     updateVisuals() {
+        // Performance: Only recreate geometry if pursuit state changed
+        const pursuitStateChanged = this.directPursuit !== this.lastDirectPursuit;
+
+        if (!pursuitStateChanged && this.sightLine) {
+            // Just update positions without recreating geometry
+            const positions = this.sightLine.geometry.attributes.position.array;
+
+            // Update start point (monster)
+            positions[0] = this.monster.position.x;
+            positions[1] = this.monster.position.y;
+            positions[2] = this.monster.position.z;
+
+            // Update end point (player) - tube geometry has multiple segments
+            const lastIndex = positions.length - 3;
+            positions[lastIndex] = this.player.position.x;
+            positions[lastIndex + 1] = this.player.position.y;
+            positions[lastIndex + 2] = this.player.position.z;
+
+            this.sightLine.geometry.attributes.position.needsUpdate = true;
+            return;
+        }
+
+        // Only recreate geometry when pursuit state changes
         if (this.sightLine) {
             this.scene.remove(this.sightLine);
             this.sightLine.geometry.dispose();
             this.sightLine.material.dispose();
         }
 
-        const startPoint = this.monster.position;
-        const endPoint = this.player.position;
+        const startPoint = this.monster.position.clone();
+        const endPoint = this.player.position.clone();
         const sightPath = new THREE.LineCurve3(startPoint, endPoint);
 
         const sightGeometry = new THREE.TubeGeometry(sightPath, 1, 0.02, 8, false);
@@ -109,6 +147,8 @@ class MonsterAI {
 
         this.sightLine = new THREE.Mesh(sightGeometry, sightMaterial);
         this.scene.add(this.sightLine);
+
+        this.lastDirectPursuit = this.directPursuit;
 
         // Status element update removed - no longer displaying aggro level
     }
@@ -144,47 +184,65 @@ class MonsterAI {
     }
 
     canSeePlayer(fromPosition = this.monster.position) {
+        // Performance: Check distance first (cheap) before raycasting (expensive)
+        const distanceToPlayer = fromPosition.distanceTo(this.player.position);
+        if (distanceToPlayer > this.raycaster.far) {
+            this.lastCanSeePlayer = false;
+            return false;
+        }
+
         if (this.aggressionLevel === 1) {
             const monsterDirection = new THREE.Vector3(0, 0, 1).applyQuaternion(this.monster.quaternion);
             const directionToPlayer = this.player.position.clone().sub(fromPosition).normalize();
-            
+
             if (monsterDirection.dot(directionToPlayer) < 0) {
+                this.lastCanSeePlayer = false;
                 return false;
             }
         }
 
-        const distanceToPlayer = fromPosition.distanceTo(this.player.position);
-        if (distanceToPlayer > this.raycaster.far) {
-            return false;
+        // Performance: Only raycast every 3rd frame, use cached result otherwise
+        this.raycastFrameCounter++;
+        if (this.raycastFrameCounter < this.raycastInterval) {
+            return this.lastCanSeePlayer;
         }
+        this.raycastFrameCounter = 0;
 
         const direction = this.player.position.clone().sub(fromPosition).normalize();
         this.raycaster.set(fromPosition, direction);
 
-        const obstacles = this.scene.children.filter(obj => {
-            return obj !== this.monster && obj !== this.sightLine && obj !== this.pathLine && !obj.name.toLowerCase().includes('monster');
-        });
+        // Performance: Cache obstacles array if not already cached
+        if (!this.cachedObstacles) {
+            this.cachedObstacles = this.scene.children.filter(obj => {
+                return obj !== this.monster && obj !== this.sightLine && obj !== this.pathLine && !obj.name.toLowerCase().includes('monster');
+            });
+        }
 
-        const intersects = this.raycaster.intersectObjects(obstacles, true);
+        const intersects = this.raycaster.intersectObjects(this.cachedObstacles, true);
+        this.lastCanSeePlayer = intersects.length === 0 || intersects[0].distance > distanceToPlayer;
 
-        return intersects.length === 0 || intersects[0].distance > distanceToPlayer;
+        return this.lastCanSeePlayer;
     }
 
     isSpotVisibleToPlayer(spot) {
+        // Performance: Distance check first
         const distanceToSpot = this.player.position.distanceTo(spot);
         if (distanceToSpot > this.raycaster.far) {
             return false;
         }
-    
+
         const direction = spot.clone().sub(this.player.position).normalize();
         this.raycaster.set(this.player.position, direction);
-    
-        const obstacles = this.scene.children.filter(obj => 
-            !obj.name.toLowerCase().includes('monster') && obj !== this.sightLine && obj !== this.pathLine
-        );
-    
-        const intersects = this.raycaster.intersectObjects(obstacles, true);
-    
+
+        // Performance: Use cached obstacles if available
+        if (!this.cachedObstacles) {
+            this.cachedObstacles = this.scene.children.filter(obj =>
+                !obj.name.toLowerCase().includes('monster') && obj !== this.sightLine && obj !== this.pathLine
+            );
+        }
+
+        const intersects = this.raycaster.intersectObjects(this.cachedObstacles, true);
+
         return intersects.length === 0 || intersects[0].distance > distanceToSpot;
     }
     
@@ -455,61 +513,64 @@ class MonsterAI {
 
     findHidingSpot() {
         this.lastPathRecalculation = Date.now();
+        const now = Date.now();
         const groupID = this.pathfinding.getGroup(this.ZONE, this.monster.position, true);
+
+        // Performance: Use cached hiding spots if available and fresh
+        if (this.cachedHidingSpots && (now - this.lastHidingSpotCacheTime < this.hidingSpotCacheDuration)) {
+            // Pick a random cached spot
+            const randomSpot = this.cachedHidingSpots[Math.floor(Math.random() * this.cachedHidingSpots.length)];
+            const closestMonsterNode = this.pathfinding.getClosestNode(this.monster.position, this.ZONE, groupID);
+            const path = this.pathfinding.findPath(closestMonsterNode.centroid, randomSpot, this.ZONE, groupID);
+            if (path) {
+                this.path = path;
+                this.visualizePath();
+            }
+            return;
+        }
+
+        // Recalculate hiding spots (expensive operation)
         const allNodes = this.pathfinding.zones[this.ZONE].groups[groupID];
-        
-        let bestSpot = null;
-        let highestScore = -Infinity;
-    
+        const validHidingSpots = [];
+
         const directionToPlayerFromMonster = this.player.position.clone().sub(this.monster.position).normalize();
-    
-        for (const node of allNodes) {
+
+        // Performance: Limit how many nodes we check per recalculation
+        const maxNodesToCheck = Math.min(allNodes.length, 50); // Only check first 50 nodes
+        const stepSize = Math.max(1, Math.floor(allNodes.length / maxNodesToCheck));
+
+        for (let i = 0; i < allNodes.length; i += stepSize) {
+            const node = allNodes[i];
             const spot = node.centroid;
             const distanceToMonster = this.monster.position.distanceTo(spot);
-    
+
             // Filter 1: Reasonable distance
             if (distanceToMonster > 3 && distanceToMonster < 20) {
                 const directionToSpot = spot.clone().sub(this.monster.position).normalize();
                 const pathDot = directionToPlayerFromMonster.dot(directionToSpot);
-    
+
                 // Filter 2: Must move generally away from the player
-                if (pathDot < 0.3) { // Allow for some lateral movement, not just directly away
-                    let score = 0;
-                    
-                    // The #1 priority is that the player cannot see the spot.
-                    if (this.isSpotVisibleToPlayer(spot)) {
-                        continue; // If player can see it, it's not a hiding spot.
-                    }
-    
-                    // Base score for being a valid, hidden spot.
-                    score += 1000;
-    
-                    // Bonus: Can the monster see the player from this hidden spot?
-                    if (this.canSeePlayer(spot)) {
-                        score += 200; // This is a great ambush spot.
-                    }
-                    
-                    // Bonus for being further away from the player's forward direction
-                    const playerDirection = new THREE.Vector3();
-                    this.player.getWorldDirection(playerDirection);
-                    const spotDirectionFromPlayer = spot.clone().sub(this.player.position).normalize();
-                    const fovDot = playerDirection.dot(spotDirectionFromPlayer);
-                    if (fovDot < 0) {
-                        score += Math.abs(fovDot) * 50;
-                    }
-    
-                    // Penalize distance slightly to prefer closer hiding spots
-                    score -= distanceToMonster; 
-                    
-                    if (score > highestScore) {
-                        highestScore = score;
-                        bestSpot = spot;
+                if (pathDot < 0.3) {
+                    // The #1 priority is that the player cannot see the spot
+                    if (!this.isSpotVisibleToPlayer(spot)) {
+                        validHidingSpots.push(spot);
+
+                        // Performance: Early exit once we have enough good spots
+                        if (validHidingSpots.length >= 10) {
+                            break;
+                        }
                     }
                 }
             }
         }
-    
-        if (bestSpot) {
+
+        // Cache the results
+        if (validHidingSpots.length > 0) {
+            this.cachedHidingSpots = validHidingSpots;
+            this.lastHidingSpotCacheTime = now;
+
+            // Pick the first one (they're all good)
+            const bestSpot = validHidingSpots[0];
             const closestMonsterNode = this.pathfinding.getClosestNode(this.monster.position, this.ZONE, groupID);
             const path = this.pathfinding.findPath(closestMonsterNode.centroid, bestSpot, this.ZONE, groupID);
             if (path) {
@@ -520,12 +581,32 @@ class MonsterAI {
     }
 
     visualizePath() {
+        if (!this.path || this.path.length === 0) {
+            if (this.pathLine) {
+                this.pathLine.visible = false;
+            }
+            this.lastPathLength = 0;
+            return;
+        }
+
+        // Performance: Only recreate geometry if path length changed significantly
+        const pathLengthChanged = Math.abs(this.path.length - this.lastPathLength) > 2;
+
+        if (this.pathLine && !pathLengthChanged) {
+            // Just update positions without recreating geometry
+            const points = [this.monster.position.clone(), ...this.path];
+            this.pathLine.geometry.setFromPoints(points);
+            this.pathLine.visible = this.pathVisualizationEnabled;
+            return;
+        }
+
+        // Recreate geometry only when path changes significantly
         if (this.pathLine) {
             this.scene.remove(this.pathLine);
             this.pathLine.geometry.dispose();
             this.pathLine.material.dispose();
         }
-        if (!this.path || this.path.length === 0) return;
+
         const points = [this.monster.position.clone(), ...this.path];
         const geometry = new THREE.BufferGeometry().setFromPoints(points);
         const material = new THREE.LineBasicMaterial({
@@ -533,8 +614,10 @@ class MonsterAI {
             linewidth: 5
         });
         this.pathLine = new THREE.Line(geometry, material);
-        this.pathLine.visible = this.pathVisualizationEnabled; 
+        this.pathLine.visible = this.pathVisualizationEnabled;
         this.scene.add(this.pathLine);
+
+        this.lastPathLength = this.path.length;
     }
 
     tick(delta) {

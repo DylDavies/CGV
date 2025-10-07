@@ -188,10 +188,21 @@ class MansionLoader {
                 node.userData = { type: 'fireplace', interactable: false }; // Not interactable until diary is read
                 console.log(`🔥 Found prop: ${node.name} (Fireplace)`);
             }
+            
             if (node.name === 'S_Bucket001') {
                 this.props.set('bucket', node);
                 node.userData = { type: 'bucket', interactable: false }; // Not interactable until fireplace is inspected
                 console.log(`🪣 Found prop: ${node.name} (Bucket)`);
+            }
+
+            if(node.name === 'S_Door001'){
+                this.props.set('master_bedroom_door', node);
+                node.userData = { 
+                    type: 'door', 
+                    interactable: true,
+                    locked: true // Start the door in a locked state
+                };
+                console.log(`🚪 Found prop: ${node.name} (Master Bedroom Door)`);
             }
             if (node.name === 'S_KeyBehindFire') {
                 this.props.set('key_behind_fire', node);
@@ -776,6 +787,46 @@ class MansionLoader {
         return this.physicsManager.createBoxBody(center, size, quaternion);
     }
 
+    recalculatePhysicsForObject(objectName) {
+        console.log(`🔄 Attempting to recalculate physics for "${objectName}"...`);
+
+        // Step 1: Find the mesh and its associated physics body.
+        const bodyEntry = this.physicsBodies.find(entry => entry.mesh.name === objectName);
+
+        if (!bodyEntry) {
+            console.warn(`[Physics Recalculation] Could not find an object named "${objectName}" with a physics body.`);
+            return;
+        }
+
+        const { mesh, body: oldBody } = bodyEntry;
+
+        // Step 2: Remove the old body from the physics world and our tracking array.
+        this.physicsManager.removeBody(oldBody);
+
+        const index = this.physicsBodies.findIndex(entry => entry.mesh.name === objectName);
+        if (index !== -1) {
+            this.physicsBodies.splice(index, 1);
+        }
+
+        console.log(`   - Old body for "${objectName}" removed.`);
+
+        // Step 3: Create a new physics body using its current transform.
+        // We use the same reliable function we built before.
+        const newBody = this.createPhysicsBodyFromMesh(mesh);
+
+        if (newBody) {
+            // Step 4: Add the new body to our tracking array and the physics manager.
+            // Assign the same userData so debug labels still work.
+            newBody.userData = { name: mesh.name };
+            this.physicsBodies.push({ mesh: mesh, body: newBody });
+            this.physicsManager.addBody(newBody); // Explicitly add to the manager's list.
+            
+            console.log(`   - New body for "${objectName}" created and added successfully.`);
+        } else {
+            console.error(`[Physics Recalculation] Failed to create a new physics body for "${objectName}".`);
+        }
+    }
+
     async loadNavMesh(path) {
         return new Promise((resolve, reject) => {
             const loader = new GLTFLoader();
@@ -1159,16 +1210,25 @@ toggleNavMeshNodesVisualizer() {
         if (playerPosSet) {
             let activeLights = 0;
 
-            const lampDistances = this.lamps.map(lamp => ({
-                lamp,
-                distance: lamp.light.position.distanceTo(playerPos)
-            }));
+            // Performance: Pre-filter lamps within reasonable distance before expensive sort
+            const maxConsiderDistance = 25; // Only consider lamps within 25 units
+            const nearbyLamps = [];
 
-            lampDistances.sort((a, b) => a.distance - b.distance);
-            for (const {
-                    lamp,
-                    distance
-                } of lampDistances) {
+            for (const lamp of this.lamps) {
+                const distance = lamp.light.position.distanceTo(playerPos);
+                // Early skip for far lamps
+                if (distance < maxConsiderDistance) {
+                    nearbyLamps.push({ lamp, distance });
+                } else {
+                    // Far lamps are simply turned off
+                    lamp.light.visible = false;
+                }
+            }
+
+            // Only sort nearby lamps (much smaller array)
+            nearbyLamps.sort((a, b) => a.distance - b.distance);
+
+            for (const { lamp, distance } of nearbyLamps) {
                 if (distance < lamp.light.distance * 2.5 && activeLights < this.maxActiveLights) {
                     lamp.light.visible = true;
 

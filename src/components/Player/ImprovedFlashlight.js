@@ -11,7 +11,7 @@ class ImprovedFlashlight {
         // Battery system
         this.maxBattery = 100;
         this.currentBattery = this.maxBattery;
-        this.batteryDrainRate = 0.3; // Slower drain
+        this.batteryDrainRate = 0; // Slower drain
 
         // Create the flashlight system
         this.createFlashlight();
@@ -24,8 +24,8 @@ class ImprovedFlashlight {
         // Main spotlight with better settings
         this.light = new THREE.SpotLight(
             0xffffff,    // color
-            2,           // intensity
-            30,          // distance
+            4,           // intensity
+            50,          // distance
             Math.PI / 6, // angle (30 degrees)
             0.2,         // penumbra (softer edges)
             1            // decay
