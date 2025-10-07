@@ -523,54 +523,58 @@ class InteractionSystem {
         }
         door.userData.isOpening = true;
 
-        // --- FINALIZED PIVOT METHOD ---
+        // --- FINAL, ROBUST PIVOT METHOD ---
 
+        // 1. We only set up the pivot ONCE.
         if (!door.userData.pivot) {
+            // Get the door's size from its bounding box.
             const box = new THREE.Box3().setFromObject(door);
             const size = new THREE.Vector3();
             box.getSize(size);
 
-            // Create an invisible pivot object
+            // Create an invisible pivot object.
             const pivot = new THREE.Group();
-            this.scene.add(pivot); // Add pivot to the scene
+            this.scene.add(pivot); // Add the pivot to the main scene.
 
-            // 1. Calculate the hinge position in the door's LOCAL space.
-            // We assume the hinge is on the door's left side (negative X).
+            // 2. Create an offset vector for the hinge in the door's LOCAL space.
+            // We assume the hinge is on the door's left edge (the -X axis of the door model).
             const hingeOffset = new THREE.Vector3(-size.x / 2, 0, 0);
 
-            // 2. Convert this local hinge point to its WORLD position.
-            door.localToWorld(hingeOffset);
-            
-            // 3. Set the pivot's position and rotation to match the hinge point and the door's orientation.
-            pivot.position.copy(hingeOffset);
-            pivot.rotation.copy(door.rotation);
+            // 3. Apply the door's WORLD rotation to this local offset.
+            hingeOffset.applyQuaternion(door.quaternion);
 
-            // 4. Attach the door to the pivot. Three.js handles the complex math to keep it in place.
+            // 4. Add the rotated offset to the door's WORLD position.
+            // This gives us the exact world coordinate for the pivot.
+            pivot.position.copy(door.position).add(hingeOffset);
+
+            // 5. Use pivot.attach(door). This is the crucial step. It re-parents the door
+            // to the pivot while maintaining its current world position, rotation, and scale.
             pivot.attach(door);
 
-            // Store the pivot for future use
+            // Store the pivot in the door's data so we don't repeat this setup.
             door.userData.pivot = pivot;
         }
 
         const pivot = door.userData.pivot;
 
-        // Animate the PIVOT's rotation
+        // 6. Animate the PIVOT's rotation. The door will now swing perfectly.
         const startRotationY = pivot.rotation.y;
-        const targetRotationY = startRotationY + (Math.PI / 2); // Open 90 degrees inwards
-        const duration = 1500; // 1.5 seconds
+        const targetRotationY = startRotationY - (Math.PI / 2); // Open 90 degrees inward.
+        const duration = 1500; // 1.5 seconds.
         const startTime = Date.now();
 
         const animate = () => {
             const elapsedTime = Date.now() - startTime;
             const progress = Math.min(elapsedTime / duration, 1);
-            const easedProgress = 1 - Math.pow(1 - progress, 4); // Ease-out quint
+            const easedProgress = 1 - Math.pow(1 - progress, 4); // A smooth ease-out effect.
 
-            // Interpolate the rotation from the start to the target angle
+            // Interpolate the pivot's rotation.
             pivot.rotation.y = startRotationY + (targetRotationY - startRotationY) * easedProgress;
 
             if (progress < 1) {
                 requestAnimationFrame(animate);
             } else {
+                pivot.rotation.y = targetRotationY; // Snap to the final rotation.
                 door.userData.isOpening = false;
                 door.userData.isOpen = true;
             }
