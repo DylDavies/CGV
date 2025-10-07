@@ -1101,16 +1101,25 @@ toggleNavMeshNodesVisualizer() {
         if (playerPosSet) {
             let activeLights = 0;
 
-            const lampDistances = this.lamps.map(lamp => ({
-                lamp,
-                distance: lamp.light.position.distanceTo(playerPos)
-            }));
+            // Performance: Pre-filter lamps within reasonable distance before expensive sort
+            const maxConsiderDistance = 25; // Only consider lamps within 25 units
+            const nearbyLamps = [];
 
-            lampDistances.sort((a, b) => a.distance - b.distance);
-            for (const {
-                    lamp,
-                    distance
-                } of lampDistances) {
+            for (const lamp of this.lamps) {
+                const distance = lamp.light.position.distanceTo(playerPos);
+                // Early skip for far lamps
+                if (distance < maxConsiderDistance) {
+                    nearbyLamps.push({ lamp, distance });
+                } else {
+                    // Far lamps are simply turned off
+                    lamp.light.visible = false;
+                }
+            }
+
+            // Only sort nearby lamps (much smaller array)
+            nearbyLamps.sort((a, b) => a.distance - b.distance);
+
+            for (const { lamp, distance } of nearbyLamps) {
                 if (distance < lamp.light.distance * 2.5 && activeLights < this.maxActiveLights) {
                     lamp.light.visible = true;
 

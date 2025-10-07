@@ -16,6 +16,10 @@ class InteractionSystem {
         this.currentInteraction = null;
         this.interactionRange = 5; // Maximum interaction distance
 
+        // Performance: Throttle crosshair raycasting
+        this.crosshairUpdateCounter = 0;
+        this.crosshairUpdateInterval = 2; // Update every 2nd frame
+
         this.messageQueue = []; // NEW: A queue for interaction messages.
         this.isMessageVisible = false; // NEW: A flag to check visibility.
         this.isColorPuzzleSolved = false;
@@ -1302,9 +1306,14 @@ class InteractionSystem {
 
     tick(delta) {
         if (!this.currentInteraction) {
-            this.updateCrosshair();
+            // Performance: Only update crosshair every 2nd frame
+            this.crosshairUpdateCounter++;
+            if (this.crosshairUpdateCounter >= this.crosshairUpdateInterval) {
+                this.updateCrosshair();
+                this.crosshairUpdateCounter = 0;
+            }
         }
-        
+
         this.updateInteractionEffects(delta);
     }
 

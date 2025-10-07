@@ -8,6 +8,10 @@ class SimpleAtmosphere {
         this.camera = camera;
         this.dustParticles = null;
 
+        // Performance optimization: staggered particle updates
+        this.updateGroup = 0; // Which quarter of particles to update this frame
+        this.groupsPerFrame = 4; // Update 1/4 of particles per frame
+
         // Set quality preset
         this.setQualityPreset(qualityPreset);
 
@@ -91,7 +95,12 @@ class SimpleAtmosphere {
             const positions = this.dustParticles.geometry.attributes.position.array;
             const velocities = this.dustParticles.geometry.attributes.velocity.array;
 
-            for (let i = 0; i < positions.length; i += 3) {
+            // Performance: Only update 1/4 of particles per frame (rotate through groups)
+            const particlesPerGroup = Math.floor(positions.length / (this.groupsPerFrame * 3));
+            const startIndex = this.updateGroup * particlesPerGroup * 3;
+            const endIndex = Math.min(startIndex + particlesPerGroup * 3, positions.length);
+
+            for (let i = startIndex; i < endIndex; i += 3) {
                 // Update positions based on velocity
                 positions[i] += velocities[i];
                 positions[i + 1] += velocities[i + 1];
@@ -110,6 +119,9 @@ class SimpleAtmosphere {
                     positions[i + 2] = (Math.random() - 0.5) * 200;
                 }
             }
+
+            // Rotate to next group for next frame
+            this.updateGroup = (this.updateGroup + 1) % this.groupsPerFrame;
 
             this.dustParticles.geometry.attributes.position.needsUpdate = true;
         }

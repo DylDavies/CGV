@@ -13,6 +13,10 @@ class Minimap {
         this.minimapScene = new THREE.Scene();
         this.minimapScene.background = new THREE.Color(0x000000);
 
+        // Performance optimization: render throttling
+        this.lastRenderTime = 0;
+        this.renderInterval = 100; // Render every 100ms (10 FPS for minimap)
+
         const frustumSize = 40;
         const aspect = 1;
         this.minimapCamera = new THREE.OrthographicCamera(
@@ -285,8 +289,16 @@ class Minimap {
 
     tick() {
         if (!this.enabled) return;
+
+        // Always update player indicator (lightweight operation)
         this.updatePlayerIndicator(this.mainCamera.position);
-        this.render();
+
+        // Performance: Only render minimap every 100ms instead of every frame
+        const now = performance.now();
+        if (now - this.lastRenderTime >= this.renderInterval) {
+            this.render();
+            this.lastRenderTime = now;
+        }
     }
 
     toggle() {
