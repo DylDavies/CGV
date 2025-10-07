@@ -10,16 +10,22 @@ class PauseMenu {
         this.isPaused = false;
         this.menuElement = null;
 
-        // Settings
-        this.settings = {
-            antialiasing: false, // Default off for performance
-            quality: 'medium' // low, medium, high
-        };
+        // Settings - load from localStorage first, then use defaults if not present
+        this.loadSettingsFromStorage();
 
         this.createMenu();
         this.setupControls();
 
-        console.log('⏸️ Pause menu initialized');
+        // Dispatch initial quality change event to ensure all systems sync with loaded settings
+        // This is important because PauseMenu is created after other systems
+        setTimeout(() => {
+            console.log(`⏸️ Dispatching initial quality sync event: ${this.settings.quality}`);
+            window.dispatchEvent(new CustomEvent('qualitychange', {
+                detail: { quality: this.settings.quality }
+            }));
+        }, 100); // Small delay to ensure all systems are ready
+
+        console.log('⏸️ Pause menu initialized with quality:', this.settings.quality);
     }
 
     createMenu() {
@@ -87,10 +93,10 @@ class PauseMenu {
                             <span style="font-weight: bold;">Quality Preset</span>
                         </label>
                         <select id="quality-select" style="width: 100%; padding: 10px; background: #222; color: #fff; border: 1px solid #555; font-size: 14px; font-family: 'Courier New', monospace; cursor: pointer;">
-                            <option value="low">Low (Minimum)</option>
-                            <option value="medium" selected>Medium (Balanced)</option>
-                            <option value="high">High (Recommended)</option>
-                            <option value="ultra">Ultra (Maximum)</option>
+                            <option value="low" ${this.settings.quality === 'low' ? 'selected' : ''}>Low (Minimum)</option>
+                            <option value="medium" ${this.settings.quality === 'medium' ? 'selected' : ''}>Medium (Balanced)</option>
+                            <option value="high" ${this.settings.quality === 'high' ? 'selected' : ''}>High (Recommended)</option>
+                            <option value="ultra" ${this.settings.quality === 'ultra' ? 'selected' : ''}>Ultra (Maximum)</option>
                         </select>
                         <p style="margin: 8px 0 0 0; font-size: 12px; color: #aaa;">
                             Adjusts particles, lights, and effects
@@ -100,7 +106,7 @@ class PauseMenu {
                     <!-- Anti-aliasing -->
                     <div style="background: rgba(0,0,0,0.3); padding: 15px; margin-bottom: 15px; text-align: left; max-width: 400px; margin: 0 auto 15px auto;">
                         <label style="display: flex; align-items: center; cursor: pointer; font-size: 16px;">
-                            <input type="checkbox" id="antialiasing-toggle" style="margin-right: 10px; width: 20px; height: 20px; cursor: pointer;">
+                            <input type="checkbox" id="antialiasing-toggle" style="margin-right: 10px; width: 20px; height: 20px; cursor: pointer;" ${this.settings.antialiasing ? 'checked' : ''}>
                             <span>Anti-aliasing (restart required)</span>
                         </label>
                         <p style="margin: 8px 0 0 30px; font-size: 12px; color: #aaa;">
@@ -176,25 +182,30 @@ class PauseMenu {
         document.getElementById('restart-btn').addEventListener('click', () => this.restart());
 
         // Quality preset selector
-        const qualitySelect = document.getElementById('quality-select');
-        qualitySelect.value = this.settings.quality;
-        qualitySelect.addEventListener('change', (e) => {
-            this.settings.quality = e.target.value;
-            this.saveSettings();
-            this.applyQualitySettings();
-        });
+        const qualitySelect = menuContent.querySelector('#quality-select');
+        qualitySelect.value = this.settings.quality; // Set the initial value
 
         // Anti-aliasing toggle
-        const aaToggle = document.getElementById('antialiasing-toggle');
+        const aaToggle = menuContent.querySelector('#antialiasing-toggle');
         aaToggle.checked = this.settings.antialiasing;
-        aaToggle.addEventListener('change', (e) => {
-            this.settings.antialiasing = e.target.checked;
-            this.saveSettings();
-            this.applySettings();
-        });
+        
+        // Use Event Delegation for the change event.
+        menuContent.addEventListener('change', (e) => {
+            // Check if the event was triggered by our quality select dropdown.
+            if (e.target.id === 'quality-select') {
+                console.log("Quality dropdown changed to:", e.target.value);
+                this.settings.quality = e.target.value;
+                this.saveSettings();
+                this.applyQualitySettings();
+            }
 
-        // Load saved settings
-        this.loadSettings();
+            // Check if the event was triggered by our anti-aliasing toggle.
+            if (e.target.id === 'antialiasing-toggle') {
+                this.settings.antialiasing = e.target.checked;
+                this.saveSettings();
+                this.applySettings();
+            }
+        });
     }
 
     setupControls() {
@@ -289,20 +300,36 @@ class PauseMenu {
 
     saveSettings() {
         localStorage.setItem('gameSettings', JSON.stringify(this.settings));
-        console.log('💾 Settings saved');
+        console.log('💾 Settings saved:', this.settings);
     }
 
-    loadSettings() {
+    loadSettingsFromStorage() {
         const saved = localStorage.getItem('gameSettings');
         if (saved) {
-            this.settings = JSON.parse(saved);
-            // Set default quality if not present
-            if (!this.settings.quality) {
-                this.settings.quality = 'medium';
+            try {
+                this.settings = JSON.parse(saved);
+                // Ensure defaults for missing properties
+                if (!this.settings.quality) {
+                    this.settings.quality = 'medium';
+                }
+                if (this.settings.antialiasing === undefined) {
+                    this.settings.antialiasing = false;
+                }
+                console.log('📂 Settings loaded from localStorage:', this.settings);
+            } catch (e) {
+                console.error('❌ Failed to load settings, using defaults:', e);
+                this.settings = {
+                    antialiasing: false,
+                    quality: 'medium'
+                };
             }
-            document.getElementById('antialiasing-toggle').checked = this.settings.antialiasing;
-            document.getElementById('quality-select').value = this.settings.quality;
-            console.log('📂 Settings loaded:', this.settings);
+        } else {
+            // No saved settings, use defaults
+            this.settings = {
+                antialiasing: false,
+                quality: 'medium'
+            };
+            console.log('📂 No saved settings, using defaults');
         }
     }
 

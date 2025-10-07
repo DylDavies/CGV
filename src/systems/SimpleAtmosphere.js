@@ -19,6 +19,7 @@ class SimpleAtmosphere {
 
         // Listen for quality changes
         window.addEventListener('qualitychange', (e) => {
+            console.log(`✨ SimpleAtmosphere received quality change event: ${e.detail.quality}`);
             this.setQualityPreset(e.detail.quality);
             this.recreateParticleSystem();
         });
@@ -28,10 +29,10 @@ class SimpleAtmosphere {
 
     setQualityPreset(preset) {
         const presets = {
-            low: { dustParticles: 150 },
+            low: { dustParticles: 100 }, // Reduced from 150 for better low-end performance
             medium: { dustParticles: 250 },
             high: { dustParticles: 500 },
-            ultra: { dustParticles: 1000 }
+            ultra: { dustParticles: 1500 } // Increased from 1000 for high-end showcase
         };
 
         const settings = presets[preset] || presets.medium;
