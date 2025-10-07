@@ -4,7 +4,7 @@
         <div class="settings-tabs">
             <button class="tab-btn active" data-tab="controls">Controls</button>
             <button class="tab-btn" data-tab="audio" disabled>Audio</button>
-            <button class="tab-btn" data-tab="video" disabled>Video</button>
+            <button class="tab-btn" data-tab="video">Video</button>
         </div>
         <div class="settings-content">
             <div id="controls-tab" class="tab-content active">
@@ -26,7 +26,35 @@
             <div id="audio-tab" class="tab-content">
                 </div>
             <div id="video-tab" class="tab-content">
+                <h2>Graphics Settings</h2>
+
+                <!-- Quality Preset -->
+                <div class="video-setting">
+                    <label for="quality-select">
+                        <span class="setting-label">Quality Preset</span>
+                    </label>
+                    <select id="quality-select">
+                        <option value="low">Low (Minimum)</option>
+                        <option value="medium" selected>Medium (Balanced)</option>
+                        <option value="high">High (Recommended)</option>
+                        <option value="ultra">Ultra (Maximum)</option>
+                    </select>
+                    <p class="setting-description">
+                        Adjusts particles, lights, and effects
+                    </p>
                 </div>
+
+                <!-- Anti-aliasing -->
+                <div class="video-setting">
+                    <label for="antialiasing-toggle" class="checkbox-label">
+                        <input type="checkbox" id="antialiasing-toggle">
+                        <span>Anti-aliasing (restart required)</span>
+                    </label>
+                    <p class="setting-description">
+                        Smoother edges but lower performance
+                    </p>
+                </div>
+            </div>
         </div>
         <button id="close-settings-btn" class="menu-btn">Back</button>
     </div>

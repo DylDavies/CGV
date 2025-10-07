@@ -3,9 +3,10 @@
 import * as THREE from 'https://unpkg.com/three@0.127.0/build/three.module.js';
 
 class PauseMenu {
-    constructor(renderer, controls) {
+    constructor(renderer, controls, loop) {
         this.renderer = renderer;
         this.controls = controls;
+        this.loop = loop;
         this.isPaused = false;
         this.menuElement = null;
 
@@ -161,7 +162,17 @@ class PauseMenu {
         });
 
         // Setup button handlers
-        document.getElementById('resume-btn').addEventListener('click', () => this.hide());
+        document.getElementById('resume-btn').addEventListener('click', () => {
+            if (!this.canResume) return; // Ignore clicks if not ready
+
+            this.hide();
+            // Small delay before locking pointer (browser requires time between unlock/lock)
+            setTimeout(() => {
+                if (this.controls) {
+                    this.controls.lock();
+                }
+            }, 100);
+        });
         document.getElementById('restart-btn').addEventListener('click', () => this.restart());
 
         // Quality preset selector
@@ -187,32 +198,30 @@ class PauseMenu {
     }
 
     setupControls() {
-        document.addEventListener('keydown', (e) => {
-            if (e.code === 'Escape') {
-                e.preventDefault();
-                e.stopPropagation();
-
-                // If pointer is locked, unlock it first and show pause menu
-                if (document.pointerLockElement) {
-                    document.exitPointerLock();
-                }
-
+        // Listen for pointer lock changes - when ESC is pressed and pointer unlocks, show pause menu
+        document.addEventListener('pointerlockchange', () => {
+            // If pointer was unlocked and we're not already paused, show pause menu
+            if (!document.pointerLockElement && !this.isPaused) {
                 this.show();
             }
         });
 
-        // Handle pointer lock changes - if unlocked outside of pause menu, relock
-        document.addEventListener('pointerlockchange', () => {
-            if (!document.pointerLockElement && !this.isPaused) {
-                // Pointer was unlocked but we're not paused - might be accidental ESC
-                // Don't auto-relock, let the pause menu handle it
+        // Prevent F10 from being caught by pause menu (let physics manager handle it)
+        document.addEventListener('keydown', (e) => {
+            if (e.code === 'F10') {
+                e.stopPropagation();
             }
-        });
+        }, true); // Use capture phase to intercept before other listeners
     }
 
     show() {
         this.isPaused = true;
         this.menuElement.style.display = 'flex';
+
+        // Pause the game loop
+        if (this.loop) {
+            this.loop.pause();
+        }
 
         // Unlock pointer controls and exit pointer lock
         if (this.controls && this.controls.isLocked) {
@@ -224,19 +233,37 @@ class PauseMenu {
             document.exitPointerLock();
         }
 
-        console.log('⏸️ Game paused');
+        // Disable resume button and ESC key for 100ms to let browser process unlock
+        this.canResume = false;
+        const resumeBtn = document.getElementById('resume-btn');
+        if (resumeBtn) {
+            resumeBtn.disabled = true;
+            resumeBtn.style.opacity = '0.5';
+            resumeBtn.style.cursor = 'not-allowed';
+        }
+
+        setTimeout(() => {
+            this.canResume = true;
+            if (resumeBtn) {
+                resumeBtn.disabled = false;
+                resumeBtn.style.opacity = '1';
+                resumeBtn.style.cursor = 'pointer';
+            }
+        }, 1000);
+
+        console.log('⏸️ Pause menu shown');
     }
 
     hide() {
         this.isPaused = false;
         this.menuElement.style.display = 'none';
 
-        // Re-lock pointer controls
-        if (this.controls && !this.controls.isLocked) {
-            this.controls.lock();
+        // Resume the game loop
+        if (this.loop) {
+            this.loop.resume();
         }
 
-        console.log('▶️ Game resumed');
+        console.log('▶️ Pause menu hidden');
     }
 
     toggle() {
