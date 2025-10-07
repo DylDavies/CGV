@@ -226,6 +226,11 @@
       "title": "You",
       "text": "But I'm not alone anymore...",
       "duration": 4000
+    },
+    "escape_front_door": {
+      "type": "objective",
+      "id": "escape_front_door",
+      "description": "Escape through the front door."
     }
   },
   "endings": {

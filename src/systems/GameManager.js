@@ -74,7 +74,7 @@ class GameManager {
         this.showWelcomeMessage();
     }
 
-    solveSafePuzzle() {
+    async solveSafePuzzle() {
         this.safePuzzleSolved = true;
         this.addToInventory({
             name: 'Entrance Key',
@@ -83,6 +83,8 @@ class GameManager {
             description: 'A key that might open the entrance door.'
         });
         this.showHint("You found a key inside the safe!");
+
+        await window.gameControls.narrativeManager.triggerEvent("stage2.escape_front_door");
     }
 
     async showStage1Title() {

@@ -599,16 +599,16 @@ class InteractionSystem {
             // Interpolate the pivot's rotation.
             pivot.rotation.y = startRotationY + (targetRotationY - startRotationY) * easedProgress;
 
+            for (const child of door.children) {
+                this.gameManager.mansion.recalculatePhysicsForObject(child.name);
+            }
+
             if (progress < 1) {
                 requestAnimationFrame(animate);
             } else {
                 pivot.rotation.y = targetRotationY; // Snap to the final rotation.
                 door.userData.isOpening = false;
                 door.userData.isOpen = true;
-
-                for (const child of door.children) {
-                    this.gameManager.mansion.recalculatePhysicsForObject(child.name);
-                }
             }
         };
 
