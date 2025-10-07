@@ -3,11 +3,12 @@ import { Clock } from 'https://unpkg.com/three@0.127.0/build/three.module.js';
 const clock = new Clock();
 
 class Loop {
-  constructor(camera, scene, renderer, stats) {
+  constructor(camera, scene, renderer, stats, labelRenderer = null) {
     this.camera = camera;
     this.scene = scene;
     this.renderer = renderer;
     this.stats = stats;
+    this.labelRenderer = labelRenderer;
     this.updatables = []; // Array of objects with a .tick() method
     this.paused = false;
   }
@@ -37,6 +38,10 @@ class Loop {
 
       try {
         this.renderer.render(this.scene, this.camera);
+
+        if (this.labelRenderer) {
+          this.labelRenderer.render(this.scene, this.camera);
+        }
       } catch (error) {
         console.error("❌ Rendering error detected. This is often caused by an invalid camera or object position (NaN).", error);
         // We stop the loop here to prevent a flood of errors.

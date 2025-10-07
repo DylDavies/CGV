@@ -1,4 +1,7 @@
+// src/main.js
+
 import * as THREE from 'https://unpkg.com/three@0.127.0/build/three.module.js';
+// ... (all your other imports are correct)
 import { createScene } from './components/World/scene.js';
 import { createRenderer } from './systems/Renderer.js';
 import { Resizer } from './systems/Resizer.js';
@@ -21,24 +24,25 @@ import { PauseMenu } from './systems/PauseMenu.js';
 import { AudioManager } from './systems/AudioManager.js';
 import { Minimap } from './systems/Minimap.js';
 import { NarrativeManager } from './systems/NarrativeManager.js';
-import logger from './utils/Logger.js'; // Import logger
+import logger from './utils/Logger.js';
 import RAPIER from 'https://cdn.skypack.dev/@dimforge/rapier3d-compat';
+
 
 async function main() {
     try {
         logger.log('噫 Initializing Project HER...');
-
         await RAPIER.init();
-
         logger.log(`📊 Logger initialized - File logging: ${logger.fileLoggingEnabled ? 'ENABLED' : 'DISABLED'}`);
+        
         const canvas = document.querySelector('#game-canvas');
 
-        // --- Initialize Core & UI Systems ---
+        // --- Initialize Core Systems that EXIST OUTSIDE the loading screen ---
         const scene = createScene();
         const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 50);
         const renderer = createRenderer(canvas);
         const stats = createStats();
-        const loop = new Loop(camera, scene, renderer, stats);
+        // We will now declare 'loop' here but define it INSIDE the callback.
+        let loop; 
         
         const audioManager = new AudioManager(camera);
         const uiManager = new UIManager(audioManager);
@@ -47,7 +51,6 @@ async function main() {
         const narrativeManager = new NarrativeManager();
         await narrativeManager.loadNarrative('public/narrative/narrative.json');
 
-        // --- Initialize Puzzles ---
         const colorPuzzle = new ColorPuzzle();
         await colorPuzzle.loadLevels();
         
@@ -65,7 +68,13 @@ async function main() {
             const atmosphere = new SimpleAtmosphere(scene, camera, settings.quality || 'medium');
 
             uiManager.updateLoadingProgress(25, "Setting up physics...");
+            // Create the physics manager first
             const physicsManager = new RapierPhysicsManager(scene, camera, null);
+
+            // --- START: THE FIX ---
+            // Now that physicsManager exists, we can create the loop and pass the labelRenderer.
+            loop = new Loop(camera, scene, renderer, stats, physicsManager.labelRenderer);
+            // --- END: THE FIX ---
 
             uiManager.updateLoadingProgress(40, "Loading mansion model...");
             const mansionLoader = new MansionLoader(scene, physicsManager, settings.quality || 'medium');
@@ -100,16 +109,15 @@ async function main() {
             scene.add(monster);
 
             const monsterAI = new MonsterAI(monster, camera, mansionLoader.pathfinding, scene, audioManager);
-            // DON'T spawn monster yet - it spawns in stage 2
-            monster.visible = false; // Hide monster initially
+            monster.visible = false;
             
             uiManager.updateLoadingProgress(85, "Preparing your escape...");
             const controls = new FirstPersonControls(camera, renderer.domElement, physicsManager, { colorPuzzle, wirePuzzle }, monsterAI, mansionLoader);
             uiManager.setControls(controls);
             const flashlight = new ImprovedFlashlight(camera, scene);
-            const pauseMenu = new PauseMenu(renderer, controls, loop);
+            // Pass the loop to the PauseMenu
+            const pauseMenu = new PauseMenu(renderer, controls, loop); 
             
-            // --- Initialize Game Logic & Puzzle Systems ---
             const gameManager = new GameManager(mansionLoader, camera, scene, uiManager, audioManager, controls);
             const puzzleSystem = new PuzzleSystem(scene, gameManager);
             const interactionSystem = new InteractionSystem(camera, scene, gameManager, uiManager, controls);
@@ -121,7 +129,6 @@ async function main() {
             puzzleSystem.registerPuzzle('colorPuzzle', colorPuzzle);
             puzzleSystem.registerPuzzle('wirePuzzle', wirePuzzle);
 
-            // --- Initialize Minimap ---
             uiManager.updateLoadingText("Creating minimap...");
             const minimap = new Minimap(scene, camera, mansionLoader, renderer);
 
@@ -143,51 +150,37 @@ async function main() {
                 camera, scene, flashlight, physicsManager, mansionLoader, gameManager,
                 interactionSystem, puzzleSystem, atmosphere, colorPuzzle, wirePuzzle,
                 audioManager, monsterAI, narrativeManager, uiManager, minimap,
-                toggleNavMesh: () => {
-                    mansionLoader.toggleNavMeshVisualizer();
-                },
-                toggleMansion: () => {
-                    mansionLoader.toggleMansionVisibility();
-                },
-                toggleNavMeshNodes: () => {
-                    mansionLoader.toggleNavMeshNodesVisualizer();
-                },
-                toggleMinimap: () => {
-                    minimap.toggle();
-                }
+                toggleNavMesh: () => mansionLoader.toggleNavMeshVisualizer(),
+                toggleMansion: () => mansionLoader.toggleMansionVisibility(),
+                toggleNavMeshNodes: () => mansionLoader.toggleNavMeshNodesVisualizer(),
+                toggleMinimap: () => minimap.toggle(),
             };
-// Also expose logger and mansionLoader for easy access
+            
             window.game = { mansionLoader, logger };
             logger.log('🔧 Debug controls available in `window.gameControls`.');
             logger.log("庁 To toggle the navigation mesh visualizer, type `gameControls.toggleNavMesh()` in the console.");
             logger.log('');
             logger.log('📝 LOGGING COMMANDS:');
-            logger.log('   logger.disable()          - Disable console logging');
-            logger.log('   logger.enable()           - Enable console logging');
-            logger.log('   logger.downloadLogs()     - Download log file');
-            logger.log('   logger.clearBuffer()      - Clear log buffer');
-            logger.log('   logger.getStats()         - View logger stats');
+            logger.log('   logger.disable()       - Disable console logging');
+            logger.log('   logger.enable()        - Enable console logging');
+            logger.log('   logger.downloadLogs()  - Download log file');
+            logger.log('   logger.clearBuffer()   - Clear log buffer');
+            logger.log('   logger.getStats()      - View logger stats');
             logger.log('');
 
             uiManager.updateLoadingProgress(95, "Preparing spawn point...");
-
-            // Start the loop but keep loading screen visible
+            
             loop.start();
 
             setTimeout(() => {
                 physicsManager.teleportTo(spawnPosition);
                 logger.log(`📍 Teleported and stabilizing...`);
-
                 setTimeout(() => {
-                     uiManager.updateLoadingProgress(100, "Ready to play!");
-
+                    uiManager.updateLoadingProgress(100, "Ready to play!");
                     setTimeout(async () => { 
                         uiManager.hideLoadingScreen();
                         document.body.classList.add('game-active');
-
-                        // play narrative sequence
                         await narrativeManager.playIntroSequence();
-                        
                         console.log('✅ Game ready! Click to begin.');
                     }, 500);
                 }, 100);

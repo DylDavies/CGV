@@ -244,44 +244,6 @@ class MansionLoader {
         }
     }
 
-    setupInstancedMeshes() {
-        logger.log('🔄 Creating InstancedMeshes...');
-        const instances = new Map();
-
-        // First, group all meshes by their base name (e.g., "Chair")
-        this.model.traverse((node) => {
-            if (node.isMesh) {
-                const baseName = node.name.split('.')[0]; // "Chair.001" -> "Chair"
-                if (!instances.has(baseName)) {
-                    instances.set(baseName, []);
-                }
-                instances.get(baseName).push(node);
-            }
-        });
-
-        // Now, create InstancedMesh for groups with more than one object
-        for (const [name, meshes] of instances.entries()) {
-            if (meshes.length > 1) {
-                const firstMesh = meshes[0];
-                const geometry = firstMesh.geometry;
-                const material = firstMesh.material;
-                const instancedMesh = new THREE.InstancedMesh(geometry, material, meshes.length);
-
-                // Set the position and rotation for each instance
-                for (let i = 0; i < meshes.length; i++) {
-                    const mesh = meshes[i];
-                    mesh.updateWorldMatrix(true, false);
-                    instancedMesh.setMatrixAt(i, mesh.matrixWorld);
-                    // Hide the original mesh
-                    mesh.visible = false;
-                }
-
-                this.scene.add(instancedMesh);
-                logger.log(`  - Created InstancedMesh for "${name}" with ${meshes.length} instances.`);
-            }
-        }
-    }
-
     setupPageEffects() {
         console.log('✨ Searching for pages to apply glow effect...');
         this.model.traverse((node) => {
@@ -531,60 +493,6 @@ class MansionLoader {
         }
     }
 
-    generatePhysics() {
-        logger.log('⚙️ Generating physics collision bodies...');
-
-        let collisionCount = 0;
-        let skippedCount = 0;
-
-        this.model.traverse((node) => {
-            if (node.isMesh) {
-                const nodeName = node.name.toLowerCase();
-
-                let shouldSkipByHierarchy = false;
-                let currentNode = node;
-                while (currentNode) {
-                    const currentName = currentNode.name.toLowerCase();
-                    if (currentName.includes('nocollision') ||
-                        currentName.includes('door') ||
-                        currentName.includes('opening') ||
-                        currentName.includes('doorway')) {
-                        shouldSkipByHierarchy = true;
-                        break;
-                    }
-                    currentNode = currentNode.parent;
-                }
-
-                if (shouldSkipByHierarchy) {
-                    skippedCount++;
-                    return;
-                }
-
-                const shouldSkip = nodeName.includes('nocollision') ||
-                    nodeName.includes('door') ||
-                    nodeName.includes('opening') ||
-                    nodeName.includes('doorway');
-
-                if (shouldSkip && !nodeName.includes("entrance")) {
-                    skippedCount++;
-                    return;
-                }
-
-                const body = this.createPhysicsBodyFromMesh(node);
-                if (body) {
-                    //this.physicsManager.addBody(body);
-                    this.physicsBodies.push({
-                        mesh: node,
-                        body: body
-                    });
-                    collisionCount++;
-                }
-            }
-        });
-
-        logger.log(`✅ Generated ${collisionCount} physics collision bodies`);
-        logger.log(`🚪 Skipped ${skippedCount} objects (doors, openings, etc.)`);
-    }
 
     hideDebugObjects() {
         logger.log('🔍 Scanning for debug/leftover objects and portraits...');
@@ -618,24 +526,141 @@ class MansionLoader {
         logger.log(`✅ Hidden ${hiddenCount} debug/helper objects and portraits`);
     }
 
-    createPhysicsBodyFromMesh(mesh) {
-        mesh.updateMatrixWorld(true);
-        const box = new THREE.Box3().setFromObject(mesh);
-        if (box.isEmpty()) return null;
-        const center = new THREE.Vector3();
-        box.getCenter(center);
-        const size = new THREE.Vector3();
-        box.getSize(size);
+    generatePhysics() {
+        logger.log('⚙️ Generating physics bodies with integrated visual exclusion logic...');
 
-        const minThickness = 0.01; 
-        if (size.x < minThickness || size.y < minThickness || size.z < minThickness) {
-            // console.warn(`Skipping physics body for "${mesh.name}" due to small size:`, size);
-            return null; // Silently skip creating a body for this object
+        // CRITICAL FIX: Update all world matrices BEFORE creating physics bodies
+        this.model.updateMatrixWorld(true);
+
+        let collisionCount = 0;
+        let skippedCount = 0;
+        let invalidBodies = 0;
+
+        this.model.traverse((node) => {
+            // Only process valid, visible meshes with geometry.
+            if (!node.isMesh || !node.geometry || !node.geometry.attributes.position || node.geometry.attributes.position.count === 0) {
+                return;
+            }
+
+            // --- START: Integrated Exclusion Logic from hideDebugObjects() ---
+            const nodeName = node.name.toLowerCase();
+            const isDebugObject = nodeName.includes('helper') || nodeName.includes('debug') || nodeName.includes('marker') || nodeName.includes('guide') || nodeName.includes('gizmo') || nodeName.includes('temp');
+            const isPortrait = nodeName.includes('portrait') || nodeName.includes('painting') || nodeName.includes('picture') || nodeName.includes('frame');
+            const isDoor = nodeName.includes('door') || nodeName.includes('doors') || nodeName.includes('doorway') || nodeName.includes('opening');
+            const isNoCollision = nodeName.includes('nocollision');
+
+            // Check parent hierarchy for door/nocollision flags
+            let shouldSkipByHierarchy = false;
+            let currentNode = node.parent;
+            while (currentNode) {
+                const currentName = currentNode.name.toLowerCase();
+                if (currentName.includes('door') ||
+                    currentName.includes('doors') ||
+                    currentName.includes('doorway') ||
+                    currentName.includes('opening') ||
+                    currentName.includes('nocollision')) {
+                    shouldSkipByHierarchy = true;
+                    break;
+                }
+                currentNode = currentNode.parent;
+            }
+
+            let hasDebugMaterial = false;
+            if (node.material) {
+                const material = Array.isArray(node.material) ? node.material[0] : node.material;
+                if (material && material.color) {
+                    const color = material.color;
+                    if ((color.r > 0.9 && color.g < 0.1 && color.b < 0.1) ||
+                        (color.g > 0.9 && color.r < 0.1 && color.b < 0.1) ||
+                        (color.b > 0.9 && color.r < 0.1 && color.g < 0.1)) {
+                        hasDebugMaterial = true;
+                    }
+                }
+            }
+
+            // If the object meets any of the exclusion criteria, skip it.
+            if (isDebugObject || hasDebugMaterial || isPortrait || isDoor || isNoCollision || shouldSkipByHierarchy) {
+                skippedCount++;
+                return; // Skip to the next node
+            }
+            // --- END: Integrated Exclusion Logic ---
+
+            // If the mesh passes all checks, create its physics body.
+            const body = this.createPhysicsBodyFromMesh(node);
+            if (body) {
+                // IMPORTANT: Store the mesh name in the body's userData for the debug labels
+                body.userData = { name: node.name };
+                this.physicsBodies.push({ mesh: node, body: body });
+                collisionCount++;
+            } else {
+                // Track bodies that failed to create (likely due to invalid geometry)
+                invalidBodies++;
+            }
+        });
+
+        logger.log(`✅ Generated ${collisionCount} physics bodies.`);
+        logger.log(`🚪 Skipped ${skippedCount} objects based on integrated exclusion rules.`);
+        if (invalidBodies > 0) {
+            logger.log(`⚠️ ${invalidBodies} objects failed physics body creation (invalid geometry or transforms).`);
         }
-        if (isNaN(center.x) || isNaN(center.y) || isNaN(center.z)) return null;
-        if (isNaN(size.x) || isNaN(size.y) || isNaN(size.z)) return null;
-        const body = this.physicsManager.createBoxBody(center, size);
-        return body;
+    }
+
+    createPhysicsBodyFromMesh(mesh) {
+        // Step 1: Get the raw vertex data and ensure the mesh's matrix is up-to-date.
+        const geometry = mesh.geometry;
+        const positionAttribute = geometry.attributes.position;
+
+        // No need to call updateMatrixWorld here - it's already updated in generatePhysics()
+        // mesh.updateMatrixWorld(true);
+
+        // Step 2: Create a list of all vertices transformed into their final WORLD positions.
+        const worldVertices = [];
+        const vertex = new THREE.Vector3();
+        for (let i = 0; i < positionAttribute.count; i++) {
+            vertex.fromBufferAttribute(positionAttribute, i);
+            vertex.applyMatrix4(mesh.matrixWorld);
+            worldVertices.push(vertex.clone());
+        }
+
+        if (worldVertices.length === 0) {
+            return null;
+        }
+
+        // Step 3: From these world-space points, create a new, tight-fitting Box3.
+        const worldAABB = new THREE.Box3().setFromPoints(worldVertices);
+        const center = new THREE.Vector3();
+        worldAABB.getCenter(center);
+
+        // Step 4: Now, we need the rotation. Get it directly from the mesh's world matrix.
+        const quaternion = new THREE.Quaternion();
+        mesh.getWorldQuaternion(quaternion);
+
+        // Step 5: Calculate the LOCAL-space dimensions of the object, aligned with its own rotation axes.
+        const inverseQuaternion = quaternion.clone().invert();
+        const localVertices = worldVertices.map(v => {
+            return v.clone().sub(center).applyQuaternion(inverseQuaternion);
+        });
+        const localAABB = new THREE.Box3().setFromPoints(localVertices);
+
+        const size = new THREE.Vector3();
+        localAABB.getSize(size);
+
+        // --- START: The Final Filter ---
+        // This is the definitive check for invalid, zero-volume meshes.
+        // It will catch any leftover helper objects or empty nodes at the origin.
+        const minValidSize = 0.01; // A reasonable threshold to consider a mesh "real"
+        if (size.x < minValidSize || size.y < minValidSize || size.z < minValidSize) {
+            return null; // Silently skip creating a body for this object.
+        }
+        // --- END: The Final Filter ---
+
+        // DEBUG: Log bodies that are spawning near the origin
+        if (Math.abs(center.x) < 0.1 && Math.abs(center.y) < 0.1 && Math.abs(center.z) < 0.1) {
+            logger.log(`⚠️ Physics body near origin detected: "${mesh.name}" at (${center.x.toFixed(2)}, ${center.y.toFixed(2)}, ${center.z.toFixed(2)})`);
+        }
+
+        // Step 6: Send the perfect, calculated data to Rapier.
+        return this.physicsManager.createBoxBody(center, size, quaternion);
     }
 
     async loadNavMesh(path) {

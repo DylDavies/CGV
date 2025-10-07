@@ -61,6 +61,9 @@ class RapierPhysicsManager {
         this.debugRenderer = null;
         this.debugEnabled = false;
 
+        // Label renderer (for compatibility with Loop.js)
+        this.labelRenderer = null;
+
         // Head bob system - DISABLED
         this.headBob = {
             enabled: false,
@@ -481,29 +484,23 @@ class RapierPhysicsManager {
     }
 
     // Create a static box body (for walls, floors)
-    createBoxBody(position, size) {
-        // Validate inputs
-        if (isNaN(position.x) || isNaN(position.y) || isNaN(position.z)) {
-            console.error('❌ Cannot create box body: Invalid position (NaN)', position);
-            return null;
-        }
-        if (isNaN(size.x) || isNaN(size.y) || isNaN(size.z)) {
-            console.error('❌ Cannot create box body: Invalid size (NaN)', size);
+    createBoxBody(position, size, quaternion) {
+        // This function now simply trusts the data it receives.
+        // All the complex calculations are handled by the MansionLoader.
+
+        // Basic validation
+        if (!position || isNaN(position.x) || !size || isNaN(size.x) || size.x <= 0 || !quaternion || isNaN(quaternion.x)) {
+            console.error('❌ [Rapier] Received invalid transform data. Aborting body creation.');
             return null;
         }
 
-        // Skip flat objects (decals, carpets, etc.)
-        const minThickness = 0.01;
-        if (size.x < minThickness || size.y < minThickness || size.z < minThickness) {
-            return null;
-        }
+        const rigidBodyDesc = RAPIER.RigidBodyDesc.fixed()
+            .setTranslation(position.x, position.y, position.z)
+            .setRotation({ x: quaternion.x, y: quaternion.y, z: quaternion.z, w: quaternion.w });
 
-        const rigidBodyDesc = RAPIER.RigidBodyDesc.fixed().setTranslation(
-            position.x,
-            position.y,
-            position.z
-        );
         const body = this.world.createRigidBody(rigidBodyDesc);
+
+        // Rapier's cuboid collider takes half-extents (half the size)
         const colliderDesc = RAPIER.ColliderDesc.cuboid(size.x / 2, size.y / 2, size.z / 2);
         this.world.createCollider(colliderDesc, body);
 
@@ -654,32 +651,52 @@ class RapierPhysicsManager {
     }
 
     createDebugRenderer() {
-        // Use Rapier's built-in debug renderer
-        const material = new THREE.LineBasicMaterial({
-            color: 0xffffff,
-            vertexColors: true
-        });
-        const geometry = new THREE.BufferGeometry();
-        const lineSegments = new THREE.LineSegments(geometry, material);
+        try {
+            // Use Rapier's built-in debug renderer
+            const material = new THREE.LineBasicMaterial({
+                color: 0xffffff,
+                vertexColors: true,
+                linewidth: 2
+            });
+            const geometry = new THREE.BufferGeometry();
+            const lineSegments = new THREE.LineSegments(geometry, material);
 
-        this.scene.add(lineSegments);
+            // Make sure the debug renderer is visible and renders on top
+            lineSegments.renderOrder = 999;
 
-        this.debugRenderer = {
-            lines: lineSegments,
-            update: () => {
-                const { vertices, colors } = this.world.debugRender();
-                this.debugRenderer.lines.geometry.setAttribute(
-                    'position',
-                    new THREE.BufferAttribute(vertices, 3)
-                );
-                this.debugRenderer.lines.geometry.setAttribute(
-                    'color',
-                    new THREE.BufferAttribute(colors, 4)
-                );
-            }
-        };
+            this.scene.add(lineSegments);
 
-        console.log('🔍 Rapier Debug Renderer created');
+            this.debugRenderer = {
+                lines: lineSegments,
+                update: () => {
+                    try {
+                        const { vertices, colors } = this.world.debugRender();
+
+                        if (vertices && vertices.length > 0) {
+                            this.debugRenderer.lines.geometry.setAttribute(
+                                'position',
+                                new THREE.BufferAttribute(vertices, 3)
+                            );
+                            this.debugRenderer.lines.geometry.setAttribute(
+                                'color',
+                                new THREE.BufferAttribute(colors, 4)
+                            );
+
+                            // Make sure geometry updates
+                            this.debugRenderer.lines.geometry.attributes.position.needsUpdate = true;
+                            this.debugRenderer.lines.geometry.attributes.color.needsUpdate = true;
+                        }
+                    } catch (error) {
+                        console.error('Error updating debug renderer:', error);
+                    }
+                }
+            };
+
+            console.log('🔍 Rapier Debug Renderer created');
+            console.log(`📊 Total physics bodies to visualize: ${this.physicsBodies.length}`);
+        } catch (error) {
+            console.error('❌ Failed to create debug renderer:', error);
+        }
     }
 
     dispose() {
