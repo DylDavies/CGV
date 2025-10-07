@@ -7,19 +7,19 @@ class ImprovedFlashlight {
         this.camera = camera;
         this.scene = scene;
         this.isOn = true;
-        
+
         // Battery system
         this.maxBattery = 100;
         this.currentBattery = this.maxBattery;
         this.batteryDrainRate = 0.3; // Slower drain
-        
+
         // Create the flashlight system
         this.createFlashlight();
         this.setupControls();
-        
+
         console.log('🔦 Improved flashlight initialized');
     }
-    
+
     createFlashlight() {
         // Main spotlight with better settings
         this.light = new THREE.SpotLight(
@@ -123,26 +123,27 @@ class ImprovedFlashlight {
     }
     
     updateLightPosition() {
-        // Get camera's world position and direction
-        const cameraWorldPos = new THREE.Vector3();
-        this.camera.getWorldPosition(cameraWorldPos);
+        // Light comes from camera
+        const lightSourcePos = new THREE.Vector3();
+        this.camera.getWorldPosition(lightSourcePos);
 
-        const cameraWorldDir = new THREE.Vector3();
-        this.camera.getWorldDirection(cameraWorldDir);
+        const lightDirection = new THREE.Vector3();
+        this.camera.getWorldDirection(lightDirection);
 
-        // Position light slightly offset from camera (like holding a flashlight)
+        // Offset slightly (like holding a flashlight)
         const rightOffset = new THREE.Vector3();
-        rightOffset.crossVectors(cameraWorldDir, new THREE.Vector3(0, 1, 0)).normalize();
-        rightOffset.multiplyScalar(0.1); // Smaller offset
+        rightOffset.crossVectors(lightDirection, new THREE.Vector3(0, 1, 0)).normalize();
+        rightOffset.multiplyScalar(0.1);
 
-        // Set light position closer to camera
-        this.light.position.copy(cameraWorldPos);
-        this.light.position.add(rightOffset);
-        this.light.position.y -= 0.1; // Slightly lower than eye level
-        
-        // Set target position (point where we're looking)
-        this.target.position.copy(cameraWorldPos);
-        this.target.position.add(cameraWorldDir.multiplyScalar(10)); // 10 units ahead
+        lightSourcePos.add(rightOffset);
+        lightSourcePos.y -= 0.1; // Slightly lower than eye level
+
+        // Set light position
+        this.light.position.copy(lightSourcePos);
+
+        // Set target position (where light is pointing)
+        this.target.position.copy(lightSourcePos);
+        this.target.position.add(lightDirection.multiplyScalar(10)); // 10 units ahead
     }
     
     rechargeBattery(amount) {

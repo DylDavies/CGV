@@ -51,17 +51,13 @@ class FirstPersonControls {
     }
 
     addEventListeners() {
-        // Click to lock pointer
-        this.domElement.addEventListener('click', () => {
-            if (!this.controls.isLocked) {
-                this.controls.lock();
-            }
-        });
-
         const onKeyDown = (event) => {
-            // Prevent default for movement keys to stop page scrolling - remove KeyP (currently here for testing)
-            if (['KeyW', 'KeyA', 'KeyS', 'KeyD', 'Space', 'ShiftLeft', 'ControlLeft', 'KeyQ', 'KeyE', 'KeyP', 'KeyL'].includes(event.code)) {
-                event.preventDefault();
+            // Prevent default for movement keys to stop page scrolling
+            if (this.controls.isLocked) {
+                const gameKeys = ['KeyW', 'KeyA', 'KeyS', 'KeyD', 'Space', 'ShiftLeft', 'KeyQ', 'KeyE', 'KeyF'];
+                if (gameKeys.includes(event.code)) {
+                    event.preventDefault();
+                }
             }
 
             switch (event.code) {
@@ -82,9 +78,6 @@ class FirstPersonControls {
                     break;
                 case 'ShiftLeft':
                     this.isRunning = true;
-                    break;
-                case 'ControlLeft':
-                    this.isCrouching = true;
                     break;
                 case 'KeyQ':
                     this.flyUp = true;
@@ -151,9 +144,6 @@ class FirstPersonControls {
                 case 'ShiftLeft':
                     this.isRunning = false;
                     break;
-                case 'ControlLeft':
-                    this.isCrouching = false;
-                    break;
                 case 'KeyQ':
                     this.flyUp = false;
                     break;
@@ -162,6 +152,17 @@ class FirstPersonControls {
                     break;
             }
         };
+
+        // Register keydown with capture phase to intercept BEFORE other listeners
+        document.addEventListener('keydown', onKeyDown, true); // Use capture phase!
+        document.addEventListener('keyup', onKeyUp, true); // Use capture phase!
+
+        // Click to lock pointer
+        this.domElement.addEventListener('click', () => {
+            if (!this.controls.isLocked) {
+                this.controls.lock();
+            }
+        });
 
         // Handle pointer lock events
         this.controls.addEventListener('lock', () => {
@@ -173,9 +174,6 @@ class FirstPersonControls {
             console.log('🔓 Pointer unlocked - game controls inactive');
             this.hideStats();
         });
-
-        document.addEventListener('keydown', onKeyDown);
-        document.addEventListener('keyup', onKeyUp);
 
         // Store references for cleanup
         this.onKeyDown = onKeyDown;
@@ -382,7 +380,12 @@ class FirstPersonControls {
 
     unfreeze() {
         this.isFrozen = false;
-        this.controls.lock(); // Re-lock the mouse pointer for gameplay
+        // Small delay before relocking to prevent pause menu from showing
+        setTimeout(() => {
+            if (!this.isFrozen) { // Only lock if still not frozen
+                this.controls.lock();
+            }
+        }, 100);
     }
 
     resetInputs() {
