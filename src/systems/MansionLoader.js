@@ -64,28 +64,44 @@ class MansionLoader {
                 lampUpdateRate: 4,
                 fireplaceUpdateRate: 4,
                 maxVisibleDistance: 12,
-                maxActiveLights: 6
+                maxActiveLights: 6,
+                lampShadows: false,
+                fireplaceShadows: false,
+                maxShadowCasters: 0, // No shadows
+                shadowMapSize: 256
             },
             medium: {
                 fireParticles: 25,
                 lampUpdateRate: 3,
                 fireplaceUpdateRate: 3,
                 maxVisibleDistance: 15,
-                maxActiveLights: 8
+                maxActiveLights: 8,
+                lampShadows: false, // Only chandeliers
+                fireplaceShadows: false, // Too expensive with many lights
+                maxShadowCasters: 2, // Only 2 chandeliers max
+                shadowMapSize: 512
             },
             high: {
                 fireParticles: 50,
                 lampUpdateRate: 2,
                 fireplaceUpdateRate: 2,
                 maxVisibleDistance: 20,
-                maxActiveLights: 12
+                maxActiveLights: 12,
+                lampShadows: false, // Only chandeliers
+                fireplaceShadows: true, // 1-2 fireplaces
+                maxShadowCasters: 4, // 2 chandeliers + 2 fireplaces
+                shadowMapSize: 512
             },
             ultra: {
                 fireParticles: 100,
                 lampUpdateRate: 1,
                 fireplaceUpdateRate: 1,
                 maxVisibleDistance: 25,
-                maxActiveLights: 15
+                maxActiveLights: 15,
+                lampShadows: true, // Enable all lamp shadows on ultra
+                fireplaceShadows: true,
+                maxShadowCasters: 6, // Increased limit but still safe (flashlight + moonlight + 6 lamps = 8 total shadow maps)
+                shadowMapSize: 512 // Reduced to 512 to stay within budget
             }
         };
 
@@ -95,8 +111,22 @@ class MansionLoader {
         this.fireplaceUpdateRate = settings.fireplaceUpdateRate;
         this.maxVisibleDistance = settings.maxVisibleDistance;
         this.maxActiveLights = settings.maxActiveLights;
+        this.lampShadows = settings.lampShadows;
+        this.fireplaceShadows = settings.fireplaceShadows;
+        this.maxShadowCasters = settings.maxShadowCasters;
+        this.shadowMapSize = settings.shadowMapSize;
 
-        logger.log(`🎨 Quality preset "${preset}" applied to MansionLoader`);
+        logger.log(`🎨 Quality preset "${preset}" applied to MansionLoader (lamp shadows: ${this.lampShadows}, fireplace shadows: ${this.fireplaceShadows}, max shadow casters: ${this.maxShadowCasters})`);
+
+        // Update existing lamps if they exist
+        if (this.lamps && this.lamps.length > 0) {
+            this.updateLampShadows();
+        }
+
+        // Update existing fireplaces if they exist
+        if (this.fireplaces && this.fireplaces.length > 0) {
+            this.updateFireplaceShadows();
+        }
     }
 
     async loadMansion(modelPath) {
@@ -220,8 +250,9 @@ class MansionLoader {
             if (node.isMesh) {
 
                 totalMeshes++;
-                node.castShadow = false;
-                node.receiveShadow = false;
+                // Enable shadows for all mansion objects
+                node.castShadow = true;
+                node.receiveShadow = true;
                 node.frustumCulled = true;
 
                 if (node.material) {
@@ -491,7 +522,18 @@ class MansionLoader {
     }
 
     tick(delta, cameraPosition) {
-        if (cameraPosition) this.updateOcclusionCulling(cameraPosition);
+        if (cameraPosition) {
+            this.updateOcclusionCulling(cameraPosition);
+
+            // Only update shadows if player has moved significantly (optimization)
+            const hasPlayerMoved = !this.lastShadowUpdatePos ||
+                this.lastShadowUpdatePos.distanceTo(cameraPosition) > 2.0; // Update every 2 units of movement
+
+            if (hasPlayerMoved) {
+                this.updateLampShadows();
+                this.lastShadowUpdatePos = cameraPosition.clone();
+            }
+        }
         if (this.lampsEnabled) this.updateLampFlickering(delta);
         if (this.fireplacesEnabled) this.updateFireplaces(delta);
         this.updatePageGlow();
@@ -524,27 +566,41 @@ class MansionLoader {
     }
 
     optimizeMaterial(material) {
-        // Optimize the material without changing its appearance
-        
+        // Optimize the material AND enhance visual quality for horror atmosphere
+
         // Set precision to medium for better performance
         material.precision = 'mediump';
-        
+
         // Disable features that hurt performance if not needed
         material.flatShading = false;
-        
-        // For MeshStandardMaterial or MeshPhysicalMaterial, reduce expensive features
+
+        // For MeshStandardMaterial or MeshPhysicalMaterial, enhance depth and contrast
         if (material.isMeshStandardMaterial || material.isMeshPhysicalMaterial) {
-            // Reduce roughness/metalness if very high (won't be noticeable)
+            // Enhance shadow reception by adjusting roughness for more pronounced shadows
             if (material.roughness !== undefined && material.roughness > 0.95) {
                 material.roughness = 1;
+            } else if (material.roughness !== undefined) {
+                // Increase roughness slightly for better shadow definition
+                material.roughness = Math.min(1.0, material.roughness * 1.1);
             }
+
             if (material.metalness !== undefined && material.metalness < 0.05) {
                 material.metalness = 0;
             }
-            
+
             // Disable expensive features if not being used
             if (!material.envMap) {
                 material.envMapIntensity = 0;
+            }
+
+            // Ensure proper encoding for tone mapping
+            if (material.map) {
+                material.map.encoding = THREE.sRGBEncoding;
+            }
+
+            // Enhance shadow darkness by reducing ambient occlusion if present
+            if (material.aoMapIntensity !== undefined) {
+                material.aoMapIntensity = Math.min(1.0, material.aoMapIntensity * 1.3);
             }
         }
         material.needsUpdate = true;
@@ -943,18 +999,19 @@ toggleNavMeshNodesVisualizer() {
                 let lightColor, lightIntensity, lightDistance;
                 if (nodeName.includes('chandelier')) {
                     lightColor = 0xffaa55;
-                    lightIntensity = 4.0; // Increased from 2.0
-                    lightDistance = 6; // Increased from 4
+                    lightIntensity = 2.5; // Reduced from 4.0 to 2.5
+                    lightDistance = 6;
                 } else if (nodeName.includes('walllamp')) {
                     lightColor = 0xffbb66;
-                    lightIntensity = 3.0; // Increased from 1.5
-                    lightDistance = 5; // Increased from 3
+                    lightIntensity = 1.8; // Reduced from 3.0 to 1.8
+                    lightDistance = 5;
                 } else {
                     lightColor = 0xffcc77;
-                    lightIntensity = 3.0; // Increased from 1.5
-                    lightDistance = 6; // Increased from 4
+                    lightIntensity = 1.8; // Reduced from 3.0 to 1.8
+                    lightDistance = 6;
                 }
                 const lampLight = new THREE.PointLight(lightColor, lightIntensity, lightDistance, 3);
+
                 if (nodeName.includes('walllamp')) {
                     const worldQuaternion = new THREE.Quaternion();
                     node.getWorldQuaternion(worldQuaternion);
@@ -973,7 +1030,20 @@ toggleNavMeshNodesVisualizer() {
                 } else {
                     lampLight.position.copy(lampPosition);
                 }
-                lampLight.castShadow = false;
+
+                // Enable shadow casting based on quality settings with extreme shadows
+                const isChandelier = nodeName.includes('chandelier');
+                // Chandeliers always cast shadows in medium+, all lamps in high+
+                lampLight.castShadow = isChandelier || this.lampShadows;
+                if (lampLight.castShadow) {
+                    lampLight.shadow.mapSize.width = this.shadowMapSize;
+                    lampLight.shadow.mapSize.height = this.shadowMapSize;
+                    lampLight.shadow.camera.near = 0.5;
+                    lampLight.shadow.camera.far = lightDistance;
+                    lampLight.shadow.bias = -0.0001; // Reduced for sharper shadows
+                    lampLight.shadow.normalBias = 0; // No normal bias for extreme contrast
+                    lampLight.shadow.radius = 0.5; // Sharp shadows for horror atmosphere
+                }
 
                 // CRITICAL FIX: Start with light visible!
                 lampLight.visible = true;
@@ -1052,14 +1122,27 @@ toggleNavMeshNodesVisualizer() {
         fireParticles.position.copy(firePosition);
         fireParticles.raycast = () => {}; // Make fire particles non-raycastable so clicks go through
         this.scene.add(fireParticles);
-        const fireLight = new THREE.PointLight(0xff6600, 8.0, 10, 2); // Increased intensity from 4.0 to 8.0, distance from 6 to 10
+        const fireLight = new THREE.PointLight(0xff6600, 4.0, 10, 2); // Reduced intensity from 8.0 to 4.0 for less brightness
         fireLight.position.copy(firePosition);
+
+        // Enable shadow casting for fireplace with extreme flickering shadows
+        fireLight.castShadow = this.fireplaceShadows;
+        if (fireLight.castShadow) {
+            fireLight.shadow.mapSize.width = this.shadowMapSize;
+            fireLight.shadow.mapSize.height = this.shadowMapSize;
+            fireLight.shadow.camera.near = 0.5;
+            fireLight.shadow.camera.far = 10;
+            fireLight.shadow.bias = -0.0001; // Reduced for sharper, more dramatic shadows
+            fireLight.shadow.normalBias = 0; // No normal bias for extreme contrast
+            fireLight.shadow.radius = 0.3; // Very sharp shadows that flicker with the fire
+        }
+
         this.scene.add(fireLight);
         const fireplaceData = {
             mesh: fireNode,
             particles: fireParticles,
             light: fireLight,
-            baseIntensity: 6.0, // Increased from 3.0
+            baseIntensity: 3.5, // Reduced from 6.0 to 3.5 for less brightness
             flickerPhase: Math.random() * Math.PI * 2,
         };
         this.fireplaces.push(fireplaceData);
@@ -1373,6 +1456,110 @@ toggleNavMeshNodesVisualizer() {
     toggleFireplaces() {
         this.setFireplacesEnabled(!this.fireplacesEnabled);
         return this.fireplacesEnabled;
+    }
+
+    updateLampShadows() {
+        //logger.log(`💡 Updating lamp shadows (lampShadows: ${this.lampShadows}, maxShadowCasters: ${this.maxShadowCasters}, shadowMapSize: ${this.shadowMapSize})`);
+
+        // Count shadow casters (reserve some for fireplaces)
+        let shadowCasterCount = 0;
+        const maxLampShadows = Math.max(0, this.maxShadowCasters - (this.fireplaceShadows ? 2 : 0));
+
+        // First pass: disable all
+        for (const lamp of this.lamps) {
+            lamp.light.castShadow = false;
+        }
+
+        // If we have a player position, prioritize nearby lamps
+        if (this.playerPosition && this.playerPosition.length() > 0.1) {
+            // Create array of lamps with distances
+            const lampsWithDistance = this.lamps.map(lamp => ({
+                lamp: lamp,
+                distance: lamp.light.position.distanceTo(this.playerPosition),
+                isChandelier: lamp.type === 'chandelier'
+            }));
+
+            // Sort by priority: chandeliers first, then by distance
+            lampsWithDistance.sort((a, b) => {
+                if (a.isChandelier && !b.isChandelier) return -1;
+                if (!a.isChandelier && b.isChandelier) return 1;
+                return a.distance - b.distance;
+            });
+
+            // Enable shadows for closest/priority lamps
+            for (const item of lampsWithDistance) {
+                const shouldCastShadow = (item.isChandelier || this.lampShadows) && shadowCasterCount < maxLampShadows;
+
+                if (shouldCastShadow) {
+                    item.lamp.light.castShadow = true;
+                    item.lamp.light.shadow.mapSize.width = this.shadowMapSize;
+                    item.lamp.light.shadow.mapSize.height = this.shadowMapSize;
+                    item.lamp.light.shadow.needsUpdate = true;
+                    shadowCasterCount++;
+                }
+            }
+        } else {
+            // No player position, use simple priority (chandeliers first)
+            for (const lamp of this.lamps) {
+                const isChandelier = lamp.type === 'chandelier';
+                const shouldCastShadow = (isChandelier || this.lampShadows) && shadowCasterCount < maxLampShadows;
+
+                if (shouldCastShadow) {
+                    lamp.light.castShadow = true;
+                    lamp.light.shadow.mapSize.width = this.shadowMapSize;
+                    lamp.light.shadow.mapSize.height = this.shadowMapSize;
+                    lamp.light.shadow.needsUpdate = true;
+                    shadowCasterCount++;
+                }
+            }
+        }
+        //logger.log(`✅ Updated lamp shadows: ${shadowCasterCount} shadow casters enabled out of ${this.lamps.length} lamps`);
+    }
+
+    updateFireplaceShadows() {
+        logger.log(`🔥 Updating fireplace shadows (fireplaceShadows: ${this.fireplaceShadows}, shadowMapSize: ${this.shadowMapSize})`);
+
+        let shadowCasterCount = 0;
+        const maxFireplaceShadows = Math.min(2, this.maxShadowCasters); // Max 2 fireplace shadows
+
+        // If we have a player position, prioritize nearby fireplaces
+        if (this.playerPosition && this.playerPosition.length() > 0.1) {
+            // Create array with distances
+            const fireplacesWithDistance = this.fireplaces.map(fireplace => ({
+                fireplace: fireplace,
+                distance: fireplace.light.position.distanceTo(this.playerPosition)
+            }));
+
+            // Sort by distance (closest first)
+            fireplacesWithDistance.sort((a, b) => a.distance - b.distance);
+
+            // Enable shadows for closest fireplaces
+            for (const item of fireplacesWithDistance) {
+                const shouldCastShadow = this.fireplaceShadows && shadowCasterCount < maxFireplaceShadows;
+
+                item.fireplace.light.castShadow = shouldCastShadow;
+                if (shouldCastShadow) {
+                    item.fireplace.light.shadow.mapSize.width = this.shadowMapSize;
+                    item.fireplace.light.shadow.mapSize.height = this.shadowMapSize;
+                    item.fireplace.light.shadow.needsUpdate = true;
+                    shadowCasterCount++;
+                }
+            }
+        } else {
+            // No player position, use simple order
+            for (const fireplace of this.fireplaces) {
+                const shouldCastShadow = this.fireplaceShadows && shadowCasterCount < maxFireplaceShadows;
+
+                fireplace.light.castShadow = shouldCastShadow;
+                if (shouldCastShadow) {
+                    fireplace.light.shadow.mapSize.width = this.shadowMapSize;
+                    fireplace.light.shadow.mapSize.height = this.shadowMapSize;
+                    fireplace.light.shadow.needsUpdate = true;
+                    shadowCasterCount++;
+                }
+            }
+        }
+        logger.log(`✅ Updated fireplace shadows: ${shadowCasterCount} shadow casters enabled out of ${this.fireplaces.length} fireplaces`);
     }
     getDebugInfo() {
         const activeLamps = this.lamps.filter(l => l.light.visible).length;

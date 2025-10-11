@@ -29,6 +29,9 @@ class RapierPhysicsManager {
         const colliderDesc = RAPIER.ColliderDesc.capsule(capsuleHalfHeight, this.playerRadius);
         this.playerCollider = this.world.createCollider(colliderDesc, this.playerBody);
 
+        // Create visual player mesh for shadow casting (invisible but casts shadows)
+        this.createPlayerShadowMesh();
+
         // Character controller - less smooth for more realistic feel
         this.characterController = this.world.createCharacterController(0.02);
         this.characterController.enableAutostep(0.3, 0.2, true); // Reduced for less smooth stairs
@@ -96,6 +99,83 @@ class RapierPhysicsManager {
 
         this.setupDevControls();
         console.log('🔧 RapierPhysicsManager initialized with full feature parity');
+    }
+
+    createPlayerShadowMesh() {
+        // Create a capsule-shaped mesh that represents the player for shadow casting
+        // The mesh is invisible but casts shadows
+
+        // Create cylinder for body
+        const cylinderHeight = this.playerHeight - (this.playerRadius * 2);
+        const bodyGeometry = new THREE.CylinderGeometry(
+            this.playerRadius,     // top radius
+            this.playerRadius,     // bottom radius
+            cylinderHeight,        // height
+            8                      // segments (low for performance)
+        );
+
+        // Create top sphere cap
+        const topSphereGeometry = new THREE.SphereGeometry(
+            this.playerRadius,
+            8,  // width segments
+            8   // height segments
+        );
+
+        // Create bottom sphere cap
+        const bottomSphereGeometry = new THREE.SphereGeometry(
+            this.playerRadius,
+            8,
+            8
+        );
+
+        // Material: invisible but casts shadows
+        const shadowMaterial = new THREE.MeshStandardMaterial({
+            color: 0x000000,
+            transparent: true,
+            opacity: 0,  // Completely invisible
+            shadowSide: THREE.DoubleSide
+        });
+
+        // Create meshes
+        this.playerShadowBody = new THREE.Mesh(bodyGeometry, shadowMaterial);
+        this.playerShadowTop = new THREE.Mesh(topSphereGeometry, shadowMaterial);
+        this.playerShadowBottom = new THREE.Mesh(bottomSphereGeometry, shadowMaterial);
+
+        // Position the caps
+        this.playerShadowTop.position.y = cylinderHeight / 2;
+        this.playerShadowBottom.position.y = -cylinderHeight / 2;
+
+        // Group them together
+        this.playerShadowMesh = new THREE.Group();
+        this.playerShadowMesh.add(this.playerShadowBody);
+        this.playerShadowMesh.add(this.playerShadowTop);
+        this.playerShadowMesh.add(this.playerShadowBottom);
+
+        // Enable shadow casting for all parts
+        this.playerShadowBody.castShadow = true;
+        this.playerShadowBody.receiveShadow = false;
+        this.playerShadowTop.castShadow = true;
+        this.playerShadowTop.receiveShadow = false;
+        this.playerShadowBottom.castShadow = true;
+        this.playerShadowBottom.receiveShadow = false;
+
+        // Disable frustum culling to ensure shadows are always cast
+        this.playerShadowBody.frustumCulled = false;
+        this.playerShadowTop.frustumCulled = false;
+        this.playerShadowBottom.frustumCulled = false;
+
+        // Make meshes non-raycastable so they don't interfere with interactions
+        this.playerShadowMesh.traverse((child) => {
+            if (child.isMesh) {
+                child.raycast = () => {}; // Disable raycasting
+            }
+        });
+
+        // Add to scene (default layer 0, no layer complexity needed)
+        // Flashlight's shadow.camera.near=2.5 will exclude it, environmental lights will cast it
+        this.scene.add(this.playerShadowMesh);
+
+        console.log('👤 Player shadow mesh created (invisible, flashlight excluded via near plane)');
     }
 
     updateDevMode() {
@@ -406,6 +486,13 @@ class RapierPhysicsManager {
         this.camera.position.x = position.x;
         this.camera.position.y = position.y + this.playerHeight / 2;
         this.camera.position.z = position.z;
+
+        // Update player shadow mesh position to match physics body
+        if (this.playerShadowMesh) {
+            this.playerShadowMesh.position.x = position.x;
+            this.playerShadowMesh.position.y = position.y;
+            this.playerShadowMesh.position.z = position.z;
+        }
     }
 
     updateHeadBob(delta) {
@@ -709,6 +796,16 @@ class RapierPhysicsManager {
             if (this.scene) {
                 this.scene.remove(this.debugRenderer.lines);
             }
+        }
+
+        // Clean up player shadow mesh
+        if (this.playerShadowMesh) {
+            this.scene.remove(this.playerShadowMesh);
+            this.playerShadowBody.geometry.dispose();
+            this.playerShadowTop.geometry.dispose();
+            this.playerShadowBottom.geometry.dispose();
+            this.playerShadowBody.material.dispose();
+            console.log('🧹 Player shadow mesh disposed');
         }
 
         // Clean up physics world

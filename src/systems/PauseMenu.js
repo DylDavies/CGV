@@ -99,7 +99,7 @@ class PauseMenu {
                             <option value="ultra" ${this.settings.quality === 'ultra' ? 'selected' : ''}>Ultra (Maximum)</option>
                         </select>
                         <p style="margin: 8px 0 0 0; font-size: 12px; color: #aaa;">
-                            Adjusts particles, lights, and effects
+                            Adjusts shadows, particles, lights, and effects
                         </p>
                     </div>
 
@@ -400,28 +400,36 @@ class PauseMenu {
                 fireParticles: 10, // Reduced from 15
                 lampUpdateRate: 6, // Reduced from 4 (update less frequently)
                 fireplaceUpdateRate: 6, // Reduced from 4
-                maxVisibleDistance: 10 // Reduced from 12 for less rendering
+                maxVisibleDistance: 10, // Reduced from 12 for less rendering
+                shadows: false, // Shadows disabled for performance
+                shadowMapSize: 512
             },
             medium: {
                 dustParticles: 250,
                 fireParticles: 25,
                 lampUpdateRate: 3, // Update every 3rd frame
                 fireplaceUpdateRate: 3,
-                maxVisibleDistance: 15
+                maxVisibleDistance: 15,
+                shadows: true, // Basic shadows enabled
+                shadowMapSize: 1024
             },
             high: {
                 dustParticles: 500,
                 fireParticles: 50,
                 lampUpdateRate: 2, // Update every 2nd frame
                 fireplaceUpdateRate: 2,
-                maxVisibleDistance: 20
+                maxVisibleDistance: 20,
+                shadows: true, // High-quality shadows
+                shadowMapSize: 2048
             },
             ultra: {
                 dustParticles: 1500, // Increased from 1000 for high-end showcase
                 fireParticles: 150, // Increased from 100
                 lampUpdateRate: 1, // Update every frame
                 fireplaceUpdateRate: 1,
-                maxVisibleDistance: 30 // Increased from 25 for more visible rooms
+                maxVisibleDistance: 30, // Increased from 25 for more visible rooms
+                shadows: true, // Ultra-quality shadows
+                shadowMapSize: 4096
             }
         };
 

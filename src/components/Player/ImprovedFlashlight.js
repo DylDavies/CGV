@@ -21,18 +21,25 @@ class ImprovedFlashlight {
     }
 
     createFlashlight() {
-        // Main spotlight with better settings
+        // Main spotlight - narrow focused beam like a real flashlight
         this.light = new THREE.SpotLight(
             0xffffff,    // color
-            8,           // intensity - Increased from 4 to 8
-            70,          // distance - Increased from 50 to 70
-            Math.PI / 5, // angle (36 degrees) - Increased from PI/6 (30 degrees)
-            0.2,         // penumbra (softer edges)
-            1            // decay
+            2,           // intensity - fixed intensity (no dynamic updates to prevent lag)
+            40,          // distance - shorter for more focused beam
+            Math.PI / 8, // angle (22.5 degrees) - much narrower beam
+            0.3,         // penumbra (softer edges at boundary)
+            2            // decay (faster falloff for more focused beam)
         );
 
-        // Disable shadows for performance (prevents lag spikes when toggling)
-        this.light.castShadow = false;
+        // Enable shadow casting (optimized resolution) with extreme shadows
+        this.light.castShadow = true;
+        this.light.shadow.mapSize.width = 1024;
+        this.light.shadow.mapSize.height = 1024;
+        this.light.shadow.camera.near = 1.4;  // Increased from 0.5 to exclude player shadow at feet
+        this.light.shadow.camera.far = 40;
+        this.light.shadow.bias = -0.00005;
+        this.light.shadow.normalBias = 0;
+        this.light.shadow.radius = 0.5;
 
         // IMPORTANT: Add light to scene, not camera
         this.scene.add(this.light);
@@ -43,28 +50,31 @@ class ImprovedFlashlight {
         this.scene.add(this.target);
         this.light.target = this.target;
 
-        // Optional: Add a subtle ambient boost when flashlight is on
-        this.ambientBoost = new THREE.AmbientLight(0x222222, 0.4); // Increased from 0x111111, 0.2
-        this.scene.add(this.ambientBoost);
-        
+        // No ambient boost - was causing lag spikes on toggle
+
         // Visual cone helper (for debugging flashlight issues)
         if (false) { // Disabled - flashlight is working properly now
             this.helper = new THREE.SpotLightHelper(this.light);
             this.scene.add(this.helper);
             console.log('🔦 Flashlight helper enabled for debugging');
         }
-        
-        console.log('🔦 Flashlight created in scene');
+
+        console.log('🔦 Flashlight created in scene (narrow focused beam)');
     }
     
     setupControls() {
-        // Flashlight is now always on - no toggle needed
-        // F key functionality removed
+        // F key to toggle flashlight
+        document.addEventListener('keydown', (e) => {
+            if (e.code === 'KeyF') {
+                this.toggle();
+            }
+        });
     }
 
     toggle() {
-        // Flashlight is always on - toggle disabled
-        console.log(`🔦 Flashlight is always ON`);
+        this.isOn = !this.isOn;
+        this.updateVisibility();
+        console.log(`🔦 Flashlight ${this.isOn ? 'ON' : 'OFF'}`);
     }
     
     updateVisibility() {
@@ -73,17 +83,15 @@ class ImprovedFlashlight {
         // Only update if state changed to avoid unnecessary updates
         if (this.light.visible !== shouldBeOn) {
             this.light.visible = shouldBeOn;
-            this.ambientBoost.visible = shouldBeOn;
+            // No ambient boost to toggle - prevents lag spike
         }
 
-        if (shouldBeOn) {
-            this.updateIntensity();
-        }
+        // No dynamic intensity updates - fixed intensity prevents lag
     }
     
     updateIntensity() {
         const batteryRatio = this.currentBattery / this.maxBattery;
-        let intensity = 8 * batteryRatio; // Increased from 2 to 8 to match new base intensity
+        let intensity = 4 * batteryRatio; // Reduced from 8 to 4 for less brightness
 
         // Add flickering when battery is low
         if (this.currentBattery < 20) {
@@ -92,7 +100,7 @@ class ImprovedFlashlight {
         }
 
         this.light.intensity = Math.max(intensity, 0.1);
-        this.ambientBoost.intensity = 0.4 * batteryRatio; // Increased from 0.2 to 0.4
+        this.ambientBoost.intensity = 0.15 * batteryRatio; // Reduced from 0.4 to 0.15
     }
     
     tick(delta) {
@@ -188,9 +196,7 @@ class ImprovedFlashlight {
         if (this.target) {
             this.scene.remove(this.target);
         }
-        if (this.ambientBoost) {
-            this.scene.remove(this.ambientBoost);
-        }
+        // No ambient boost to dispose
         if (this.helper) {
             this.scene.remove(this.helper);
         }
