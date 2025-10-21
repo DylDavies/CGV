@@ -1395,7 +1395,8 @@ class GameManager {
         this.lightsOn = true;
 
         if (this.mansion) {
-            this.mansion.setAllLightsEnabled(true);
+            // Only restore lamps - fuse box doesn't control fireplace
+            this.mansion.setLampsEnabled(true);
         }
 
         this.completeObjective('fix_fuse_box');

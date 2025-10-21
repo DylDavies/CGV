@@ -849,10 +849,10 @@ class InteractionSystem {
             // Complete the escape objective
             this.gameManager.completeObjective('escape_mansion');
 
-            // Turn off the lights
+            // Turn off the lamps (but not fireplace - that stays lit)
             this.gameManager.lightsOn = false;
             if (this.gameManager.mansion) {
-                this.gameManager.mansion.setAllLightsEnabled(false);
+                this.gameManager.mansion.setLampsEnabled(false);
             }
 
             await window.gameControls.narrativeManager.triggerEvent('stage2.lights_out');
