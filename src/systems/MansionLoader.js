@@ -64,28 +64,44 @@ class MansionLoader {
                 lampUpdateRate: 4,
                 fireplaceUpdateRate: 4,
                 maxVisibleDistance: 12,
-                maxActiveLights: 6
+                maxActiveLights: 6,
+                lampShadows: false,
+                fireplaceShadows: false,
+                maxShadowCasters: 0, // No shadows
+                shadowMapSize: 256
             },
             medium: {
                 fireParticles: 25,
                 lampUpdateRate: 3,
                 fireplaceUpdateRate: 3,
                 maxVisibleDistance: 15,
-                maxActiveLights: 8
+                maxActiveLights: 8,
+                lampShadows: false, // Only chandeliers
+                fireplaceShadows: false, // Too expensive with many lights
+                maxShadowCasters: 2, // Only 2 chandeliers max
+                shadowMapSize: 512
             },
             high: {
                 fireParticles: 50,
                 lampUpdateRate: 2,
                 fireplaceUpdateRate: 2,
                 maxVisibleDistance: 20,
-                maxActiveLights: 12
+                maxActiveLights: 12,
+                lampShadows: false, // Only chandeliers
+                fireplaceShadows: true, // 1-2 fireplaces
+                maxShadowCasters: 4, // 2 chandeliers + 2 fireplaces
+                shadowMapSize: 512
             },
             ultra: {
                 fireParticles: 100,
                 lampUpdateRate: 1,
                 fireplaceUpdateRate: 1,
                 maxVisibleDistance: 25,
-                maxActiveLights: 15
+                maxActiveLights: 15,
+                lampShadows: true,
+                fireplaceShadows: true,
+                maxShadowCasters: 6,
+                shadowMapSize: 512
             }
         };
 
@@ -95,8 +111,22 @@ class MansionLoader {
         this.fireplaceUpdateRate = settings.fireplaceUpdateRate;
         this.maxVisibleDistance = settings.maxVisibleDistance;
         this.maxActiveLights = settings.maxActiveLights;
+        this.lampShadows = settings.lampShadows;
+        this.fireplaceShadows = settings.fireplaceShadows;
+        this.maxShadowCasters = settings.maxShadowCasters;
+        this.shadowMapSize = settings.shadowMapSize;
 
-        logger.log(`🎨 Quality preset "${preset}" applied to MansionLoader`);
+        logger.log(`🎨 Quality preset "${preset}" applied to MansionLoader (lamp shadows: ${this.lampShadows}, fireplace shadows: ${this.fireplaceShadows}, max shadow casters: ${this.maxShadowCasters})`);
+
+        // Update existing lamps if they exist
+        if (this.lamps && this.lamps.length > 0) {
+            this.updateLampShadows();
+        }
+
+        // Update existing fireplaces if they exist
+        if (this.fireplaces && this.fireplaces.length > 0) {
+            this.updateFireplaceShadows();
+        }
     }
 
     async loadMansion(modelPath) {
@@ -220,8 +250,9 @@ class MansionLoader {
             if (node.isMesh) {
 
                 totalMeshes++;
-                node.castShadow = false;
-                node.receiveShadow = false;
+                // Enable shadows for all mansion objects
+                node.castShadow = true;
+                node.receiveShadow = true;
                 node.frustumCulled = true;
 
                 if (node.material) {
@@ -300,6 +331,58 @@ class MansionLoader {
                 node.material = node.material.clone();
                 node.material.emissive = new THREE.Color(0xff0000);
                 node.material.emissiveIntensity = 0;
+
+                // Enable shadows for all page meshes (including children)
+                node.traverse((child) => {
+                    if (child.isMesh && child.material) {
+                        const childName = child.name.toLowerCase();
+                        const isSymbol = childName.includes('_symbol') || childName.includes('symbol');
+                        const isBackground = childName.includes('back') || childName.includes('plane') || childName.includes('bg');
+
+                        // Only clone if not already modified
+                        if (!child.material.userData.pageModified) {
+                            child.material = child.material.clone();
+                            child.material.userData.pageModified = true;
+                        }
+
+                        // SMART POLYGON OFFSET SYSTEM
+                        child.material.polygonOffset = true;
+                        if (isSymbol) {
+                            child.material.polygonOffsetFactor = -4.0;
+                            child.material.polygonOffsetUnits = -4.0;
+                        } else if (isBackground) {
+                            child.material.polygonOffsetFactor = -0.5;
+                            child.material.polygonOffsetUnits = -0.5;
+                            child.visible = false;
+                            console.log(`🔧 Hiding background mesh: ${child.name}`);
+                        } else {
+                            child.material.polygonOffsetFactor = -2.0;
+                            child.material.polygonOffsetUnits = -2.0;
+                        }
+
+                        // SHADOW SETTINGS
+                        child.castShadow = true;
+                        child.receiveShadow = !isSymbol; // Symbols don't receive shadows
+
+                        // EMISSIVE FOR PICKUP GLOW (red pulsing when enabled)
+                        if (child.material.emissive) {
+                            child.material.emissive.setHex(0xff0000); // Red for pickup
+                            child.material.emissiveIntensity = 0; // Start at 0, will pulse when enabled
+                        }
+
+                        // PHYSICAL SEPARATION for symbols
+                        if (isSymbol && child.parent) {
+                            const symbolForward = new THREE.Vector3(0, 0, 1);
+                            // Increase separation for symbols that need more space
+                            let separationDistance = 0.04; // Increased from 0.025
+                            if (childName.includes('hand') || childName.includes('eye')) {
+                                separationDistance = 0.06; // Extra separation for problematic symbols
+                            }
+                            child.position.add(symbolForward.multiplyScalar(separationDistance));
+                        }
+                    }
+                });
+
                 this.pages.push(node);
             }
         });
@@ -353,24 +436,59 @@ class MansionLoader {
         const pageObject = this.pages[pageIndex];
 
         pageObject.traverse((node) => {
-        if (node.isMesh) {
-            // Apply the polygon offset fix to all parts of the page
-            node.material = node.material.clone();
-            node.material.polygonOffset = true;
-            node.material.polygonOffsetFactor = -1.0;
-            node.material.polygonOffsetUnits = -1.0;
+        if (node.isMesh && node.material) {
+            const nodeName = node.name.toLowerCase();
+            const isSymbol = nodeName.includes('_symbol') || nodeName.includes('symbol');
+            const isBackground = nodeName.includes('back') || nodeName.includes('plane') || nodeName.includes('bg');
 
-            // --- FIX TO LIFT SYMBOL OFF PAGE ---
-            // Check if the current mesh is a symbol
-            if (node.name.toLowerCase().includes('_symbol')) {
-                // The symbol's "forward" is its local Z-axis
-                const symbolForward = new THREE.Vector3(0, 0, 1); 
-                
-                // Move the symbol slightly along its own forward axis
-                node.position.add(symbolForward.multiplyScalar(0.01));
-                console.log(`🔧 Lifted symbol ${node.name} off its page.`);
+            // Only clone material if we need to modify it
+            // This prevents creating too many material instances
+            if (!node.material.userData.pageModified) {
+                node.material = node.material.clone();
+                node.material.userData.pageModified = true; // Mark as already modified
             }
-            // --- END FIX ---
+
+            // SMART POLYGON OFFSET SYSTEM - Create proper depth layering
+            node.material.polygonOffset = true;
+            if (isSymbol) {
+                node.material.polygonOffsetFactor = -3.0;
+                node.material.polygonOffsetUnits = -3.0;
+            } else if (isBackground) {
+                node.material.polygonOffsetFactor = -0.5;
+                node.material.polygonOffsetUnits = -0.5;
+                node.visible = false;
+                console.log(`🔧 Hiding background mesh: ${node.name}`);
+            } else {
+                node.material.polygonOffsetFactor = -2.0;
+                node.material.polygonOffsetUnits = -2.0;
+            }
+
+            // SHADOW SETTINGS
+            node.castShadow = true;
+            node.receiveShadow = !isSymbol; // Only symbols don't receive shadows
+
+            // EMISSIVE GLOW - Higher for symbols, moderate for pages
+            if (node.material.emissive) {
+                if (isSymbol) {
+                    node.material.emissive.setHex(0x333333);
+                    node.material.emissiveIntensity = 0.6;
+                } else if (!isBackground) {
+                    node.material.emissive.setHex(0x222222);
+                    node.material.emissiveIntensity = 0.4;
+                }
+            }
+
+            // PHYSICAL SEPARATION - Lift symbols more to prevent z-fighting and clipping
+            if (isSymbol) {
+                const symbolForward = new THREE.Vector3(0, 1, 0);
+                // Increase separation for symbols that need more space (hand, eye)
+                let separationDistance = 0.01; // Increased from 0.025
+                if (nodeName == "s_page4_symbol" || nodeName == "s_page5_symbol") {
+                    separationDistance = 0.02; // Extra separation for problematic symbols
+                }
+                node.position.add(symbolForward.multiplyScalar(separationDistance));
+                console.log(`🔧 Lifted symbol ${node.name} off its page (${separationDistance} units)`);
+            }
         }
     });
 
@@ -381,18 +499,20 @@ class MansionLoader {
         const worldQuaternion = new THREE.Quaternion();
         slotObject.getWorldPosition(worldPosition);
         slotObject.getWorldQuaternion(worldQuaternion);
-        
+
         // Apply the world coordinates to the page
         pageObject.position.copy(worldPosition);
         pageObject.quaternion.copy(worldQuaternion);
-        
+
         // Add a small offset along the object's normal to prevent z-fighting with the wall
         const normal = new THREE.Vector3(0, 0, 1).applyQuaternion(pageObject.quaternion);
         pageObject.position.add(normal.multiplyScalar(0.015));
 
-        // Make the page visible again and stop its glow
+        // Make the page visible and turn off the red pulsing glow
         pageObject.visible = true;
-        pageObject.material.emissiveIntensity = 0;
+        // Note: Emissive values already set above in the traverse loop
+        // Symbols: 0x333333 @ 0.6 intensity
+        // Pages: 0x222222 @ 0.4 intensity
 
         // Remove the page from the animation array so it no longer pulses
         this.pages.splice(pageIndex, 1);
@@ -491,7 +611,18 @@ class MansionLoader {
     }
 
     tick(delta, cameraPosition) {
-        if (cameraPosition) this.updateOcclusionCulling(cameraPosition);
+        if (cameraPosition) {
+            this.updateOcclusionCulling(cameraPosition);
+
+            // Only update shadows if player has moved significantly (optimization)
+            const hasPlayerMoved = !this.lastShadowUpdatePos ||
+                this.lastShadowUpdatePos.distanceTo(cameraPosition) > 2.0; // Update every 2 units of movement
+
+            if (hasPlayerMoved) {
+                this.updateLampShadows();
+                this.lastShadowUpdatePos = cameraPosition.clone();
+            }
+        }
         if (this.lampsEnabled) this.updateLampFlickering(delta);
         if (this.fireplacesEnabled) this.updateFireplaces(delta);
         this.updatePageGlow();
@@ -524,27 +655,41 @@ class MansionLoader {
     }
 
     optimizeMaterial(material) {
-        // Optimize the material without changing its appearance
-        
+        // Optimize the material AND enhance visual quality for horror atmosphere
+
         // Set precision to medium for better performance
         material.precision = 'mediump';
-        
+
         // Disable features that hurt performance if not needed
         material.flatShading = false;
-        
-        // For MeshStandardMaterial or MeshPhysicalMaterial, reduce expensive features
+
+        // For MeshStandardMaterial or MeshPhysicalMaterial, enhance depth and contrast
         if (material.isMeshStandardMaterial || material.isMeshPhysicalMaterial) {
-            // Reduce roughness/metalness if very high (won't be noticeable)
+            // Enhance shadow reception by adjusting roughness for more pronounced shadows
             if (material.roughness !== undefined && material.roughness > 0.95) {
                 material.roughness = 1;
+            } else if (material.roughness !== undefined) {
+                // Increase roughness slightly for better shadow definition
+                material.roughness = Math.min(1.0, material.roughness * 1.1);
             }
+
             if (material.metalness !== undefined && material.metalness < 0.05) {
                 material.metalness = 0;
             }
-            
+
             // Disable expensive features if not being used
             if (!material.envMap) {
                 material.envMapIntensity = 0;
+            }
+
+            // Ensure proper encoding for tone mapping
+            if (material.map) {
+                material.map.encoding = THREE.sRGBEncoding;
+            }
+
+            // Enhance shadow darkness by reducing ambient occlusion if present
+            if (material.aoMapIntensity !== undefined) {
+                material.aoMapIntensity = Math.min(1.0, material.aoMapIntensity * 1.3);
             }
         }
         material.needsUpdate = true;
@@ -943,18 +1088,19 @@ toggleNavMeshNodesVisualizer() {
                 let lightColor, lightIntensity, lightDistance;
                 if (nodeName.includes('chandelier')) {
                     lightColor = 0xffaa55;
-                    lightIntensity = 4.0; // Increased from 2.0
-                    lightDistance = 6; // Increased from 4
+                    lightIntensity = 2.5; // Reduced from 4.0 to 2.5
+                    lightDistance = 6;
                 } else if (nodeName.includes('walllamp')) {
                     lightColor = 0xffbb66;
-                    lightIntensity = 3.0; // Increased from 1.5
-                    lightDistance = 5; // Increased from 3
+                    lightIntensity = 1.8; // Reduced from 3.0 to 1.8
+                    lightDistance = 5;
                 } else {
                     lightColor = 0xffcc77;
-                    lightIntensity = 3.0; // Increased from 1.5
-                    lightDistance = 6; // Increased from 4
+                    lightIntensity = 1.8; // Reduced from 3.0 to 1.8
+                    lightDistance = 6;
                 }
                 const lampLight = new THREE.PointLight(lightColor, lightIntensity, lightDistance, 3);
+
                 if (nodeName.includes('walllamp')) {
                     const worldQuaternion = new THREE.Quaternion();
                     node.getWorldQuaternion(worldQuaternion);
@@ -973,7 +1119,20 @@ toggleNavMeshNodesVisualizer() {
                 } else {
                     lampLight.position.copy(lampPosition);
                 }
-                lampLight.castShadow = false;
+
+                // Enable shadow casting based on quality settings with extreme shadows
+                const isChandelier = nodeName.includes('chandelier');
+                // Chandeliers always cast shadows in medium+, all lamps in high+
+                lampLight.castShadow = isChandelier || this.lampShadows;
+                if (lampLight.castShadow) {
+                    lampLight.shadow.mapSize.width = this.shadowMapSize;
+                    lampLight.shadow.mapSize.height = this.shadowMapSize;
+                    lampLight.shadow.camera.near = 0.5;
+                    lampLight.shadow.camera.far = lightDistance;
+                    lampLight.shadow.bias = -0.0001; // Reduced for sharper shadows
+                    lampLight.shadow.normalBias = 0; // No normal bias for extreme contrast
+                    lampLight.shadow.radius = 0.5; // Sharp shadows for horror atmosphere
+                }
 
                 // CRITICAL FIX: Start with light visible!
                 lampLight.visible = true;
@@ -1052,14 +1211,27 @@ toggleNavMeshNodesVisualizer() {
         fireParticles.position.copy(firePosition);
         fireParticles.raycast = () => {}; // Make fire particles non-raycastable so clicks go through
         this.scene.add(fireParticles);
-        const fireLight = new THREE.PointLight(0xff6600, 8.0, 10, 2); // Increased intensity from 4.0 to 8.0, distance from 6 to 10
+        const fireLight = new THREE.PointLight(0xff6600, 4.0, 10, 2); // Reduced intensity from 8.0 to 4.0 for less brightness
         fireLight.position.copy(firePosition);
+
+        // Enable shadow casting for fireplace with extreme flickering shadows
+        fireLight.castShadow = this.fireplaceShadows;
+        if (fireLight.castShadow) {
+            fireLight.shadow.mapSize.width = this.shadowMapSize;
+            fireLight.shadow.mapSize.height = this.shadowMapSize;
+            fireLight.shadow.camera.near = 0.5;
+            fireLight.shadow.camera.far = 10;
+            fireLight.shadow.bias = -0.0001; // Reduced for sharper, more dramatic shadows
+            fireLight.shadow.normalBias = 0; // No normal bias for extreme contrast
+            fireLight.shadow.radius = 0.3; // Very sharp shadows that flicker with the fire
+        }
+
         this.scene.add(fireLight);
         const fireplaceData = {
             mesh: fireNode,
             particles: fireParticles,
             light: fireLight,
-            baseIntensity: 6.0, // Increased from 3.0
+            baseIntensity: 3.5, // Reduced from 6.0 to 3.5 for less brightness
             flickerPhase: Math.random() * Math.PI * 2,
         };
         this.fireplaces.push(fireplaceData);
@@ -1200,9 +1372,12 @@ toggleNavMeshNodesVisualizer() {
         const time = Date.now() * 0.005;
         const pulseIntensity = (Math.sin(time) + 1) / 2;
         for (const page of this.pages) {
-            if (page.material) {
-                page.material.emissiveIntensity = 0.5 + pulseIntensity;
-            }
+            // Update all child meshes, not just the group
+            page.traverse((child) => {
+                if (child.isMesh && child.material && child.material.emissive) {
+                    child.material.emissiveIntensity = 0.5 + pulseIntensity;
+                }
+            });
         }
     }
 
@@ -1226,8 +1401,8 @@ toggleNavMeshNodesVisualizer() {
                 if (distance < maxConsiderDistance) {
                     nearbyLamps.push({ lamp, distance });
                 } else {
-                    // Far lamps are simply turned off
-                    lamp.light.visible = false;
+                    // Far lamps fade to 0 intensity (no visibility toggle to prevent lag)
+                    lamp.light.intensity = 0;
                 }
             }
 
@@ -1236,21 +1411,21 @@ toggleNavMeshNodesVisualizer() {
 
             for (const { lamp, distance } of nearbyLamps) {
                 if (distance < lamp.light.distance * 2.5 && activeLights < this.maxActiveLights) {
-                    lamp.light.visible = true;
-
+                    // Apply flicker effect
                     const flicker = Math.sin(time * lamp.flickerSpeed * this.lampFlickerSpeed + lamp.flickerPhase);
                     const noise = Math.random() * 0.1 - 0.05;
                     lamp.light.intensity = lamp.baseIntensity * (0.9 + flicker * 0.05 + noise);
 
                     activeLights++;
                 } else if (activeLights >= this.maxActiveLights) {
+                    // Gradually fade out instead of hiding
                     lamp.light.intensity *= 0.95;
-                    if (lamp.light.intensity < 0.1) lamp.light.visible = false;
+                    if (lamp.light.intensity < 0.01) lamp.light.intensity = 0;
                 }
             }
         } else {
+            // No player position, flicker all lamps
             for (const lamp of this.lamps) {
-                lamp.light.visible = true;
                 const flicker = Math.sin(time * lamp.flickerSpeed * this.lampFlickerSpeed + lamp.flickerPhase);
                 const noise = Math.random() * 0.1 - 0.05;
                 lamp.light.intensity = lamp.baseIntensity * (0.9 + flicker * 0.05 + noise);
@@ -1286,10 +1461,21 @@ toggleNavMeshNodesVisualizer() {
 
     setLampsEnabled(enabled) {
         this.lampsEnabled = enabled;
+
+        // OPTIMIZATION: Use intensity instead of visibility to prevent shader recompile lag
+        // Same optimization as fireplaces - toggling visibility causes GPU shader recompilation
         for (const lamp of this.lamps) {
-            lamp.light.visible = enabled;
+            if (enabled) {
+                // Restore lamp to base intensity
+                lamp.light.intensity = lamp.baseIntensity;
+            } else {
+                // Set intensity to 0 instead of hiding (prevents shader recompile)
+                lamp.light.intensity = 0;
+            }
+            // Note: light.visible stays true to prevent shader recompilation
         }
-        logger.log(`💡 Lamps ${enabled ? 'enabled' : 'disabled'}`);
+
+        logger.log(`💡 Lamps ${enabled ? 'enabled' : 'disabled'} (${this.lamps.length} total)`);
     }
 
     // NEW: Control all lights (lamps and fireplaces)
@@ -1341,15 +1527,27 @@ toggleNavMeshNodesVisualizer() {
     }
     setFireplacesEnabled(enabled) {
         this.fireplacesEnabled = enabled;
+
+        // OPTIMIZATION: Reduce intensity instead of toggling visibility to prevent shader recompile
+        // Toggling light visibility can cause WebGL to recompile shaders, causing lag spikes
         for (const fireplace of this.fireplaces) {
             // Don't re-enable extinguished fireplaces
             if (!fireplace.extinguished) {
-                fireplace.particles.visible = enabled;
-                fireplace.light.visible = enabled;
+                if (enabled) {
+                    // Restore fireplace
+                    fireplace.particles.visible = true;
+                    fireplace.light.intensity = fireplace.baseIntensity;
+                } else {
+                    // Instead of hiding light, set intensity to 0 (prevents shader recompile lag)
+                    fireplace.light.intensity = 0;
+                    // Hide particles (less expensive than light changes)
+                    fireplace.particles.visible = false;
+                }
+                // Note: We keep light.visible always true to prevent shader recompilation
             }
         }
 
-        logger.log(`🔥 Fireplaces ${enabled ? 'enabled' : 'disabled'}`);
+        logger.log(`🔥 Fireplaces ${enabled ? 'enabled' : 'disabled'} (${this.fireplaces.length} total)`);
     }
 
     extinguishFireplace(fireplaceNode) {
@@ -1373,6 +1571,110 @@ toggleNavMeshNodesVisualizer() {
     toggleFireplaces() {
         this.setFireplacesEnabled(!this.fireplacesEnabled);
         return this.fireplacesEnabled;
+    }
+
+    updateLampShadows() {
+        //logger.log(`💡 Updating lamp shadows (lampShadows: ${this.lampShadows}, maxShadowCasters: ${this.maxShadowCasters}, shadowMapSize: ${this.shadowMapSize})`);
+
+        // Count shadow casters (reserve some for fireplaces)
+        let shadowCasterCount = 0;
+        const maxLampShadows = Math.max(0, this.maxShadowCasters - (this.fireplaceShadows ? 2 : 0));
+
+        // First pass: disable all
+        for (const lamp of this.lamps) {
+            lamp.light.castShadow = false;
+        }
+
+        // If we have a player position, prioritize nearby lamps
+        if (this.playerPosition && this.playerPosition.length() > 0.1) {
+            // Create array of lamps with distances
+            const lampsWithDistance = this.lamps.map(lamp => ({
+                lamp: lamp,
+                distance: lamp.light.position.distanceTo(this.playerPosition),
+                isChandelier: lamp.type === 'chandelier'
+            }));
+
+            // Sort by priority: chandeliers first, then by distance
+            lampsWithDistance.sort((a, b) => {
+                if (a.isChandelier && !b.isChandelier) return -1;
+                if (!a.isChandelier && b.isChandelier) return 1;
+                return a.distance - b.distance;
+            });
+
+            // Enable shadows for closest/priority lamps
+            for (const item of lampsWithDistance) {
+                const shouldCastShadow = (item.isChandelier || this.lampShadows) && shadowCasterCount < maxLampShadows;
+
+                if (shouldCastShadow) {
+                    item.lamp.light.castShadow = true;
+                    item.lamp.light.shadow.mapSize.width = this.shadowMapSize;
+                    item.lamp.light.shadow.mapSize.height = this.shadowMapSize;
+                    item.lamp.light.shadow.needsUpdate = true;
+                    shadowCasterCount++;
+                }
+            }
+        } else {
+            // No player position, use simple priority (chandeliers first)
+            for (const lamp of this.lamps) {
+                const isChandelier = lamp.type === 'chandelier';
+                const shouldCastShadow = (isChandelier || this.lampShadows) && shadowCasterCount < maxLampShadows;
+
+                if (shouldCastShadow) {
+                    lamp.light.castShadow = true;
+                    lamp.light.shadow.mapSize.width = this.shadowMapSize;
+                    lamp.light.shadow.mapSize.height = this.shadowMapSize;
+                    lamp.light.shadow.needsUpdate = true;
+                    shadowCasterCount++;
+                }
+            }
+        }
+        //logger.log(`✅ Updated lamp shadows: ${shadowCasterCount} shadow casters enabled out of ${this.lamps.length} lamps`);
+    }
+
+    updateFireplaceShadows() {
+        logger.log(`🔥 Updating fireplace shadows (fireplaceShadows: ${this.fireplaceShadows}, shadowMapSize: ${this.shadowMapSize})`);
+
+        let shadowCasterCount = 0;
+        const maxFireplaceShadows = Math.min(2, this.maxShadowCasters); // Max 2 fireplace shadows
+
+        // If we have a player position, prioritize nearby fireplaces
+        if (this.playerPosition && this.playerPosition.length() > 0.1) {
+            // Create array with distances
+            const fireplacesWithDistance = this.fireplaces.map(fireplace => ({
+                fireplace: fireplace,
+                distance: fireplace.light.position.distanceTo(this.playerPosition)
+            }));
+
+            // Sort by distance (closest first)
+            fireplacesWithDistance.sort((a, b) => a.distance - b.distance);
+
+            // Enable shadows for closest fireplaces
+            for (const item of fireplacesWithDistance) {
+                const shouldCastShadow = this.fireplaceShadows && shadowCasterCount < maxFireplaceShadows;
+
+                item.fireplace.light.castShadow = shouldCastShadow;
+                if (shouldCastShadow) {
+                    item.fireplace.light.shadow.mapSize.width = this.shadowMapSize;
+                    item.fireplace.light.shadow.mapSize.height = this.shadowMapSize;
+                    item.fireplace.light.shadow.needsUpdate = true;
+                    shadowCasterCount++;
+                }
+            }
+        } else {
+            // No player position, use simple order
+            for (const fireplace of this.fireplaces) {
+                const shouldCastShadow = this.fireplaceShadows && shadowCasterCount < maxFireplaceShadows;
+
+                fireplace.light.castShadow = shouldCastShadow;
+                if (shouldCastShadow) {
+                    fireplace.light.shadow.mapSize.width = this.shadowMapSize;
+                    fireplace.light.shadow.mapSize.height = this.shadowMapSize;
+                    fireplace.light.shadow.needsUpdate = true;
+                    shadowCasterCount++;
+                }
+            }
+        }
+        logger.log(`✅ Updated fireplace shadows: ${shadowCasterCount} shadow casters enabled out of ${this.fireplaces.length} fireplaces`);
     }
     getDebugInfo() {
         const activeLamps = this.lamps.filter(l => l.light.visible).length;
