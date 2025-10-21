@@ -31,15 +31,15 @@ class ImprovedFlashlight {
             2            // decay (faster falloff for more focused beam)
         );
 
-        // Enable shadow casting (optimized resolution) with extreme shadows
+        // Enable shadow casting (optimized resolution) with dramatic but clean shadows
         this.light.castShadow = true;
         this.light.shadow.mapSize.width = 1024;
         this.light.shadow.mapSize.height = 1024;
         this.light.shadow.camera.near = 1.4;  // Increased from 0.5 to exclude player shadow at feet
         this.light.shadow.camera.far = 40;
-        this.light.shadow.bias = -0.00005;
-        this.light.shadow.normalBias = 0;
-        this.light.shadow.radius = 0.5;
+        this.light.shadow.bias = -0.0003;     // Less aggressive bias to prevent shadow acne (was -0.00005)
+        this.light.shadow.normalBias = 0.02;  // Add normal bias for flat surfaces like pages
+        this.light.shadow.radius = 1.0;       // Slightly softer shadow edges
 
         // IMPORTANT: Add light to scene, not camera
         this.scene.add(this.light);

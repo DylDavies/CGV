@@ -98,10 +98,10 @@ class MansionLoader {
                 fireplaceUpdateRate: 1,
                 maxVisibleDistance: 25,
                 maxActiveLights: 15,
-                lampShadows: true, // Enable all lamp shadows on ultra
+                lampShadows: true,
                 fireplaceShadows: true,
-                maxShadowCasters: 6, // Increased limit but still safe (flashlight + moonlight + 6 lamps = 8 total shadow maps)
-                shadowMapSize: 512 // Reduced to 512 to stay within budget
+                maxShadowCasters: 6,
+                shadowMapSize: 512
             }
         };
 
@@ -331,6 +331,58 @@ class MansionLoader {
                 node.material = node.material.clone();
                 node.material.emissive = new THREE.Color(0xff0000);
                 node.material.emissiveIntensity = 0;
+
+                // Enable shadows for all page meshes (including children)
+                node.traverse((child) => {
+                    if (child.isMesh && child.material) {
+                        const childName = child.name.toLowerCase();
+                        const isSymbol = childName.includes('_symbol') || childName.includes('symbol');
+                        const isBackground = childName.includes('back') || childName.includes('plane') || childName.includes('bg');
+
+                        // Only clone if not already modified
+                        if (!child.material.userData.pageModified) {
+                            child.material = child.material.clone();
+                            child.material.userData.pageModified = true;
+                        }
+
+                        // SMART POLYGON OFFSET SYSTEM
+                        child.material.polygonOffset = true;
+                        if (isSymbol) {
+                            child.material.polygonOffsetFactor = -4.0;
+                            child.material.polygonOffsetUnits = -4.0;
+                        } else if (isBackground) {
+                            child.material.polygonOffsetFactor = -0.5;
+                            child.material.polygonOffsetUnits = -0.5;
+                            child.visible = false;
+                            console.log(`🔧 Hiding background mesh: ${child.name}`);
+                        } else {
+                            child.material.polygonOffsetFactor = -2.0;
+                            child.material.polygonOffsetUnits = -2.0;
+                        }
+
+                        // SHADOW SETTINGS
+                        child.castShadow = true;
+                        child.receiveShadow = !isSymbol; // Symbols don't receive shadows
+
+                        // EMISSIVE FOR PICKUP GLOW (red pulsing when enabled)
+                        if (child.material.emissive) {
+                            child.material.emissive.setHex(0xff0000); // Red for pickup
+                            child.material.emissiveIntensity = 0; // Start at 0, will pulse when enabled
+                        }
+
+                        // PHYSICAL SEPARATION for symbols
+                        if (isSymbol && child.parent) {
+                            const symbolForward = new THREE.Vector3(0, 0, 1);
+                            // Increase separation for symbols that need more space
+                            let separationDistance = 0.04; // Increased from 0.025
+                            if (childName.includes('hand') || childName.includes('eye')) {
+                                separationDistance = 0.06; // Extra separation for problematic symbols
+                            }
+                            child.position.add(symbolForward.multiplyScalar(separationDistance));
+                        }
+                    }
+                });
+
                 this.pages.push(node);
             }
         });
@@ -384,24 +436,59 @@ class MansionLoader {
         const pageObject = this.pages[pageIndex];
 
         pageObject.traverse((node) => {
-        if (node.isMesh) {
-            // Apply the polygon offset fix to all parts of the page
-            node.material = node.material.clone();
-            node.material.polygonOffset = true;
-            node.material.polygonOffsetFactor = -1.0;
-            node.material.polygonOffsetUnits = -1.0;
+        if (node.isMesh && node.material) {
+            const nodeName = node.name.toLowerCase();
+            const isSymbol = nodeName.includes('_symbol') || nodeName.includes('symbol');
+            const isBackground = nodeName.includes('back') || nodeName.includes('plane') || nodeName.includes('bg');
 
-            // --- FIX TO LIFT SYMBOL OFF PAGE ---
-            // Check if the current mesh is a symbol
-            if (node.name.toLowerCase().includes('_symbol')) {
-                // The symbol's "forward" is its local Z-axis
-                const symbolForward = new THREE.Vector3(0, 0, 1); 
-                
-                // Move the symbol slightly along its own forward axis
-                node.position.add(symbolForward.multiplyScalar(0.01));
-                console.log(`🔧 Lifted symbol ${node.name} off its page.`);
+            // Only clone material if we need to modify it
+            // This prevents creating too many material instances
+            if (!node.material.userData.pageModified) {
+                node.material = node.material.clone();
+                node.material.userData.pageModified = true; // Mark as already modified
             }
-            // --- END FIX ---
+
+            // SMART POLYGON OFFSET SYSTEM - Create proper depth layering
+            node.material.polygonOffset = true;
+            if (isSymbol) {
+                node.material.polygonOffsetFactor = -3.0;
+                node.material.polygonOffsetUnits = -3.0;
+            } else if (isBackground) {
+                node.material.polygonOffsetFactor = -0.5;
+                node.material.polygonOffsetUnits = -0.5;
+                node.visible = false;
+                console.log(`🔧 Hiding background mesh: ${node.name}`);
+            } else {
+                node.material.polygonOffsetFactor = -2.0;
+                node.material.polygonOffsetUnits = -2.0;
+            }
+
+            // SHADOW SETTINGS
+            node.castShadow = true;
+            node.receiveShadow = !isSymbol; // Only symbols don't receive shadows
+
+            // EMISSIVE GLOW - Higher for symbols, moderate for pages
+            if (node.material.emissive) {
+                if (isSymbol) {
+                    node.material.emissive.setHex(0x333333);
+                    node.material.emissiveIntensity = 0.6;
+                } else if (!isBackground) {
+                    node.material.emissive.setHex(0x222222);
+                    node.material.emissiveIntensity = 0.4;
+                }
+            }
+
+            // PHYSICAL SEPARATION - Lift symbols more to prevent z-fighting and clipping
+            if (isSymbol) {
+                const symbolForward = new THREE.Vector3(0, 1, 0);
+                // Increase separation for symbols that need more space (hand, eye)
+                let separationDistance = 0.01; // Increased from 0.025
+                if (nodeName == "s_page4_symbol" || nodeName == "s_page5_symbol") {
+                    separationDistance = 0.02; // Extra separation for problematic symbols
+                }
+                node.position.add(symbolForward.multiplyScalar(separationDistance));
+                console.log(`🔧 Lifted symbol ${node.name} off its page (${separationDistance} units)`);
+            }
         }
     });
 
@@ -412,18 +499,20 @@ class MansionLoader {
         const worldQuaternion = new THREE.Quaternion();
         slotObject.getWorldPosition(worldPosition);
         slotObject.getWorldQuaternion(worldQuaternion);
-        
+
         // Apply the world coordinates to the page
         pageObject.position.copy(worldPosition);
         pageObject.quaternion.copy(worldQuaternion);
-        
+
         // Add a small offset along the object's normal to prevent z-fighting with the wall
         const normal = new THREE.Vector3(0, 0, 1).applyQuaternion(pageObject.quaternion);
         pageObject.position.add(normal.multiplyScalar(0.015));
 
-        // Make the page visible again and stop its glow
+        // Make the page visible and turn off the red pulsing glow
         pageObject.visible = true;
-        pageObject.material.emissiveIntensity = 0;
+        // Note: Emissive values already set above in the traverse loop
+        // Symbols: 0x333333 @ 0.6 intensity
+        // Pages: 0x222222 @ 0.4 intensity
 
         // Remove the page from the animation array so it no longer pulses
         this.pages.splice(pageIndex, 1);
@@ -1283,9 +1372,12 @@ toggleNavMeshNodesVisualizer() {
         const time = Date.now() * 0.005;
         const pulseIntensity = (Math.sin(time) + 1) / 2;
         for (const page of this.pages) {
-            if (page.material) {
-                page.material.emissiveIntensity = 0.5 + pulseIntensity;
-            }
+            // Update all child meshes, not just the group
+            page.traverse((child) => {
+                if (child.isMesh && child.material && child.material.emissive) {
+                    child.material.emissiveIntensity = 0.5 + pulseIntensity;
+                }
+            });
         }
     }
 
@@ -1309,8 +1401,8 @@ toggleNavMeshNodesVisualizer() {
                 if (distance < maxConsiderDistance) {
                     nearbyLamps.push({ lamp, distance });
                 } else {
-                    // Far lamps are simply turned off
-                    lamp.light.visible = false;
+                    // Far lamps fade to 0 intensity (no visibility toggle to prevent lag)
+                    lamp.light.intensity = 0;
                 }
             }
 
@@ -1319,21 +1411,21 @@ toggleNavMeshNodesVisualizer() {
 
             for (const { lamp, distance } of nearbyLamps) {
                 if (distance < lamp.light.distance * 2.5 && activeLights < this.maxActiveLights) {
-                    lamp.light.visible = true;
-
+                    // Apply flicker effect
                     const flicker = Math.sin(time * lamp.flickerSpeed * this.lampFlickerSpeed + lamp.flickerPhase);
                     const noise = Math.random() * 0.1 - 0.05;
                     lamp.light.intensity = lamp.baseIntensity * (0.9 + flicker * 0.05 + noise);
 
                     activeLights++;
                 } else if (activeLights >= this.maxActiveLights) {
+                    // Gradually fade out instead of hiding
                     lamp.light.intensity *= 0.95;
-                    if (lamp.light.intensity < 0.1) lamp.light.visible = false;
+                    if (lamp.light.intensity < 0.01) lamp.light.intensity = 0;
                 }
             }
         } else {
+            // No player position, flicker all lamps
             for (const lamp of this.lamps) {
-                lamp.light.visible = true;
                 const flicker = Math.sin(time * lamp.flickerSpeed * this.lampFlickerSpeed + lamp.flickerPhase);
                 const noise = Math.random() * 0.1 - 0.05;
                 lamp.light.intensity = lamp.baseIntensity * (0.9 + flicker * 0.05 + noise);
@@ -1369,10 +1461,21 @@ toggleNavMeshNodesVisualizer() {
 
     setLampsEnabled(enabled) {
         this.lampsEnabled = enabled;
+
+        // OPTIMIZATION: Use intensity instead of visibility to prevent shader recompile lag
+        // Same optimization as fireplaces - toggling visibility causes GPU shader recompilation
         for (const lamp of this.lamps) {
-            lamp.light.visible = enabled;
+            if (enabled) {
+                // Restore lamp to base intensity
+                lamp.light.intensity = lamp.baseIntensity;
+            } else {
+                // Set intensity to 0 instead of hiding (prevents shader recompile)
+                lamp.light.intensity = 0;
+            }
+            // Note: light.visible stays true to prevent shader recompilation
         }
-        logger.log(`💡 Lamps ${enabled ? 'enabled' : 'disabled'}`);
+
+        logger.log(`💡 Lamps ${enabled ? 'enabled' : 'disabled'} (${this.lamps.length} total)`);
     }
 
     // NEW: Control all lights (lamps and fireplaces)
@@ -1424,15 +1527,27 @@ toggleNavMeshNodesVisualizer() {
     }
     setFireplacesEnabled(enabled) {
         this.fireplacesEnabled = enabled;
+
+        // OPTIMIZATION: Reduce intensity instead of toggling visibility to prevent shader recompile
+        // Toggling light visibility can cause WebGL to recompile shaders, causing lag spikes
         for (const fireplace of this.fireplaces) {
             // Don't re-enable extinguished fireplaces
             if (!fireplace.extinguished) {
-                fireplace.particles.visible = enabled;
-                fireplace.light.visible = enabled;
+                if (enabled) {
+                    // Restore fireplace
+                    fireplace.particles.visible = true;
+                    fireplace.light.intensity = fireplace.baseIntensity;
+                } else {
+                    // Instead of hiding light, set intensity to 0 (prevents shader recompile lag)
+                    fireplace.light.intensity = 0;
+                    // Hide particles (less expensive than light changes)
+                    fireplace.particles.visible = false;
+                }
+                // Note: We keep light.visible always true to prevent shader recompilation
             }
         }
 
-        logger.log(`🔥 Fireplaces ${enabled ? 'enabled' : 'disabled'}`);
+        logger.log(`🔥 Fireplaces ${enabled ? 'enabled' : 'disabled'} (${this.fireplaces.length} total)`);
     }
 
     extinguishFireplace(fireplaceNode) {
