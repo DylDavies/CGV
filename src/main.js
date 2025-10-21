@@ -10,6 +10,7 @@ import { createStats } from './systems/Stats.js';
 import { UIManager } from './systems/uiManager.js';
 import { RapierPhysicsManager } from './systems/RapierPhysicsManager.js';
 import { MansionLoader } from './systems/MansionLoader.js';
+import { StageManager } from './systems/StageManager.js';
 import { GameManager } from './systems/GameManager.js';
 import { InteractionSystem } from './systems/InteractionSystem.js';
 import { PuzzleSystem } from './systems/PuzzleSystem.js';
@@ -80,32 +81,21 @@ async function main() {
             loop = new Loop(camera, scene, renderer, stats, physicsManager.labelRenderer);
             // --- END: THE FIX ---
 
-            uiManager.updateLoadingProgress(40, "Loading mansion model...");
-            const mansionLoader = new MansionLoader(scene, physicsManager, settings.quality || 'medium');
-            await mansionLoader.loadMansion('blender/Mansion.glb');
+            // Create StageManager to handle different game stages (pass loop and audioManager for safe transitions)
+            const stageManager = new StageManager(scene, physicsManager, camera, settings.quality || 'medium', loop, audioManager);
 
-            uiManager.updateLoadingProgress(60, "Analyzing walkable areas...");
-            await mansionLoader.loadNavMesh(`blender/NavMesh.glb?v=${Date.now()}`);
+            // Snapshot persistent objects (lights, camera) before loading stage
+            stageManager.snapshotPersistentObjects();
 
-            const doorSpawnPoint = mansionLoader.getEntranceDoorSpawnPoint();
-            let spawnPosition;
+            // Load initial stage (mansion for now, will be office in stage 1 later)
+            uiManager.updateLoadingProgress(40, "Loading initial stage...");
+            const stageData = await stageManager.loadStage('mansion', (progress, message) => {
+                uiManager.updateLoadingProgress(progress, message);
+            });
 
-            if (doorSpawnPoint) {
-                spawnPosition = doorSpawnPoint;
-                camera.position.copy(doorSpawnPoint);
-                logger.log(`📍 Will spawn at entrance door`);
-            } else {
-                const entranceRoom = mansionLoader.getEntranceRoom();
-                if (entranceRoom) {
-                    const spawnY = entranceRoom.bounds.max.y + 2.5;
-                    spawnPosition = new THREE.Vector3(entranceRoom.center.x, spawnY, entranceRoom.center.z);
-                    camera.position.copy(spawnPosition);
-                    logger.log(`📍 Will spawn at entrance: ${entranceRoom.name} at Y=${spawnY.toFixed(2)}`);
-                } else {
-                    spawnPosition = new THREE.Vector3(0, 10, 5);
-                    camera.position.copy(spawnPosition);
-                }
-            }
+            const mansionLoader = stageData.loader;
+            const spawnPosition = stageData.spawnPosition;
+
             scene.add(camera);
 
             uiManager.updateLoadingProgress(75, "Preparing the experience...");
@@ -155,16 +145,18 @@ async function main() {
             window.gameControls = {
                 camera, scene, flashlight, physicsManager, mansionLoader, gameManager,
                 interactionSystem, puzzleSystem, atmosphere, colorPuzzle, wirePuzzle, keypadPuzzle,
-                audioManager, monsterAI, narrativeManager, uiManager, minimap,
+                audioManager, monsterAI, narrativeManager, uiManager, minimap, stageManager,
                 toggleNavMesh: () => mansionLoader.toggleNavMeshVisualizer(),
                 toggleMansion: () => mansionLoader.toggleMansionVisibility(),
                 toggleNavMeshNodes: () => mansionLoader.toggleNavMeshNodesVisualizer(),
                 toggleMinimap: () => minimap.toggle(),
+                listPhysics: () => mansionLoader.listPhysicsBodies(),
             };
 
             window.game = { mansionLoader, logger };
             logger.log('🔧 Debug controls available in `window.gameControls`.');
             logger.log("庁 To toggle the navigation mesh visualizer, type `gameControls.toggleNavMesh()` in the console.");
+            logger.log("🎬 To transition to office stage, type `gameControls.stageManager.transitionToStage('office')` in the console.");
             logger.log('');
             logger.log('📝 LOGGING COMMANDS:');
             logger.log('   logger.disable()       - Disable console logging');

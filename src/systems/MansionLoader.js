@@ -48,6 +48,9 @@ class MansionLoader {
         // Material caching for performance
         this.materialCache = new Map();
 
+        // Stage-specific physics exclusions (can be set via setPhysicsExclusions)
+        this.physicsExclusions = [];
+
         // Listen for quality changes
         window.addEventListener('qualitychange', (e) => {
             this.setQualityPreset(e.detail.quality);
@@ -55,6 +58,15 @@ class MansionLoader {
         });
 
         logger.log(`🏠 MansionLoader initialized (${qualityPreset} quality)`);
+    }
+
+    /**
+     * Set stage-specific physics exclusions (keywords to exclude from collision)
+     * @param {Array<string>} exclusions - Array of keywords to exclude from physics
+     */
+    setPhysicsExclusions(exclusions) {
+        this.physicsExclusions = exclusions || [];
+        logger.log(`🔒 Physics exclusions set: ${this.physicsExclusions.join(', ')}`);
     }
 
     setQualityPreset(preset) {
@@ -711,12 +723,18 @@ class MansionLoader {
     organizeByRooms() {
         logger.log('🗂️ Organizing rooms from collections...');
 
-        // NEW: First, find the main 'Mansion' parent group
-        const mansionNode = this.model.getObjectByName('Mansion');
+        // Try to find the main parent group - could be 'Mansion' or 'Scene' or the model itself
+        let mansionNode = this.model.getObjectByName('Mansion');
 
         if (!mansionNode) {
-            logger.error("❌ Critical Error: Could not find the 'Mansion' group in the model! Make sure your main collection is named 'Mansion'.");
-            return;
+            // Try 'Scene' as fallback (common in Blender exports)
+            mansionNode = this.model.getObjectByName('Scene');
+        }
+
+        if (!mansionNode) {
+            // If no specific collection found, use the model root itself
+            logger.log("ℹ️ No 'Mansion' or 'Scene' collection found, using model root");
+            mansionNode = this.model;
         }
 
         mansionNode.children.forEach((node) => {
@@ -853,8 +871,19 @@ class MansionLoader {
                 }
             }
 
+            // Check stage-specific exclusions
+            let isStageExcluded = false;
+            if (this.physicsExclusions.length > 0) {
+                for (const keyword of this.physicsExclusions) {
+                    if (nodeName.includes(keyword.toLowerCase())) {
+                        isStageExcluded = true;
+                        break;
+                    }
+                }
+            }
+
             // If the object meets any of the exclusion criteria, skip it.
-            if (isDebugObject || hasDebugMaterial || isPortrait || isDoor || isNoCollision || shouldSkipByHierarchy) {
+            if (isDebugObject || hasDebugMaterial || isPortrait || isDoor || isNoCollision || shouldSkipByHierarchy || isStageExcluded) {
                 skippedCount++;
                 return; // Skip to the next node
             }
@@ -1080,76 +1109,129 @@ toggleNavMeshNodesVisualizer() {
             const nodeName = node.name.toLowerCase();
 
              if (nodeName.includes('walllamp') || nodeName.includes('chandelier') ||
-                nodeName.includes('lamp') || nodeName.includes('light')) {
+                nodeName.includes('lamp') || nodeName.includes('light') || nodeName.includes('fluorescent')) {
 
                 node.updateMatrixWorld(true);
                 const lampPosition = new THREE.Vector3();
                 node.getWorldPosition(lampPosition);
-                let lightColor, lightIntensity, lightDistance;
-                if (nodeName.includes('chandelier')) {
+                let lightColor, lightIntensity, lightDistance, lightType;
+
+                if (nodeName.includes('fluorescent')) {
+                    // Fluorescent ceiling light (office) - rectangular fixture
+                    lightColor = 0xffffff; // Cool white
+                    lightIntensity = 3.0; // Bright office lighting
+                    lightDistance = 15; // Extended range for wider fixture
+                    lightType = 'fluorescent';
+                } else if (nodeName.includes('chandelier')) {
                     lightColor = 0xffaa55;
-                    lightIntensity = 2.5; // Reduced from 4.0 to 2.5
+                    lightIntensity = 2.5;
                     lightDistance = 6;
+                    lightType = 'chandelier';
                 } else if (nodeName.includes('walllamp')) {
                     lightColor = 0xffbb66;
-                    lightIntensity = 1.8; // Reduced from 3.0 to 1.8
+                    lightIntensity = 1.8;
                     lightDistance = 5;
+                    lightType = 'walllamp';
                 } else {
                     lightColor = 0xffcc77;
-                    lightIntensity = 1.8; // Reduced from 3.0 to 1.8
+                    lightIntensity = 1.8;
                     lightDistance = 6;
+                    lightType = 'lamp';
                 }
-                const lampLight = new THREE.PointLight(lightColor, lightIntensity, lightDistance, 3);
+                if (nodeName.includes('fluorescent')) {
+                    // For fluorescent fixtures, create multiple point lights along the length
+                    const box = new THREE.Box3().setFromObject(node);
+                    const size = new THREE.Vector3();
+                    box.getSize(size);
 
-                if (nodeName.includes('walllamp')) {
-                    const worldQuaternion = new THREE.Quaternion();
-                    node.getWorldQuaternion(worldQuaternion);
-                    const forward = new THREE.Vector3(0.5, 0, 0);
-                    forward.applyQuaternion(worldQuaternion);
-                    forward.normalize();
+                    // Determine the longest horizontal dimension
+                    const width = Math.max(size.x, size.z);
+                    const isXAxis = size.x > size.z;
 
-                    if (isNaN(forward.x) || isNaN(forward.y) || isNaN(forward.z)) {
-                        console.error("❌ Failed to calculate spawn point direction. Using fallback.");
-                        return null; // Return null to indicate failure
+                    // Create 3-5 lights spread across the fixture width
+                    const numLights = Math.max(3, Math.ceil(width / 1.5));
+                    const spacing = width / (numLights + 1);
+
+                    for (let i = 0; i < numLights; i++) {
+                        const lampLight = new THREE.PointLight(lightColor, lightIntensity / numLights, lightDistance);
+
+                        // Position lights along the fixture
+                        lampLight.position.copy(lampPosition);
+                        lampLight.position.y -= 0.15;
+
+                        if (isXAxis) {
+                            lampLight.position.x = lampPosition.x - width / 2 + spacing * (i + 1);
+                        } else {
+                            lampLight.position.z = lampPosition.z - width / 2 + spacing * (i + 1);
+                        }
+
+                        lampLight.visible = true;
+                        this.scene.add(lampLight);
+
+                        const lampData = {
+                            mesh: node,
+                            light: lampLight,
+                            baseIntensity: lightIntensity / numLights,
+                            flickerPhase: Math.random() * Math.PI * 2,
+                            flickerSpeed: 0.5 + Math.random() * 0.5,
+                            type: 'fluorescent'
+                        };
+                        this.lamps.push(lampData);
+                        lampCount++;
+                    }
+                } else {
+                    const lampLight = new THREE.PointLight(lightColor, lightIntensity, lightDistance, 3);
+
+                    if (nodeName.includes('walllamp')) {
+                        const worldQuaternion = new THREE.Quaternion();
+                        node.getWorldQuaternion(worldQuaternion);
+                        const forward = new THREE.Vector3(0.5, 0, 0);
+                        forward.applyQuaternion(worldQuaternion);
+                        forward.normalize();
+
+                        if (isNaN(forward.x) || isNaN(forward.y) || isNaN(forward.z)) {
+                            console.error("❌ Failed to calculate spawn point direction. Using fallback.");
+                            return null; // Return null to indicate failure
+                        }
+
+                        lampLight.position.copy(lampPosition);
+                        lampLight.position.add(forward.multiplyScalar(0.4));
+                        lampLight.position.y += 0.1;
+                    } else {
+                        lampLight.position.copy(lampPosition);
                     }
 
-                    lampLight.position.copy(lampPosition);
-                    lampLight.position.add(forward.multiplyScalar(0.4));
-                    lampLight.position.y += 0.1;
-                } else {
-                    lampLight.position.copy(lampPosition);
-                }
+                    // Enable shadow casting based on quality settings with extreme shadows
+                    const isChandelier = nodeName.includes('chandelier');
+                    // Chandeliers always cast shadows in medium+, all lamps in high+
+                    lampLight.castShadow = isChandelier || this.lampShadows;
+                    if (lampLight.castShadow) {
+                        lampLight.shadow.mapSize.width = this.shadowMapSize;
+                        lampLight.shadow.mapSize.height = this.shadowMapSize;
+                        lampLight.shadow.camera.near = 0.5;
+                        lampLight.shadow.camera.far = lightDistance;
+                        lampLight.shadow.bias = -0.0001; // Reduced for sharper shadows
+                        lampLight.shadow.normalBias = 0; // No normal bias for extreme contrast
+                        lampLight.shadow.radius = 0.5; // Sharp shadows for horror atmosphere
+                    }
 
-                // Enable shadow casting based on quality settings with extreme shadows
-                const isChandelier = nodeName.includes('chandelier');
-                // Chandeliers always cast shadows in medium+, all lamps in high+
-                lampLight.castShadow = isChandelier || this.lampShadows;
-                if (lampLight.castShadow) {
-                    lampLight.shadow.mapSize.width = this.shadowMapSize;
-                    lampLight.shadow.mapSize.height = this.shadowMapSize;
-                    lampLight.shadow.camera.near = 0.5;
-                    lampLight.shadow.camera.far = lightDistance;
-                    lampLight.shadow.bias = -0.0001; // Reduced for sharper shadows
-                    lampLight.shadow.normalBias = 0; // No normal bias for extreme contrast
-                    lampLight.shadow.radius = 0.5; // Sharp shadows for horror atmosphere
+                    // CRITICAL FIX: Start with light visible!
+                    lampLight.visible = true;
+                    this.scene.add(lampLight);
+                    if (lampCount < 3) {
+                        console.log(`💡 ${node.name}: pos=${lampLight.position.x.toFixed(1)},${lampLight.position.y.toFixed(1)},${lampLight.position.z.toFixed(1)}`);
+                    }
+                    const lampData = {
+                        mesh: node,
+                        light: lampLight,
+                        baseIntensity: lightIntensity,
+                        flickerPhase: Math.random() * Math.PI * 2,
+                        flickerSpeed: 0.5 + Math.random() * 0.5,
+                        type: lightType // Use the lightType we determined above
+                    };
+                    this.lamps.push(lampData);
+                    lampCount++;
                 }
-
-                // CRITICAL FIX: Start with light visible!
-                lampLight.visible = true;
-                this.scene.add(lampLight);
-                if (lampCount < 3) {
-                    console.log(`💡 ${node.name}: pos=${lampLight.position.x.toFixed(1)},${lampLight.position.y.toFixed(1)},${lampLight.position.z.toFixed(1)}`);
-                }
-                const lampData = {
-                    mesh: node,
-                    light: lampLight,
-                    baseIntensity: lightIntensity,
-                    flickerPhase: Math.random() * Math.PI * 2,
-                    flickerSpeed: 0.5 + Math.random() * 0.5,
-                    type: nodeName.includes('chandelier') ? 'chandelier' : nodeName.includes('walllamp') ? 'walllamp' : 'lamp'
-                };
-                this.lamps.push(lampData);
-                lampCount++;
             }
             if (nodeName.includes('fire') && !nodeName.includes('fireplace')) {
                 this.setupFireplace(node);
@@ -1754,31 +1836,86 @@ toggleNavMeshNodesVisualizer() {
         console.table(collections);
         return collections;
     }
+
+    /**
+     * Debug method to list all physics bodies with their positions and sizes
+     */
+    listPhysicsBodies() {
+        logger.log(`\n📊 Physics Bodies Report (Total: ${this.physicsBodies.length})`);
+        logger.log('─'.repeat(80));
+
+        const bodies = this.physicsBodies.map((entry, index) => {
+            const body = entry.body;
+            const translation = body.translation();
+            return {
+                '#': index,
+                'Name': entry.mesh.name.substring(0, 20),
+                'X': translation.x.toFixed(2),
+                'Y': translation.y.toFixed(2),
+                'Z': translation.z.toFixed(2)
+            };
+        });
+
+        console.table(bodies);
+        logger.log(`Total physics bodies: ${this.physicsBodies.length}`);
+        return this.physicsBodies;
+    }
+
     dispose() {
         logger.log('🧹 Disposing mansion loader...');
 
+        // Clean up physics bodies
         for (const { body } of this.physicsBodies) {
             this.physicsManager.removeBody(body);
         }
         this.physicsBodies = [];
-        for (const lamp of this.lamps)
+
+        // Clean up lamps
+        for (const lamp of this.lamps) {
             if (lamp.light) {
                 this.scene.remove(lamp.light);
                 if (lamp.light.dispose) lamp.light.dispose();
             }
+            if (lamp.helper) {
+                this.scene.remove(lamp.helper);
+            }
+        }
         this.lamps = [];
+
+        // Clean up fireplaces
+        if (this.fireplaces) {
+            for (const fireplace of this.fireplaces) {
+                if (fireplace.particles) {
+                    this.scene.remove(fireplace.particles);
+                    if (fireplace.particles.geometry) fireplace.particles.geometry.dispose();
+                    if (fireplace.particles.material) fireplace.particles.material.dispose();
+                }
+                if (fireplace.light) {
+                    this.scene.remove(fireplace.light);
+                }
+            }
+            this.fireplaces = [];
+        }
+
+        // Clean up model and its materials/geometries
         if (this.model) {
             this.scene.remove(this.model);
             this.model.traverse((node) => {
                 if (node.isMesh) {
                     if (node.geometry) node.geometry.dispose();
                     if (node.material) {
-                        if (Array.isArray(node.material)) node.material.forEach(mat => mat.dispose());
-                        else node.material.dispose();
+                        if (Array.isArray(node.material)) {
+                            node.material.forEach(mat => mat.dispose());
+                        } else {
+                            node.material.dispose();
+                        }
                     }
                 }
             });
+            this.model = null;
         }
+
+        // Clean up room tracking
         this.rooms.clear();
         this.visibleRooms.clear();
 

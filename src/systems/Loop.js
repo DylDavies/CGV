@@ -11,9 +11,11 @@ class Loop {
     this.labelRenderer = labelRenderer;
     this.updatables = []; // Array of objects with a .tick() method
     this.paused = false;
+    this.isRunning = false;
   }
 
   start() {
+    this.isRunning = true;
     this.renderer.setAnimationLoop(() => {
         this.stats.begin();
 
@@ -53,6 +55,7 @@ class Loop {
   }
 
   stop() {
+    this.isRunning = false;
     this.renderer.setAnimationLoop(null);
   }
 
