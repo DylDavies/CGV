@@ -27,6 +27,9 @@ export class UIManager {
         await this._loadHTML('src/ui/clueScreen/clue-screen.html', 'clue-screen-container');
         await this._loadHTML('src/ui/resultScreen/result-screen.html', 'result-screen-container');
         await this._loadHTML('src/ui/keypad/keypad.html', 'keypad-container');
+        await this._loadHTML('src/ui/qtes/buttonMash/button-mash.html', 'qte-button-mash-container');
+        await this._loadHTML('src/ui/qtes/skillCheck/skill-check.html', 'qte-skill-check-container');
+        await this._loadHTML('src/ui/qtes/bouncingRing/bouncing-ring.html', 'qte-bouncing-ring-container');
 
         // Now that the HTML is loaded, cache the elements inside it
         this.uiElements = {
@@ -62,8 +65,39 @@ export class UIManager {
             keypadContainer: document.getElementById('keypad-container'),
             keypadDisplay: document.getElementById('keypad-display'),
             keypadButtons: document.querySelectorAll('.keypad-button, #keypad-enter-button'),
-            keypadCloseButton: document.getElementById('keypad-close-button'),       
+            keypadCloseButton: document.getElementById('keypad-close-button'),    
+            
+            // Quick Time Events
+            qteButtonMash: document.getElementById('qte-button-mash'),
+            mashKeyDisplay: document.getElementById('mash-key-display'),
+            mashProgressBar: document.getElementById('mash-progress-bar'),
+            mashTimerBar: document.getElementById('mash-timer-bar'),
+
+            qteSkillCheck: document.getElementById('qte-skill-check'),
+            skillCheckKeyDisplay: document.getElementById('skill-check-key-display'),
+            skillCheckCircle: document.querySelector('.skill-check-circle'),
+            skillCheckNeedle: document.getElementById('skill-check-needle'),
+            skillCheckSuccessZone: document.getElementById('skill-check-success-zone'),
+
+            qteBouncingRing: document.getElementById('qte-bouncing-ring'),
+            bounceKeyDisplay: document.getElementById('bounce-key-display'),
+            bouncingRingCircle: document.querySelector('.bouncing-ring-circle'),
+            bounceIndicator: document.getElementById('bounce-indicator'),
+            bounceSafeZoneLeft: document.getElementById('bounce-safe-zone-left'),
+            bounceSafeZoneRight: document.getElementById('bounce-safe-zone-right'),
+            bounceProgress: document.getElementById('bounce-progress'),
+            bounceTimerBar: document.getElementById('bounce-timer-bar'),
+
         };
+
+        // *** Log caching results *** -- remove this (just to figure out why the boucing ring qte is not working)
+        logger.log(`UIManager: Caching qteButtonMash: ${this.uiElements.qteButtonMash ? 'Success' : 'Failed'}`);
+        logger.log(`UIManager: Caching qteSkillCheck: ${this.uiElements.qteSkillCheck ? 'Success' : 'Failed'}`);
+        logger.log(`UIManager: Caching qteBouncingRing: ${this.uiElements.qteBouncingRing ? 'Success' : 'Failed'}`);
+    
+        // Add checks for the safe zones specifically
+        logger.log(`UIManager: Caching bounceSafeZoneLeft: ${this.uiElements.bounceSafeZoneLeft ? 'Success' : 'Failed'}`);
+        logger.log(`UIManager: Caching bounceSafeZoneRight: ${this.uiElements.bounceSafeZoneRight ? 'Success' : 'Failed'}`);
         
         if (!this.uiElements.welcomeScreen || !this.uiElements.playButton) {
             console.error("UIManager Critical Error: Welcome screen elements not found after loading.");
@@ -425,6 +459,109 @@ export class UIManager {
         });
 
         this.keypadListenersSetup = true;
-    }  
+    }
+    
+    
+    // Quick Time event stuff
+
+    // Button Mash
+    showButtonMashQTE(key) {
+        if (this.uiElements.qteButtonMash) {
+            this.uiElements.mashKeyDisplay.textContent = key;
+            this.uiElements.qteButtonMash.classList.remove('hidden');
+        } else { console.error("UI Element 'qteButtonMash' not found"); }
+    }
+    hideButtonMashQTE() {
+        if (this.uiElements.qteButtonMash) this.uiElements.qteButtonMash.classList.add('hidden');
+    }
+    updateButtonMashProgress(percentage) {
+        if (this.uiElements.mashProgressBar) this.uiElements.mashProgressBar.style.width = `${percentage}%`;
+    }
+     updateButtonMashTimer(ratio) { // ratio is 0 to 1 (time remaining / total time)
+        if (this.uiElements.mashTimerBar) this.uiElements.mashTimerBar.style.width = `${ratio * 100}%`;
+    }
+
+
+    // Skill Check
+    showSkillCheckQTE(key, zoneStartAngle, zoneSize) {
+        if (this.uiElements.qteSkillCheck) {
+            this.uiElements.skillCheckKeyDisplay.textContent = key;
+            // Calculate clip-path for the success zone arc (as defined in QTEManager.js)
+            const points = ['50% 50%']; // Center point
+             const segments = 10; // Number of points to approximate the arc
+             for(let i=0; i <= segments; i++) {
+                 const angle = zoneStartAngle + (zoneSize * i / segments);
+                 // Check if THREE is available or use standard Math
+                 const rad = (typeof THREE !== 'undefined' ? THREE.MathUtils.degToRad(angle - 90) : (angle - 90) * Math.PI / 180); // Offset for CSS rotation
+                 const x = 50 + 50 * Math.cos(rad);
+                 const y = 50 + 50 * Math.sin(rad);
+                 points.push(`${x}% ${y}%`);
+             }
+            if (this.uiElements.skillCheckSuccessZone) {
+                 this.uiElements.skillCheckSuccessZone.style.clipPath = `polygon(${points.join(', ')})`;
+            } else { console.error("UI Element 'skillCheckSuccessZone' not found"); }
+
+            this.uiElements.qteSkillCheck.classList.remove('hidden');
+        } else { console.error("UI Element 'qteSkillCheck' not found"); }
+    }
+
+    hideSkillCheckQTE() {
+        if (this.uiElements.qteSkillCheck) this.uiElements.qteSkillCheck.classList.add('hidden');
+    }
+
+    updateSkillCheckNeedle(angle) {
+        if (this.uiElements.skillCheckNeedle) this.uiElements.skillCheckNeedle.style.transform = `translateX(-50%) rotate(${angle}deg)`;
+    }
+
+    // Bouncing Ring
+    showBouncingRingQTE(key) {
+        if (this.uiElements.qteBouncingRing) {
+             this.uiElements.bounceKeyDisplay.textContent = key;
+            this.uiElements.qteBouncingRing.classList.remove('hidden');
+        } else { console.error("UI Element 'qteBouncingRing' not found"); }
+    }
+
+    hideBouncingRingQTE() {
+        if (this.uiElements.qteBouncingRing) this.uiElements.qteBouncingRing.classList.add('hidden');
+    }
+
+    updateBouncingRingIndicator(angle) {
+        if (this.uiElements.bounceIndicator) this.uiElements.bounceIndicator.style.transform = `translate(-50%, -50%) rotate(${angle}deg)`;
+    }
+
+    // Updates BOTH safe zones based on the left zone's start and the current size
+    updateBouncingRingZones(leftZoneStartAngle, zoneSize) {
+        // Function to generate polygon points for a zone
+         const getPoints = (startAngle, size) => {
+             const p = ['50% 50%'];
+             const segments = Math.max(5, Math.floor(size / 10));
+             for (let i = 0; i <= segments; i++) {
+                 const angle = startAngle + (size * i / segments);
+                 const rad = (typeof THREE !== 'undefined' ? THREE.MathUtils.degToRad(angle - 90) : (angle - 90) * Math.PI / 180);
+                 const x = 50 + 50 * Math.cos(rad);
+                 const y = 50 + 50 * Math.sin(rad);
+                 p.push(`${x}% ${y}%`);
+             }
+             return `polygon(${p.join(', ')})`;
+        };
+
+        const rightZoneStartAngle = (leftZoneStartAngle + 180) % 360;
+
+        if (this.uiElements.bounceSafeZoneLeft) {
+            this.uiElements.bounceSafeZoneLeft.style.clipPath = getPoints(leftZoneStartAngle, zoneSize);
+        } else { console.error("UI Element 'bounceSafeZoneLeft' not found"); }
+
+        if (this.uiElements.bounceSafeZoneRight) {
+             this.uiElements.bounceSafeZoneRight.style.clipPath = getPoints(rightZoneStartAngle, zoneSize);
+        } else { console.error("UI Element 'bounceSafeZoneRight' not found"); }
+    }
+
+    updateBouncingRingProgress(current, required) {
+        if(this.uiElements.bounceProgress) this.uiElements.bounceProgress.textContent = `Loops: ${current} / ${required}`;
+    }
+
+    updateBouncingRingTimer(ratio) { // ratio is 0 to 1
+         if (this.uiElements.bounceTimerBar) this.uiElements.bounceTimerBar.style.width = `${ratio * 100}%`;
+    }
 }
 

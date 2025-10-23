@@ -1,0 +1,49 @@
+#qte-button-mash {
+    /* Styles specific to button mash */
+    width: 300px;
+    text-align: center;
+}
+
+#mash-key-display {
+    font-weight: bold;
+    font-size: 1.5em;
+    color: #ffdddd;
+    padding: 2px 8px;
+    background: #550000;
+    border: 1px solid #ffaaaa;
+    border-radius: 4px;
+    display: inline-block; /* Allows padding */
+    min-width: 30px; /* Ensure space for key display */
+}
+
+.qte-progress-bar-container {
+    height: 25px;
+    background: #333;
+    border: 1px solid #666;
+    margin-top: 15px;
+    overflow: hidden; /* Important for progress bar */
+    border-radius: 3px;
+}
+
+#mash-progress-bar {
+    height: 100%;
+    width: 0%; /* Starts empty */
+    background: linear-gradient(to right, #ff4141, #ff8c41);
+    transition: width 0.1s linear; /* Smooth fill */
+}
+
+.qte-timer-bar-container {
+    height: 8px;
+    background: #222;
+    border: 1px solid #444;
+    margin-top: 10px;
+    overflow: hidden;
+    border-radius: 2px;
+}
+
+#mash-timer-bar {
+    height: 100%;
+    width: 100%; /* Starts full */
+    background: #ffffff;
+    transition: width 0.1s linear; /* Smooth drain */
+}

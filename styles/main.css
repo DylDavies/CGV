@@ -75,3 +75,37 @@
 }
 
 
+/* Quick Time Events*/
+.qte-container {
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    background: rgba(10, 10, 10, 0.9);
+    border: 2px solid #555;
+    border-radius: 8px;
+    padding: 25px;
+    color: #fff;
+    font-family: 'Courier New', monospace;
+    z-index: 20000; /* Ensure QTE is above most UI */
+    box-shadow: 0 0 25px rgba(0, 0, 0, 0.7);
+    display: flex; /* Use flexbox for basic layout */
+    flex-direction: column; /* Stack elements vertically */
+    align-items: center; /* Center elements horizontally */
+    opacity: 1;
+    transition: opacity 0.3s ease-in-out;
+}
+
+.qte-container.hidden {
+    opacity: 0;
+    pointer-events: none;
+    display: none; /* Use display none when hidden */
+}
+
+.qte-prompt {
+    font-size: 1.2em;
+    margin-bottom: 15px;
+    color: #ccc;
+    text-align: center;
+}
+

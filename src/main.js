@@ -27,7 +27,7 @@ import { Minimap } from './systems/Minimap.js';
 import { NarrativeManager } from './systems/NarrativeManager.js';
 import logger from './utils/Logger.js';
 import RAPIER from 'https://cdn.skypack.dev/@dimforge/rapier3d-compat';
-
+import { QTEManager } from './systems/QTEManager.js';
 
 async function main() {
     try {
@@ -121,6 +121,10 @@ async function main() {
             const flashlight = new ImprovedFlashlight(camera, scene);
             // Pass the loop to the PauseMenu
             const pauseMenu = new PauseMenu(renderer, controls, loop);
+            
+            // initialize QTEManager
+            const qteManager = new QTEManager(uiManager, controls);
+            controls.setQTEManager(qteManager); 
 
             const gameManager = new GameManager(mansionLoader, camera, scene, uiManager, audioManager, controls);
             const puzzleSystem = new PuzzleSystem(scene, gameManager);
@@ -160,6 +164,21 @@ async function main() {
                 toggleMansion: () => mansionLoader.toggleMansionVisibility(),
                 toggleNavMeshNodes: () => mansionLoader.toggleNavMeshNodesVisualizer(),
                 toggleMinimap: () => minimap.toggle(),
+
+                qteManager, // Add the QTE manager instance
+                testQTE: (type) => { // Helper function for console testing
+                   let options = {};
+                   // Define default options for each QTE type for testing
+                   if (type === 'buttonMash') options = { key: 'KeyE', duration: 3000, requiredPresses: 10 };
+                   if (type === 'skillCheck') options = { key: 'Space', duration: 4000, successZoneSize: 30, needleSpeed: 400 };
+                   if (type === 'bouncingRing') options = { key: 'KeyF', duration: 10000, requiredLoops: 2, initialZoneSize: 70, indicatorSpeed: 250 };
+                    // Start the QTE using the manager
+                    qteManager.startQTE(type || 'buttonMash', {
+                         ...options,
+                        onSuccess: () => console.log(`Test QTE (${type || 'buttonMash'}) SUCCESS!`),
+                        onFailure: () => console.log(`Test QTE (${type || 'buttonMash'}) FAILURE!`)
+                    });
+                }
             };
 
             window.game = { mansionLoader, logger };
