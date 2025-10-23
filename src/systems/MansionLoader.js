@@ -16,6 +16,7 @@ class MansionLoader {
         this.pages = [];
         this.pageSlots = []; // Array to store the puzzle slot objects
         this.glowingSymbols = []; // NEW: An array to hold symbols that need to animate.
+        this.pageSpawnPoints = new Map(); // Map to store page spawn points: pageNum -> [spawn points]
 
         // --- NEW: Pathfinding Properties ---
         this.pathfinding = new Pathfinding();
@@ -145,6 +146,8 @@ class MansionLoader {
 
                     this.setupInstancedMeshes()
                     this.setupPageEffects();
+                    this.setupSofaEffects(); // Apply green glow to sofas with userData from Blender
+                    this.randomizePageSpawns(); // Randomly position pages 1, 2, 3, and 5
                     this.setupPuzzleSlots(); // Find and prepare the puzzle slots on the wall
 
                     this.scene.add(this.model);
@@ -241,10 +244,30 @@ class MansionLoader {
                 console.log(`🔑 Found prop: ${node.name} (Key Behind Fire)`);
             }
             
-            if (node.name === 'S_Safe') { 
+            if (node.name === 'S_Safe') {
                 this.props.set('safe', node);
                 node.userData = { type: 'safe', interactable: true };
                 console.log(`🔒 Found prop: ${node.name} (Safe)`);
+            }
+
+            // Note: Sofas are now detected in setupSofaEffects() method (like pages)
+
+            // Detect page spawn points with pattern: p_[page number]_spawn_point_[spawn point number]
+            if (node.name.startsWith('p_') && node.name.includes('_spawn_point_')) {
+                const match = node.name.match(/^p_(\d+)_spawn_point_(\d+)$/);
+                if (match) {
+                    const pageNum = parseInt(match[1], 10);
+                    const spawnPointNum = parseInt(match[2], 10);
+
+                    // Initialize array for this page if it doesn't exist
+                    if (!this.pageSpawnPoints.has(pageNum)) {
+                        this.pageSpawnPoints.set(pageNum, []);
+                    }
+
+                    // Add spawn point to the array for this page
+                    this.pageSpawnPoints.get(pageNum).push(node);
+                    console.log(`📍 Found page spawn point: ${node.name} for S_Page${pageNum}`);
+                }
             }
 
             if (node.isMesh) {
@@ -292,6 +315,23 @@ class MansionLoader {
         // First, group all meshes by their base name (e.g., "Chair")
         this.model.traverse((node) => {
             if (node.isMesh) {
+                // CRITICAL FIX: Skip meshes that are children of sofas
+                let isSofaChild = false;
+                let parent = node.parent;
+                while (parent) {
+                    if (parent.userData && parent.userData.type === 'sofa') {
+                        isSofaChild = true;
+                        break;
+                    }
+                    parent = parent.parent;
+                }
+
+                // Skip sofa children - they need individual materials for interaction
+                if (isSofaChild) {
+                    console.log(`⏭️ Skipping ${node.name} from instancing (child of sofa)`);
+                    return;
+                }
+
                 const baseName = node.name.split('.')[0]; // "Chair.001" -> "Chair"
                 if (!instances.has(baseName)) {
                     instances.set(baseName, []);
@@ -386,6 +426,134 @@ class MansionLoader {
                 this.pages.push(node);
             }
         });
+    }
+
+    setupSofaEffects() {
+        console.log('🛋️ === SOFA DETECTION DEBUG ===');
+
+        // First, find ALL objects with "sofa" in the name to understand the structure
+        const sofaLikeObjects = [];
+        this.model.traverse((node) => {
+            if (node.name.toLowerCase().includes('sofa')) {
+                sofaLikeObjects.push({
+                    name: node.name,
+                    type: node.type,
+                    isMesh: node.isMesh,
+                    userData: node.userData,
+                    hasChildren: node.children && node.children.length > 0
+                });
+            }
+        });
+
+        console.log('🛋️ Found objects with "sofa" in name:', sofaLikeObjects);
+
+        // Now search for sofas with userData.type === 'sofa'
+        let sofasFound = 0;
+        this.model.traverse((node) => {
+            if (node.userData && node.userData.type === 'sofa') {
+                sofasFound++;
+                console.log(`🛋️ Found sofa with userData: ${node.name}`);
+                console.log(`   - Node type: ${node.type}`);
+                console.log(`   - Is mesh? ${node.isMesh}`);
+                console.log(`   - UserData:`, node.userData);
+
+                // Add moved property if not set
+                if (node.userData.moved === undefined) {
+                    node.userData.moved = false;
+                }
+
+                // Count children for logging
+                let childCount = 0;
+                let meshChildren = [];
+                let allChildren = [];
+
+                // Traverse ALL children to see structure
+                node.traverse((child) => {
+                    allChildren.push({
+                        name: child.name,
+                        type: child.type,
+                        isMesh: child.isMesh,
+                        hasMaterial: child.material ? true : false
+                    });
+                });
+                console.log(`   - All children of ${node.name}:`, allChildren);
+
+                // Traverse ALL child meshes and apply green glow
+                node.traverse((child) => {
+                    if (child.isMesh && child.material) {
+                        meshChildren.push(child.name);
+
+                        // Clone material to avoid affecting other objects
+                        child.material = child.material.clone();
+                        child.material.userData.sofaModified = true;
+
+                        // Add GREEN emissive glow
+                        child.material.emissive = new THREE.Color(0x00ff00); // Green
+                        child.material.emissiveIntensity = 0.5; // Bright and visible
+
+                        // Shadow settings
+                        child.castShadow = true;
+                        child.receiveShadow = true;
+
+                        childCount++;
+                    }
+                });
+
+                console.log(`   ✓ Applied green glow to ${childCount} child meshes:`, meshChildren);
+
+                // Store in props
+                this.props.set(`sofa_${node.name}`, node);
+            }
+        });
+
+        console.log(`🛋️ Total sofas with userData.type === 'sofa': ${sofasFound}`);
+        console.log('🛋️ === END SOFA DETECTION DEBUG ===');
+    }
+
+    randomizePageSpawns() {
+        logger.log('🎲 Randomizing page spawn locations...');
+
+        // Pages to randomize: 1, 2, 3, 5 (skip 4 and 6)
+        const pagesToRandomize = [1, 2, 3, 5];
+
+        for (const pageNum of pagesToRandomize) {
+            // Get spawn points for this page
+            const spawnPoints = this.pageSpawnPoints.get(pageNum);
+
+            if (!spawnPoints || spawnPoints.length === 0) {
+                logger.warn(`⚠️ No spawn points found for S_Page${pageNum}`);
+                continue;
+            }
+
+            // Find the page object
+            const pageName = `S_Page${pageNum}`;
+            const pageObject = this.pages.find(page => page.name === pageName);
+
+            if (!pageObject) {
+                logger.warn(`⚠️ ${pageName} not found in pages array`);
+                continue;
+            }
+
+            // Randomly choose one spawn point
+            const randomIndex = Math.floor(Math.random() * spawnPoints.length);
+            const chosenSpawnPoint = spawnPoints[randomIndex];
+
+            // Get world position and rotation of the spawn point
+            const worldPosition = new THREE.Vector3();
+            const worldQuaternion = new THREE.Quaternion();
+            const worldScale = new THREE.Vector3();
+
+            chosenSpawnPoint.updateWorldMatrix(true, false);
+            chosenSpawnPoint.matrixWorld.decompose(worldPosition, worldQuaternion, worldScale);
+
+            // Move the entire page object to the spawn point
+            pageObject.position.copy(worldPosition);
+            pageObject.quaternion.copy(worldQuaternion);
+
+            logger.log(`✅ ${pageName} spawned at ${chosenSpawnPoint.name} - Position: (${worldPosition.x.toFixed(2)}, ${worldPosition.y.toFixed(2)}, ${worldPosition.z.toFixed(2)})`);
+        }
+
+        logger.log(`✅ Randomized spawn locations for pages 1, 2, 3, and 5`);
     }
 
     setupPuzzleSlots() {

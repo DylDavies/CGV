@@ -25,6 +25,12 @@ class InteractionSystem {
         this.isColorPuzzleSolved = false;
         this.justClosedUI = false; // Prevent immediate re-interaction after closing UI
 
+        // Sofa movement system
+        this.movingSofa = null; // Currently moving sofa
+        this.sofaMovementSpeed = 0.01; // Units per frame (slow movement)
+        this.sofaMaxMovement = 0.5; // Maximum distance to move (0.5 units)
+        this.isEKeyHeld = false; // Track if E key is held
+
         // UI Elements
         this.crosshair = null;
         this.interactionPrompt = null;
@@ -229,6 +235,12 @@ class InteractionSystem {
             bucket: {
                 prompt: "Press E to pick up bucket",
                 handler: this.handleBucketInteraction.bind(this)
+            },
+            sofa: {
+                prompt: "Hold E to push sofa",
+                movedPrompt: "Sofa won't move any further",
+                pushingPrompt: "Pushing... (Hold E)",
+                handler: this.handleSofaInteraction.bind(this)
             }
         };
     }
@@ -260,8 +272,12 @@ class InteractionSystem {
         switch (event.code) {
             case 'KeyE':
                 if (this.controls && this.controls.isFrozen) {
-                return;
+                    return;
                 }
+
+                // Set E key held state
+                this.isEKeyHeld = true;
+
                 if (!this.currentInteraction) {
                     this.checkInteraction();
                 }
@@ -277,7 +293,18 @@ class InteractionSystem {
     }
 
     onKeyUp(event) {
-        // Handle key up events if needed
+        switch (event.code) {
+            case 'KeyE':
+                // Release E key
+                this.isEKeyHeld = false;
+
+                // Stop moving sofa if currently moving
+                if (this.movingSofa) {
+                    this.showMessage(`Stopped pushing sofa. Moved ${this.movingSofa.distanceMoved.toFixed(2)} units.`);
+                    this.movingSofa = null;
+                }
+                break;
+        }
     }
 
     onTouchStart(event) {
@@ -316,20 +343,39 @@ class InteractionSystem {
     }
 
     findInteractableData(object) {
+        // DEBUG: Log the object that was hit
+        console.log('🔍 Raycaster hit:', {
+            name: object.name,
+            type: object.type,
+            isMesh: object.isMesh,
+            userData: object.userData
+        });
+
         // Check the object itself
         if (object.userData && object.userData.type) {
+            console.log('✅ Found userData on hit object:', object.userData.type);
             return { object: object, data: object.userData };
         }
-        
+
         // Check parent chain
         let parent = object.parent;
+        let depth = 0;
         while (parent && parent !== this.scene) {
+            console.log(`  ↑ Checking parent ${depth}:`, {
+                name: parent.name,
+                type: parent.type,
+                userData: parent.userData
+            });
+
             if (parent.userData && parent.userData.type) {
+                console.log(`✅ Found userData on parent ${depth}:`, parent.userData.type);
                 return { object: parent, data: parent.userData };
             }
             parent = parent.parent;
+            depth++;
         }
-        
+
+        console.log('❌ No userData found in object or parent chain');
         return null;
     }
 
@@ -1144,6 +1190,30 @@ class InteractionSystem {
         await window.gameControls.narrativeManager.triggerEvent('stage1.put_out_fire_objective');
     }
 
+    async handleSofaInteraction(sofa, userData) {
+        // Check if sofa has already been fully moved
+        if (userData.moved) {
+            this.showMessage("The sofa has already been moved as far as it will go.");
+            return;
+        }
+
+        // Check if already moving this sofa
+        if (this.movingSofa && this.movingSofa.sofa === sofa) {
+            return; // Already moving, continue in tick()
+        }
+
+        // Start moving the sofa
+        this.movingSofa = {
+            sofa: sofa,
+            userData: userData,
+            distanceMoved: userData.distanceMoved || 0, // Track total distance moved
+            initialY: sofa.position.y
+        };
+
+        console.log(`🛋️ Started pushing ${sofa.name}. Hold E to continue.`);
+        this.showMessage("Pushing sofa... Hold E to continue.", 500);
+    }
+
     startPuzzle(puzzleData, puzzleObject) {
         switch (puzzleData.type) {
             case 'combination_lock':
@@ -1445,8 +1515,11 @@ class InteractionSystem {
 
         if (intersects.length > 0) {
             const distance = intersects[0].distance;
+            const hitObject = intersects[0].object;
+
             if (distance <= this.interactionRange) {
-                const interactableData = this.findInteractableData(intersects[0].object);
+                const interactableData = this.findInteractableData(hitObject);
+
                 if (interactableData) {
                     const interactionType = this.interactionTypes[interactableData.data.type];
 
@@ -1499,6 +1572,20 @@ class InteractionSystem {
                                 interactionPrompt = this.gameManager.fuseBoxFixed ?
                                     interactionType.fixedPrompt :
                                     interactionType.prompt;
+                            }
+                            // Special handling for sofa to show different prompt based on state
+                            else if (interactableData.data.type === 'sofa') {
+                                // Check if this sofa is currently being pushed
+                                const isBeingPushed = this.movingSofa && this.movingSofa.sofa === interactableData.object;
+
+                                if (isBeingPushed) {
+                                    // Show progress while pushing (handled in updateSofaMovement)
+                                    // Don't override here, let updateSofaMovement handle it
+                                } else if (interactableData.data.moved) {
+                                    interactionPrompt = interactionType.movedPrompt;
+                                } else {
+                                    interactionPrompt = interactionType.prompt;
+                                }
                             } else {
                                 interactionPrompt = interactableData.data.locked ?
                                     (interactionType.lockedPrompt || interactionType.prompt) :
@@ -1585,7 +1672,46 @@ class InteractionSystem {
             }
         }
 
+        // Handle gradual sofa movement
+        this.updateSofaMovement(delta);
+
         this.updateInteractionEffects(delta);
+    }
+
+    updateSofaMovement(delta) {
+        // If no sofa is being moved, return
+        if (!this.movingSofa) return;
+
+        // If E key is not held, don't continue moving
+        if (!this.isEKeyHeld) return;
+
+        const { sofa, userData, distanceMoved } = this.movingSofa;
+
+        // Check if we've reached max movement
+        if (distanceMoved >= this.sofaMaxMovement) {
+            // Mark as fully moved
+            userData.moved = true;
+            userData.distanceMoved = distanceMoved;
+            this.showMessage("The sofa won't move any further.");
+            console.log(`🛋️ ${sofa.name} fully moved to Y position: ${sofa.position.y.toFixed(2)}`);
+            this.movingSofa = null;
+            return;
+        }
+
+        // Calculate movement for this frame
+        const moveAmount = Math.min(this.sofaMovementSpeed, this.sofaMaxMovement - distanceMoved);
+
+        // Move the sofa down
+        sofa.position.y -= moveAmount;
+
+        // Update distance moved
+        this.movingSofa.distanceMoved += moveAmount;
+        userData.distanceMoved = this.movingSofa.distanceMoved;
+
+        // Update prompt to show progress
+        const progress = (this.movingSofa.distanceMoved / this.sofaMaxMovement * 100).toFixed(0);
+        this.interactionPrompt.textContent = `Pushing sofa... ${progress}% (Hold E)`;
+        this.interactionPrompt.style.display = 'block';
     }
 
     updateInteractionEffects(delta) {
