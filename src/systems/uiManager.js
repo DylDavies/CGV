@@ -81,23 +81,13 @@ export class UIManager {
 
             qteBouncingRing: document.getElementById('qte-bouncing-ring'),
             bounceKeyDisplay: document.getElementById('bounce-key-display'),
-            bouncingRingCircle: document.querySelector('.bouncing-ring-circle'),
+            bouncingRingGauge: document.querySelector('.bouncing-ring-gauge'), // Changed selector
+            bounceIndicatorWrapper: document.getElementById('bounce-indicator-wrapper'), // Cache the wrapper
             bounceIndicator: document.getElementById('bounce-indicator'),
             bounceSafeZoneLeft: document.getElementById('bounce-safe-zone-left'),
             bounceSafeZoneRight: document.getElementById('bounce-safe-zone-right'),
-            bounceProgress: document.getElementById('bounce-progress'),
-            bounceTimerBar: document.getElementById('bounce-timer-bar'),
 
         };
-
-        // *** Log caching results *** -- remove this (just to figure out why the boucing ring qte is not working)
-        logger.log(`UIManager: Caching qteButtonMash: ${this.uiElements.qteButtonMash ? 'Success' : 'Failed'}`);
-        logger.log(`UIManager: Caching qteSkillCheck: ${this.uiElements.qteSkillCheck ? 'Success' : 'Failed'}`);
-        logger.log(`UIManager: Caching qteBouncingRing: ${this.uiElements.qteBouncingRing ? 'Success' : 'Failed'}`);
-    
-        // Add checks for the safe zones specifically
-        logger.log(`UIManager: Caching bounceSafeZoneLeft: ${this.uiElements.bounceSafeZoneLeft ? 'Success' : 'Failed'}`);
-        logger.log(`UIManager: Caching bounceSafeZoneRight: ${this.uiElements.bounceSafeZoneRight ? 'Success' : 'Failed'}`);
         
         if (!this.uiElements.welcomeScreen || !this.uiElements.playButton) {
             console.error("UIManager Critical Error: Welcome screen elements not found after loading.");
@@ -525,35 +515,48 @@ export class UIManager {
         if (this.uiElements.qteBouncingRing) this.uiElements.qteBouncingRing.classList.add('hidden');
     }
 
+    // Modify the update function to rotate the wrapper
     updateBouncingRingIndicator(angle) {
-        if (this.uiElements.bounceIndicator) this.uiElements.bounceIndicator.style.transform = `translate(-50%, -50%) rotate(${angle}deg)`;
+        // Apply ONLY rotation to the WRAPPER
+        if (this.uiElements.bounceIndicatorWrapper) {
+            this.uiElements.bounceIndicatorWrapper.style.transform = `rotate(${angle}deg)`;
+        } else {
+            logger.error("UI Element 'bounceIndicatorWrapper' not found for rotation");
+        }
     }
 
-    // Updates BOTH safe zones based on the left zone's start and the current size
-    updateBouncingRingZones(leftZoneStartAngle, zoneSize) {
-        // Function to generate polygon points for a zone
-         const getPoints = (startAngle, size) => {
-             const p = ['50% 50%'];
-             const segments = Math.max(5, Math.floor(size / 10));
-             for (let i = 0; i <= segments; i++) {
-                 const angle = startAngle + (size * i / segments);
-                 const rad = (typeof THREE !== 'undefined' ? THREE.MathUtils.degToRad(angle - 90) : (angle - 90) * Math.PI / 180);
-                 const x = 50 + 50 * Math.cos(rad);
-                 const y = 50 + 50 * Math.sin(rad);
-                 p.push(`${x}% ${y}%`);
-             }
-             return `polygon(${p.join(', ')})`;
+    // Updates BOTH safe zones based ONLY on their size (centers are fixed at 180 and 0/360)
+    updateBouncingRingZones(zoneSize) {
+        // Function to generate polygon points for a zone centered at a specific angle
+        const getPoints = (centerAngle, size) => {
+            const startAngle = centerAngle - size / 2;
+            const p = ['50% 50%']; // Center point of the circle
+            const segments = Math.max(5, Math.floor(size / 10)); // More segments for larger zones
+
+            for (let i = 0; i <= segments; i++) {
+                const angle = startAngle + (size * i / segments);
+                const rad = (angle - 90) * Math.PI / 180;
+                const x = 50 + 50 * Math.cos(rad);
+                const y = 50 + 50 * Math.sin(rad);
+                p.push(`${x}% ${y}%`);
+            }
+            return `polygon(${p.join(', ')})`;
         };
 
-        const rightZoneStartAngle = (leftZoneStartAngle + 180) % 360;
+        const westZoneCenter = 180;
+        const eastZoneCenter = 0;
 
         if (this.uiElements.bounceSafeZoneLeft) {
-            this.uiElements.bounceSafeZoneLeft.style.clipPath = getPoints(leftZoneStartAngle, zoneSize);
-        } else { console.error("UI Element 'bounceSafeZoneLeft' not found"); }
+            this.uiElements.bounceSafeZoneLeft.style.clipPath = getPoints(westZoneCenter, zoneSize);
+        } else {
+            logger.error("UI Element 'bounceSafeZoneLeft' not found for update"); // Use logger
+        }
 
         if (this.uiElements.bounceSafeZoneRight) {
-             this.uiElements.bounceSafeZoneRight.style.clipPath = getPoints(rightZoneStartAngle, zoneSize);
-        } else { console.error("UI Element 'bounceSafeZoneRight' not found"); }
+            this.uiElements.bounceSafeZoneRight.style.clipPath = getPoints(eastZoneCenter, zoneSize);
+        } else {
+            logger.error("UI Element 'bounceSafeZoneRight' not found for update"); // Use logger
+        }
     }
 
     updateBouncingRingProgress(current, required) {

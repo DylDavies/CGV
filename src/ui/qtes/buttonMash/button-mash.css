@@ -1,5 +1,6 @@
+/* src/ui/qtes/buttonMash/button-mash.css */
+
 #qte-button-mash {
-    /* Styles specific to button mash */
     width: 300px;
     text-align: center;
 }
@@ -12,38 +13,45 @@
     background: #550000;
     border: 1px solid #ffaaaa;
     border-radius: 4px;
-    display: inline-block; /* Allows padding */
-    min-width: 30px; /* Ensure space for key display */
+    display: inline-block; 
+    min-width: 30px; 
 }
 
+/* Container for the PROGRESS bar */
 .qte-progress-bar-container {
-    height: 25px;
-    background: #333;
+    height: 25px;       
+    background: #333; 
     border: 1px solid #666;
     margin-top: 15px;
-    overflow: hidden; /* Important for progress bar */
+    overflow: hidden;   
     border-radius: 3px;
+    width: 100%;       
 }
 
+/* The actual PROGRESS bar that fills up */
 #mash-progress-bar {
-    height: 100%;
-    width: 0%; /* Starts empty */
-    background: linear-gradient(to right, #ff4141, #ff8c41);
-    transition: width 0.1s linear; /* Smooth fill */
+    height: 100%;       
+    width: 0%;        
+    background: linear-gradient(to right, #abff41, #41ff8c); 
+    box-shadow: 0 0 5px #7fff00;
+    transition: width 0.1s linear;
 }
 
+/* Container for the TIMER bar */
 .qte-timer-bar-container {
-    height: 8px;
-    background: #222;
+    height: 8px;        
+    background: #222;   
     border: 1px solid #444;
     margin-top: 10px;
-    overflow: hidden;
+    overflow: hidden;   
     border-radius: 2px;
+    width: 100%;       
 }
 
+/* The actual TIMER bar that drains */
 #mash-timer-bar {
-    height: 100%;
-    width: 100%; /* Starts full */
-    background: #ffffff;
-    transition: width 0.1s linear; /* Smooth drain */
+    height: 100%;      
+    width: 100%;       
+    background: #ffffff; 
+    transition: width 0.1s linear; 
 }

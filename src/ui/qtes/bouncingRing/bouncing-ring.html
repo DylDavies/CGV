@@ -1,12 +1,13 @@
 <div id="qte-bouncing-ring" class="qte-container hidden">
-    <div class="bouncing-ring-circle">
+  <div class="bouncing-ring-gauge">
+    <div id="bounce-safe-zone-left" class="bounce-safe-zone"></div>
+    <div id="bounce-safe-zone-right" class="bounce-safe-zone"></div>
+
+    <div id="bounce-indicator-wrapper">
         <div id="bounce-indicator"></div>
-        <div id="bounce-safe-zone-left" class="bounce-safe-zone"></div>
-        <div id="bounce-safe-zone-right" class="bounce-safe-zone"></div>
     </div>
-    <div class="qte-prompt">Press <span id="bounce-key-display">[KEY]</span> in the zones!</div>
-    <div id="bounce-progress">Loops: 0 / 3</div>
-     <div class="qte-timer-bar-container">
-        <div id="bounce-timer-bar"></div>
+    <div class="qte-prompt-center">
+      <span id="bounce-key-display">[KEY]</span>
     </div>
+  </div>
 </div>
