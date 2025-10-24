@@ -250,6 +250,12 @@ class MansionLoader {
                 console.log(`🔒 Found prop: ${node.name} (Safe)`);
             }
 
+            if (node.name === 'Annie') {
+                this.props.set('annie', node);
+                node.userData = { type: 'annie', interactable: false }; // Not directly interactable
+                console.log(`🎎 Found prop: ${node.name} (Annie Doll)`);
+            }
+
             // Note: Sofas are now detected in setupSofaEffects() method (like pages)
 
             // Detect page spawn points with pattern: p_[page number]_spawn_point_[spawn point number]
@@ -328,7 +334,6 @@ class MansionLoader {
 
                 // Skip sofa children - they need individual materials for interaction
                 if (isSofaChild) {
-                    console.log(`⏭️ Skipping ${node.name} from instancing (child of sofa)`);
                     return;
                 }
 
@@ -429,85 +434,23 @@ class MansionLoader {
     }
 
     setupSofaEffects() {
-        console.log('🛋️ === SOFA DETECTION DEBUG ===');
-
-        // First, find ALL objects with "sofa" in the name to understand the structure
-        const sofaLikeObjects = [];
-        this.model.traverse((node) => {
-            if (node.name.toLowerCase().includes('sofa')) {
-                sofaLikeObjects.push({
-                    name: node.name,
-                    type: node.type,
-                    isMesh: node.isMesh,
-                    userData: node.userData,
-                    hasChildren: node.children && node.children.length > 0
-                });
-            }
-        });
-
-        console.log('🛋️ Found objects with "sofa" in name:', sofaLikeObjects);
-
-        // Now search for sofas with userData.type === 'sofa'
-        let sofasFound = 0;
+        // Search for sofas with userData.type === 'sofa' and set them up
         this.model.traverse((node) => {
             if (node.userData && node.userData.type === 'sofa') {
-                sofasFound++;
-                console.log(`🛋️ Found sofa with userData: ${node.name}`);
-                console.log(`   - Node type: ${node.type}`);
-                console.log(`   - Is mesh? ${node.isMesh}`);
-                console.log(`   - UserData:`, node.userData);
-
-                // Add moved property if not set
+                // Initialize movement tracking properties
                 if (node.userData.moved === undefined) {
                     node.userData.moved = false;
                 }
+                if (node.userData.distanceMoved === undefined) {
+                    node.userData.distanceMoved = 0;
+                }
 
-                // Count children for logging
-                let childCount = 0;
-                let meshChildren = [];
-                let allChildren = [];
-
-                // Traverse ALL children to see structure
-                node.traverse((child) => {
-                    allChildren.push({
-                        name: child.name,
-                        type: child.type,
-                        isMesh: child.isMesh,
-                        hasMaterial: child.material ? true : false
-                    });
-                });
-                console.log(`   - All children of ${node.name}:`, allChildren);
-
-                // Traverse ALL child meshes and apply green glow
-                node.traverse((child) => {
-                    if (child.isMesh && child.material) {
-                        meshChildren.push(child.name);
-
-                        // Clone material to avoid affecting other objects
-                        child.material = child.material.clone();
-                        child.material.userData.sofaModified = true;
-
-                        // Add GREEN emissive glow
-                        child.material.emissive = new THREE.Color(0x00ff00); // Green
-                        child.material.emissiveIntensity = 0.5; // Bright and visible
-
-                        // Shadow settings
-                        child.castShadow = true;
-                        child.receiveShadow = true;
-
-                        childCount++;
-                    }
-                });
-
-                console.log(`   ✓ Applied green glow to ${childCount} child meshes:`, meshChildren);
-
-                // Store in props
+                // Store in props for easy access
                 this.props.set(`sofa_${node.name}`, node);
+
+                console.log(`🛋️ Found interactive sofa: ${node.name} (moved: ${node.userData.moved}, distance: ${node.userData.distanceMoved})`);
             }
         });
-
-        console.log(`🛋️ Total sofas with userData.type === 'sofa': ${sofasFound}`);
-        console.log('🛋️ === END SOFA DETECTION DEBUG ===');
     }
 
     randomizePageSpawns() {

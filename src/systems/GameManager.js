@@ -608,18 +608,38 @@ class GameManager {
     updateInventoryUI() {
         const inventoryHTML = `
             <h3 style="margin: 0 0 10px 0; color: #ffaa00;">🎒 Inventory (${this.inventory.length}/10)</h3>
-            ${this.inventory.length === 0 ? 
-                '<p style="color: #888; font-style: italic;">Empty</p>' : 
-                this.inventory.map((item, index) => 
-                    `<div class="inventory-item" onclick="window.gameManager?.useItem?.(${index})" style="margin: 3px 0;">
+            ${this.inventory.length === 0 ?
+                '<p style="color: #888; font-style: italic;">Empty</p>' :
+                this.inventory.map((item, index) =>
+                    `<div class="inventory-item" onclick="window.gameManager?.useItem?.(${index})"
+                         style="margin: 3px 0; cursor: pointer; padding: 5px; border-radius: 3px; transition: background 0.2s;"
+                         onmouseover="this.style.background='rgba(255,170,0,0.1)'"
+                         onmouseout="this.style.background='transparent'">
                         • <span style="color: #${this.getItemColor(item.type)}">${item.name}</span>
                         ${item.description ? `<br><small style="color: #aaa; margin-left: 10px;">${item.description}</small>` : ''}
+                        ${item.type === 'page' ? `<br><small style="color: #88aaff; margin-left: 10px;">Click to read</small>` : ''}
                     </div>`
                 ).join('')
             }
         `;
-        
+
         this.ui.inventory.innerHTML = inventoryHTML;
+    }
+
+    useItem(index) {
+        const item = this.inventory[index];
+        if (!item) return;
+
+        console.log(`Using item: ${item.name} (${item.type})`);
+
+        // Handle page viewing
+        if (item.type === 'page' && item.pageId) {
+            // Show page content through InteractionSystem
+            if (window.gameControls && window.gameControls.interactionSystem) {
+                window.gameControls.interactionSystem.showPageContent(item.pageId);
+            }
+        }
+        // Add other item use cases here in the future
     }
 
     updateObjectivesUI() {

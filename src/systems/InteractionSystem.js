@@ -28,7 +28,7 @@ class InteractionSystem {
         // Sofa movement system
         this.movingSofa = null; // Currently moving sofa
         this.sofaMovementSpeed = 0.01; // Units per frame (slow movement)
-        this.sofaMaxMovement = 0.5; // Maximum distance to move (0.5 units)
+        this.sofaMaxMovement = 1; // Maximum distance to move (0.5 units)
         this.isEKeyHeld = false; // Track if E key is held
 
         // UI Elements
@@ -302,6 +302,11 @@ class InteractionSystem {
                 if (this.movingSofa) {
                     this.showMessage(`Stopped pushing sofa. Moved ${this.movingSofa.distanceMoved.toFixed(2)} units.`);
                     this.movingSofa = null;
+
+                    // Clear the interaction state
+                    if (this.currentInteraction === 'sofa_movement') {
+                        this.currentInteraction = null;
+                    }
                 }
                 break;
         }
@@ -343,39 +348,20 @@ class InteractionSystem {
     }
 
     findInteractableData(object) {
-        // DEBUG: Log the object that was hit
-        console.log('🔍 Raycaster hit:', {
-            name: object.name,
-            type: object.type,
-            isMesh: object.isMesh,
-            userData: object.userData
-        });
-
         // Check the object itself
         if (object.userData && object.userData.type) {
-            console.log('✅ Found userData on hit object:', object.userData.type);
             return { object: object, data: object.userData };
         }
 
         // Check parent chain
         let parent = object.parent;
-        let depth = 0;
         while (parent && parent !== this.scene) {
-            console.log(`  ↑ Checking parent ${depth}:`, {
-                name: parent.name,
-                type: parent.type,
-                userData: parent.userData
-            });
-
             if (parent.userData && parent.userData.type) {
-                console.log(`✅ Found userData on parent ${depth}:`, parent.userData.type);
                 return { object: parent, data: parent.userData };
             }
             parent = parent.parent;
-            depth++;
         }
 
-        console.log('❌ No userData found in object or parent chain');
         return null;
     }
 
@@ -396,15 +382,464 @@ class InteractionSystem {
         }
 
         if (userData.pageId) {
+            // Special handling for Page 4 - Annie interaction
+            if (userData.pageId === 'S_Page4') {
+                this.handleAnniePageInteraction(pageObject, userData);
+                return;
+            }
+
+            // Show page content first, then collect it
+            this.showPageContent(userData.pageId, () => {
+                // After viewing, collect the page (with slight delay to prevent double-click)
+                setTimeout(() => {
+                    this.gameManager.collectPage(userData.pageId);
+                    this.animateItemPickup(pageObject, () => {
+                        if (pageObject.parent) {
+                            pageObject.parent.remove(pageObject);
+                        }
+                    });
+                }, 100);
+            });
+        } else {
+            console.warn("Tried to pick up a page with no pageId property:", pageObject.name);
+        }
+    }
+
+    handleAnniePageInteraction(pageObject, userData) {
+        // Get Annie doll from mansion
+        const annie = this.gameManager.mansion.props.get('annie');
+
+        if (!annie) {
+            console.warn('Annie doll not found! Allowing normal page pickup.');
+            // Fall back to normal page collection
             this.gameManager.collectPage(userData.pageId);
             this.animateItemPickup(pageObject, () => {
                 if (pageObject.parent) {
                     pageObject.parent.remove(pageObject);
                 }
             });
-        } else {
-            console.warn("Tried to pick up a page with no pageId property:", pageObject.name);
+            return;
         }
+
+        // Make camera look at Annie
+        this.lookAtAnnie(annie);
+
+        // Start Annie's dialogue tree
+        this.showDialogueTree({
+            speaker: "Annie",
+            text: "Do you want the paper?",
+            options: [
+                {
+                    text: "Yes",
+                    next: {
+                        speaker: "Annie",
+                        text: "Here you go...",
+                        onComplete: () => {
+                            console.log('🎎 Annie: Giving page to player');
+                            this.stopLookingAtAnnie();
+                            this.gameManager.collectPage(userData.pageId);
+                            this.animateItemPickup(pageObject, () => {
+                                if (pageObject.parent) {
+                                    pageObject.parent.remove(pageObject);
+                                }
+                            });
+                            this.showMessage("Annie lets you take the paper.");
+                        }
+                    }
+                },
+                {
+                    text: "No",
+                    next: {
+                        speaker: "Annie",
+                        text: "Okay... maybe later then.",
+                        onComplete: () => {
+                            console.log('🎎 Annie: Player declined');
+                            this.stopLookingAtAnnie();
+                            this.showMessage("You decide not to take the paper.");
+                        }
+                    }
+                }
+            ]
+        });
+    }
+
+    lookAtAnnie(annie) {
+        // Store original camera state
+        this.originalCameraLookAt = {
+            enabled: true,
+            target: annie
+        };
+
+        // Get Annie's world position
+        const anniePosition = new THREE.Vector3();
+        annie.getWorldPosition(anniePosition);
+
+        // Look higher - add offset to Y coordinate (looking at Annie's face/upper body)
+        anniePosition.y += 0.5; // Adjust this value to look higher or lower
+
+        // Smoothly rotate camera to look at Annie
+        const startQuaternion = this.camera.quaternion.clone();
+        this.camera.lookAt(anniePosition);
+        const endQuaternion = this.camera.quaternion.clone();
+        this.camera.quaternion.copy(startQuaternion);
+
+        // Animate the rotation
+        const duration = 1000; // 1 second
+        const startTime = Date.now();
+
+        const animate = () => {
+            const elapsed = Date.now() - startTime;
+            const progress = Math.min(elapsed / duration, 1);
+            const eased = 1 - Math.pow(1 - progress, 3); // Ease out cubic
+
+            this.camera.quaternion.slerpQuaternions(startQuaternion, endQuaternion, eased);
+
+            if (progress < 1) {
+                requestAnimationFrame(animate);
+            }
+        };
+
+        animate();
+
+        // Freeze controls while looking at Annie
+        if (this.controls) {
+            this.controls.freeze();
+        }
+    }
+
+    stopLookingAtAnnie() {
+        // Unfreeze controls
+        if (this.controls) {
+            this.controls.unfreeze();
+        }
+        this.originalCameraLookAt = null;
+    }
+
+    showDialogueTree(dialogueNode) {
+        if (this.controls) this.controls.freeze();
+        this.currentInteraction = 'dialogue';
+
+        // Create dialogue container at bottom of screen
+        const dialogueBox = document.createElement('div');
+        dialogueBox.id = 'dialogue-box';
+        dialogueBox.style.cssText = `
+            position: fixed;
+            bottom: 50px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 80%;
+            max-width: 800px;
+            background: rgba(0, 0, 0, 0.9);
+            border: 3px solid #888;
+            border-radius: 10px;
+            padding: 20px;
+            font-family: 'Courier New', monospace;
+            color: white;
+            z-index: 2000;
+            box-shadow: 0 0 20px rgba(0, 0, 0, 0.8);
+        `;
+
+        // Speaker name
+        const speakerName = document.createElement('div');
+        speakerName.textContent = dialogueNode.speaker || 'Unknown';
+        speakerName.style.cssText = `
+            font-size: 18px;
+            font-weight: bold;
+            color: #ffaa55;
+            margin-bottom: 10px;
+        `;
+
+        // Dialogue text
+        const dialogueText = document.createElement('div');
+        dialogueText.textContent = dialogueNode.text;
+        dialogueText.style.cssText = `
+            font-size: 16px;
+            line-height: 1.6;
+            margin-bottom: 20px;
+        `;
+
+        // Options container
+        const optionsContainer = document.createElement('div');
+        optionsContainer.style.cssText = `
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        `;
+
+        dialogueBox.appendChild(speakerName);
+        dialogueBox.appendChild(dialogueText);
+        dialogueBox.appendChild(optionsContainer);
+
+        // If there are options, show them
+        if (dialogueNode.options && dialogueNode.options.length > 0) {
+            dialogueNode.options.forEach((option, index) => {
+                const button = document.createElement('button');
+                button.textContent = `${index + 1}. ${option.text}`;
+                button.style.cssText = `
+                    padding: 10px 20px;
+                    background: #444;
+                    color: white;
+                    border: 2px solid #666;
+                    cursor: pointer;
+                    border-radius: 5px;
+                    font-family: 'Courier New', monospace;
+                    font-size: 14px;
+                    transition: all 0.2s;
+                `;
+                button.onmouseover = () => {
+                    button.style.background = '#666';
+                    button.style.borderColor = '#888';
+                };
+                button.onmouseout = () => {
+                    button.style.background = '#444';
+                    button.style.borderColor = '#666';
+                };
+                button.onclick = () => {
+                    document.body.removeChild(dialogueBox);
+
+                    // If this option leads to more dialogue, show it
+                    if (option.next) {
+                        setTimeout(() => {
+                            this.showDialogueTree(option.next);
+                        }, 100);
+                    } else {
+                        // End dialogue
+                        this.currentInteraction = null;
+                        if (this.controls) this.controls.unfreeze();
+                    }
+                };
+                optionsContainer.appendChild(button);
+            });
+        } else {
+            // No options, just a continue button
+            const continueButton = document.createElement('button');
+            continueButton.textContent = 'Continue';
+            continueButton.style.cssText = `
+                padding: 10px 20px;
+                background: #2a5d2a;
+                color: white;
+                border: 2px solid #3a7d3a;
+                cursor: pointer;
+                border-radius: 5px;
+                font-family: 'Courier New', monospace;
+                font-size: 14px;
+            `;
+            continueButton.onclick = () => {
+                document.body.removeChild(dialogueBox);
+                this.currentInteraction = null;
+                if (this.controls) this.controls.unfreeze();
+
+                // Call onComplete if provided
+                if (dialogueNode.onComplete) {
+                    dialogueNode.onComplete();
+                }
+            };
+            optionsContainer.appendChild(continueButton);
+        }
+
+        document.body.appendChild(dialogueBox);
+    }
+
+    getPageContent(pageId) {
+        // Define unique content for each page
+        const pageContents = {
+            'S_Page1': {
+                title: 'Page 1: The Beginning',
+                content: `The mansion stands silent tonight, but I can feel it watching me.
+
+Every shadow seems alive, every creak of the floorboards sounds like footsteps. I came here seeking answers about my family's past, but I'm beginning to wonder if some secrets are better left buried.
+
+The old caretaker warned me not to come after dark. I should have listened.`
+            },
+            'S_Page2': {
+                title: 'Page 2: Strange Findings',
+                content: `I found something in the library today. Hidden behind a loose panel, a collection of letters dating back decades. They speak of rituals, of something they tried to contain within these walls.
+
+Whatever it was, I don't think they succeeded.
+
+The lights keep flickering, even though I checked all the fuses.`
+            },
+            'S_Page3': {
+                title: 'Page 3: The Basement',
+                content: `There's something in the basement. I can hear it moving down there when I'm trying to sleep. Heavy, deliberate footsteps that start and stop without reason.
+
+I tried to board up the door, but the next morning all the planks were neatly stacked beside it.
+
+It wants me to come down. But I'm not ready. Not yet.`
+            },
+            'S_Page4': {
+                title: 'Page 4: Annie',
+                content: `I found a doll in one of the bedrooms. The tag says her name is Annie. She has this unnerving smile, and her eyes seem to follow you around the room.
+
+I moved her to the attic, but she keeps appearing back in the bedroom. Always sitting in the same chair, always facing the door.
+
+I've stopped moving her.`
+            },
+            'S_Page5': {
+                title: 'Page 5: The Truth',
+                content: `I understand now. This isn't just a haunted house. This is a prison. The original owners didn't just die here – they were consumed, absorbed into the very fabric of the building.
+
+And now it wants me too.
+
+The walls are breathing. I can feel them contract and expand when I press my hand against them. This place is alive.`
+            },
+            'S_Page6': {
+                title: 'Page 6: Final Entry',
+                content: `If you're reading this, I'm probably gone. Either I escaped, or I became part of the mansion like the others.
+
+There is a way out. The ritual in the basement can be reversed, but it requires all six pages to be placed in the correct order. Look for the symbols on the wall near the entrance.
+
+Whatever you do, don't let the darkness catch you. It knows you're here now.
+
+Run.`
+            }
+        };
+
+        return pageContents[pageId] || {
+            title: 'Unknown Page',
+            content: 'The writing on this page is too faded to read...'
+        };
+    }
+
+    showPageContent(pageId, onClose = null) {
+        console.log(`📄 Showing page content for: ${pageId}`);
+
+        if (this.controls) this.controls.freeze();
+        this.currentInteraction = 'page_view';
+
+        const pageData = this.getPageContent(pageId);
+
+        // Remove any existing page overlay first
+        const existingOverlay = document.getElementById('page-overlay');
+        if (existingOverlay) {
+            document.body.removeChild(existingOverlay);
+        }
+
+        // Create old page overlay
+        const pageOverlay = document.createElement('div');
+        pageOverlay.id = 'page-overlay';
+        pageOverlay.style.cssText = `
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.95);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 3000;
+            backdrop-filter: blur(5px);
+        `;
+
+        // Create old page paper
+        const pagePaper = document.createElement('div');
+        pagePaper.style.cssText = `
+            width: 600px;
+            max-height: 80vh;
+            background: linear-gradient(to bottom, #f4e9d4 0%, #e8dcc4 100%);
+            border: 2px solid #8b7355;
+            box-shadow:
+                0 0 40px rgba(0, 0, 0, 0.8),
+                inset 0 0 100px rgba(139, 115, 85, 0.1);
+            padding: 40px;
+            font-family: 'Georgia', serif;
+            color: #2c1810;
+            position: relative;
+            overflow-y: auto;
+
+            /* Old paper texture effect */
+            background-image:
+                repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(139, 115, 85, 0.03) 2px, rgba(139, 115, 85, 0.03) 4px),
+                repeating-linear-gradient(90deg, transparent, transparent 2px, rgba(139, 115, 85, 0.03) 2px, rgba(139, 115, 85, 0.03) 4px);
+        `;
+
+        // Page title
+        const pageTitle = document.createElement('h2');
+        pageTitle.textContent = pageData.title;
+        pageTitle.style.cssText = `
+            font-size: 24px;
+            font-weight: bold;
+            text-align: center;
+            margin-bottom: 30px;
+            color: #1a0f08;
+            text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.1);
+            font-family: 'Georgia', serif;
+            border-bottom: 2px solid #8b7355;
+            padding-bottom: 10px;
+        `;
+
+        // Page content
+        const pageContent = document.createElement('div');
+        pageContent.textContent = pageData.content;
+        pageContent.style.cssText = `
+            font-size: 16px;
+            line-height: 1.8;
+            white-space: pre-line;
+            text-align: justify;
+            color: #3c2415;
+            font-family: 'Georgia', serif;
+            margin-bottom: 30px;
+        `;
+
+        // Close button
+        const closeButton = document.createElement('button');
+        closeButton.textContent = 'Close (Press E)';
+        closeButton.style.cssText = `
+            width: 100%;
+            padding: 15px;
+            background: #5c4a3a;
+            color: #f4e9d4;
+            border: 2px solid #3c2a1a;
+            cursor: pointer;
+            font-family: 'Georgia', serif;
+            font-size: 16px;
+            transition: all 0.3s;
+        `;
+        closeButton.onmouseover = () => {
+            closeButton.style.background = '#6c5a4a';
+        };
+        closeButton.onmouseout = () => {
+            closeButton.style.background = '#5c4a3a';
+        };
+
+        const closePageView = () => {
+            console.log('📄 Closing page view');
+
+            // Check if overlay still exists
+            if (document.body.contains(pageOverlay)) {
+                document.body.removeChild(pageOverlay);
+            }
+
+            this.currentInteraction = null;
+            if (this.controls) this.controls.unfreeze();
+
+            // Call onClose callback if provided
+            if (onClose && typeof onClose === 'function') {
+                onClose();
+            }
+        };
+
+        closeButton.onclick = (e) => {
+            e.stopPropagation();
+            closePageView();
+        };
+
+        // Allow E key to close
+        const keyHandler = (e) => {
+            if (e.code === 'KeyE') {
+                e.preventDefault();
+                document.removeEventListener('keydown', keyHandler);
+                closePageView();
+            }
+        };
+        document.addEventListener('keydown', keyHandler);
+
+        pagePaper.appendChild(pageTitle);
+        pagePaper.appendChild(pageContent);
+        pagePaper.appendChild(closeButton);
+        pageOverlay.appendChild(pagePaper);
+        document.body.appendChild(pageOverlay);
     }
 
     handlePageSlotInteraction(slotObject, userData) {
@@ -1202,15 +1637,17 @@ class InteractionSystem {
             return; // Already moving, continue in tick()
         }
 
-        // Start moving the sofa
+        // Start moving the sofa in positive Z direction
         this.movingSofa = {
             sofa: sofa,
             userData: userData,
-            distanceMoved: userData.distanceMoved || 0, // Track total distance moved
-            initialY: sofa.position.y
+            distanceMoved: userData.distanceMoved, // Use the sofa's tracked distance
+            initialPosition: sofa.position.clone()
         };
 
-        console.log(`🛋️ Started pushing ${sofa.name}. Hold E to continue.`);
+        this.currentInteraction = 'sofa_movement';
+
+        console.log(`🛋️ Started pushing ${sofa.name}. Current distance: ${userData.distanceMoved}. Hold E to continue.`);
         this.showMessage("Pushing sofa... Hold E to continue.", 500);
     }
 
@@ -1546,7 +1983,13 @@ class InteractionSystem {
                                                   interactableData.data.type === 'fuse_box') &&
                                                  !interactableData.data.interactable;
 
-                    if (isPagesLocked) {
+                    // Never show prompt for Annie (she's triggered through Page 4)
+                    const isAnnie = interactableData.data.type === 'annie';
+
+                    if (isAnnie) {
+                        // Don't show any interaction prompt for Annie
+                        isInteractable = false;
+                    } else if (isPagesLocked) {
                         blockedMessage = "The pages are sealed in place by ancient magic";
                     } else if (isPageSlotBlocked) {
                         blockedMessage = "These symbols don't make sense yet";
@@ -1682,6 +2125,9 @@ class InteractionSystem {
         // If no sofa is being moved, return
         if (!this.movingSofa) return;
 
+        // Don't update sofa movement if player is in dialogue or other interaction
+        if (this.currentInteraction && this.currentInteraction !== 'sofa_movement') return;
+
         // If E key is not held, don't continue moving
         if (!this.isEKeyHeld) return;
 
@@ -1689,20 +2135,44 @@ class InteractionSystem {
 
         // Check if we've reached max movement
         if (distanceMoved >= this.sofaMaxMovement) {
-            // Mark as fully moved
+            // Mark as fully moved on this specific sofa's userData
             userData.moved = true;
             userData.distanceMoved = distanceMoved;
+
             this.showMessage("The sofa won't move any further.");
-            console.log(`🛋️ ${sofa.name} fully moved to Y position: ${sofa.position.y.toFixed(2)}`);
+            console.log(`🛋️ ${sofa.name} fully moved. Final position: (${sofa.position.x.toFixed(2)}, ${sofa.position.y.toFixed(2)}, ${sofa.position.z.toFixed(2)})`);
+
+            // Recalculate physics for all child meshes of THIS specific sofa
+            console.log(`🔧 Recalculating physics for ${sofa.name}...`);
+            let recalcCount = 0;
+            sofa.traverse((child) => {
+                if (child.isMesh && child.name) {
+                    try {
+                        this.gameManager.mansion.recalculatePhysicsForObject(child.name);
+                        recalcCount++;
+                        console.log(`  ✓ Recalculated physics for child: ${child.name}`);
+                    } catch (error) {
+                        console.warn(`  ✗ Failed to recalculate physics for ${child.name}:`, error);
+                    }
+                }
+            });
+            console.log(`🔧 Recalculated ${recalcCount} physics bodies for ${sofa.name}`);
+
             this.movingSofa = null;
+
+            // Clear the interaction state
+            if (this.currentInteraction === 'sofa_movement') {
+                this.currentInteraction = null;
+            }
+
             return;
         }
 
         // Calculate movement for this frame
         const moveAmount = Math.min(this.sofaMovementSpeed, this.sofaMaxMovement - distanceMoved);
 
-        // Move the sofa down
-        sofa.position.y -= moveAmount;
+        // Move the sofa in positive Z direction
+        sofa.position.z += moveAmount;
 
         // Update distance moved
         this.movingSofa.distanceMoved += moveAmount;
