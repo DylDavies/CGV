@@ -33,7 +33,7 @@ export class StageManager {
                     fireplaces: false
                 },
                 // Physics filter for office - add exclusion keywords for furniture that shouldn't collide
-                physicsExclusions: ['furniture', 'chair', 'desk', 'cabinet', 'file', 'table', 'shelf', 'bin', 'frame']
+                physicsExclusions: ['furniture', 'chair', 'desk', 'cabinet', 'file', 'shelf', 'frame']
             },
             mansion: {
                 name: 'Haunted Mansion',

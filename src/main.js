@@ -26,6 +26,7 @@ import { PauseMenu } from './systems/PauseMenu.js';
 import { AudioManager } from './systems/AudioManager.js';
 import { Minimap } from './systems/Minimap.js';
 import { NarrativeManager } from './systems/NarrativeManager.js';
+import { Stage1Manager } from './systems/Stage1Manager.js';
 import logger from './utils/Logger.js';
 import RAPIER from 'https://cdn.skypack.dev/@dimforge/rapier3d-compat';
 
@@ -50,9 +51,6 @@ async function main() {
         const uiManager = new UIManager(audioManager);
         await uiManager.initialize();
 
-        const narrativeManager = new NarrativeManager();
-        await narrativeManager.loadNarrative('public/narrative/narrative.json');
-
         const colorPuzzle = new ColorPuzzle();
         await colorPuzzle.loadLevels();
 
@@ -62,7 +60,7 @@ async function main() {
         const keypadPuzzle = new KeypadPuzzle(uiManager);
 
 
-        // --- UI Manager loading --- 
+        // --- UI Manager loading ---
         uiManager.showWelcomeScreen(async () => {
 
             const savedSettings = localStorage.getItem('gameSettings');
@@ -84,12 +82,16 @@ async function main() {
             // Create StageManager to handle different game stages (pass loop and audioManager for safe transitions)
             const stageManager = new StageManager(scene, physicsManager, camera, settings.quality || 'medium', loop, audioManager);
 
+            // Create NarrativeManager with StageManager support
+            const narrativeManager = new NarrativeManager(stageManager);
+            await narrativeManager.loadNarrative('public/narrative/narrative.json');
+
             // Snapshot persistent objects (lights, camera) before loading stage
             stageManager.snapshotPersistentObjects();
 
-            // Load initial stage (mansion for now, will be office in stage 1 later)
+            // Load initial stage (office/Stage1)
             uiManager.updateLoadingProgress(40, "Loading initial stage...");
-            const stageData = await stageManager.loadStage('mansion', (progress, message) => {
+            const stageData = await stageManager.loadStage('office', (progress, message) => {
                 uiManager.updateLoadingProgress(progress, message);
             });
 
@@ -108,11 +110,11 @@ async function main() {
             uiManager.updateLoadingProgress(85, "Preparing your escape...");
             const controls = new FirstPersonControls(camera, renderer.domElement, physicsManager, { colorPuzzle, wirePuzzle, keypadPuzzle }, monsterAI, mansionLoader);
             uiManager.setControls(controls);
-            const flashlight = new ImprovedFlashlight(camera, scene);
+            const flashlight = new ImprovedFlashlight(camera, scene, stageManager);
             // Pass the loop to the PauseMenu
             const pauseMenu = new PauseMenu(renderer, controls, loop);
 
-            const gameManager = new GameManager(mansionLoader, camera, scene, uiManager, audioManager, controls);
+            const gameManager = new GameManager(mansionLoader, camera, scene, uiManager, audioManager, controls, stageManager);
             const puzzleSystem = new PuzzleSystem(scene, gameManager);
             const interactionSystem = new InteractionSystem(camera, scene, gameManager, uiManager, controls);
 
@@ -128,6 +130,9 @@ async function main() {
             uiManager.updateLoadingText("Creating minimap...");
             const minimap = new Minimap(scene, camera, mansionLoader, renderer);
 
+            uiManager.updateLoadingText("Setting up Stage 1 puzzles...");
+            const stage1Manager = new Stage1Manager(scene, gameManager, mansionLoader, uiManager, audioManager, interactionSystem);
+
             new Resizer(camera, renderer);
             loop.updatables.push(
                 controls,
@@ -139,13 +144,14 @@ async function main() {
                 gameManager,
                 atmosphere,
                 monsterAI,
-                minimap
+                minimap,
+                stage1Manager
             );
 
             window.gameControls = {
                 camera, scene, flashlight, physicsManager, mansionLoader, gameManager,
                 interactionSystem, puzzleSystem, atmosphere, colorPuzzle, wirePuzzle, keypadPuzzle,
-                audioManager, monsterAI, narrativeManager, uiManager, minimap, stageManager,
+                audioManager, monsterAI, narrativeManager, uiManager, minimap, stageManager, stage1Manager,
                 toggleNavMesh: () => mansionLoader.toggleNavMeshVisualizer(),
                 toggleMansion: () => mansionLoader.toggleMansionVisibility(),
                 toggleNavMeshNodes: () => mansionLoader.toggleNavMeshNodesVisualizer(),
@@ -179,7 +185,16 @@ async function main() {
                         uiManager.hideLoadingScreen();
                         document.body.classList.add('game-active');
                         await gameManager.showStage1Title(); // Show Stage 1 title
-                        await narrativeManager.playIntroSequence();
+
+                        // Start stage-specific gameplay
+                        if (stageManager.currentStage === 'office') {
+                            // Start Stage 1 puzzle sequence
+                            stage1Manager.setupMissingPersonsFile();
+                            stage1Manager.startStage1();
+                        } else if (stageManager.currentStage === 'mansion') {
+                            // Play intro narrative sequence on mansion stage
+                            await narrativeManager.playIntroSequence();
+                        }
                         console.log('✅ Game ready! Click to begin.');
                     }, 500);
                 }, 100);
