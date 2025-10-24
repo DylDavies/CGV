@@ -94,15 +94,17 @@ class GameManager {
 
     startPhoneRingEvent() {
         console.log("☎️ Starting phone ring event...");
-        
-        // Trigger narrative events
-        window.gameControls.narrativeManager.triggerEvent('intro.speech_bubble_2');
-        window.gameControls.narrativeManager.triggerEvent('intro.objective_1');
+
+        // Trigger narrative events (check if narrativeManager exists first)
+        if (window.gameControls && window.gameControls.narrativeManager) {
+            window.gameControls.narrativeManager.triggerEvent('intro.speech_bubble_2');
+            window.gameControls.narrativeManager.triggerEvent('intro.objective_1');
+        }
 
         const soundSourceMesh = this.mansion.getProp('telephone');
         if (soundSourceMesh) {
             this.audioManager.playLoopingPositionalSound('phone_ringing', this.audioManager.soundPaths.rotaryPhone, soundSourceMesh, 10);
-        } 
+        }
     }
     
     async answerTelephone() {
@@ -161,7 +163,7 @@ class GameManager {
 
         this.addToInventory({
             name: `Page (${pageData.symbol})`,
-            type: 'scroll',
+            type: 'page',
             description: 'A strange page with a unique symbol.',
             stackable: false,
             pageId: pageId, // Store the ID for placing it later
@@ -498,10 +500,27 @@ class GameManager {
         if (isVisible) {
             this.ui.inventoryPopup.style.display = 'none';
             if (this.controls) this.controls.unfreeze(); // NEW: Unfreeze controls when closing
+            // Remove outside click listener
+            if (this.inventoryClickOutsideHandler) {
+                document.removeEventListener('click', this.inventoryClickOutsideHandler);
+                this.inventoryClickOutsideHandler = null;
+            }
         } else {
             this.updateInventoryPopup();
             this.ui.inventoryPopup.style.display = 'block';
             if (this.controls) this.controls.freeze(); // NEW: Freeze controls when opening
+
+            // Add outside click listener after a short delay (to prevent immediate close)
+            setTimeout(() => {
+                this.inventoryClickOutsideHandler = (e) => {
+                    // Check if click is outside the popup
+                    if (!this.ui.inventoryPopup.contains(e.target)) {
+                        console.log('🎒 Closing inventory - clicked outside');
+                        this.toggleInventoryPopup();
+                    }
+                };
+                document.addEventListener('click', this.inventoryClickOutsideHandler);
+            }, 100);
         }
     }
 
@@ -557,6 +576,7 @@ class GameManager {
     getItemIcon(itemType) {
         const icons = {
             'key': '🔑',
+            'page': '📜',
             'scroll': '📜',
             'tool': '🔧',
             'weight_object': '⚖️',
@@ -576,7 +596,7 @@ class GameManager {
         const pageData = PAGE_DATA[pageId];
         this.addToInventory({
             name: `Page (${pageData.symbol})`,
-            type: 'scroll',
+            type: 'page',
             description: 'A strange page with a unique symbol.',
             stackable: false,
             pageId: pageId,
@@ -1002,6 +1022,13 @@ class GameManager {
             const item = this.inventory[itemIndex];
             
             switch (item.type) {
+                case 'page':
+                    // Show page content through InteractionSystem
+                    if (window.gameControls && window.gameControls.interactionSystem) {
+                        window.gameControls.interactionSystem.showPageContent(item.pageId);
+                    }
+                    break;
+
                 case 'scroll':
                     this.showInteraction(
                         item.name,
@@ -1475,6 +1502,11 @@ class GameManager {
 
         // Only check collision if we're in Stage 2 (monster is spawned)
         if (this.gameStage !== 2) return;
+
+        // Don't check collision if player is hiding
+        if (window.gameControls.interactionSystem && window.gameControls.interactionSystem.isHiding) {
+            return;
+        }
 
         const monster = window.gameControls.monsterAI.monster;
         if (!monster) return;

@@ -1,6 +1,7 @@
 // src/systems/InteractionSystem.js
 
 import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.127.0/build/three.module.js';
+import { AnnieInteraction } from '../interactions/AnnieInteraction.js';
 
 class InteractionSystem {
    constructor(camera, scene, gameManager, uiManager, controls) {
@@ -31,11 +32,28 @@ class InteractionSystem {
         this.sofaMaxMovement = 1; // Maximum distance to move (0.5 units)
         this.isEKeyHeld = false; // Track if E key is held
 
+        // Hiding system
+        this.isHiding = false; // Is player currently hiding
+        this.currentHidingSpot = null; // Current wardrobe object player is in
+        this.hideStartTime = 0; // When player started hiding
+        this.hideTimer = null; // Timer for aggression decrease
+        this.monsterInvestigationTriggered = false; // Track if monster has investigated this hiding session
+        this.monsterAggroReductionTriggered = false; // Track if aggro reduction has occurred
+        this.hideOverlay = null; // Visual overlay for hiding
+        this.originalCameraPosition = null; // Store player's position before hiding
+        this.originalCameraQuaternion = null; // Store player's rotation before hiding
+        this.lockedCameraPosition = null; // Camera position while hiding (locked)
+        this.lockedCameraQuaternion = null; // Camera rotation while hiding (locked)
+        this.flashlightWasOn = false; // Track if flashlight was on before hiding
+
         // UI Elements
         this.crosshair = null;
         this.interactionPrompt = null;
         this.puzzleUI = null;
-        
+
+        // Initialize Annie interaction handler
+        this.annieInteraction = new AnnieInteraction(this);
+
         this.setupEventListeners();
         this.createUI();
         this.registerInteractionTypes();
@@ -241,6 +259,11 @@ class InteractionSystem {
                 movedPrompt: "Sofa won't move any further",
                 pushingPrompt: "Pushing... (Hold E)",
                 handler: this.handleSofaInteraction.bind(this)
+            },
+            wardrobe: {
+                prompt: "Press E to hide",
+                hidingPrompt: "Press E to exit",
+                handler: this.handleWardrobeInteraction.bind(this)
             }
         };
     }
@@ -271,6 +294,12 @@ class InteractionSystem {
     onKeyDown(event) {
         switch (event.code) {
             case 'KeyE':
+                // Special handling for hiding - allow E key to exit
+                if (this.isHiding) {
+                    this.exitHiding();
+                    return;
+                }
+
                 if (this.controls && this.controls.isFrozen) {
                     return;
                 }
@@ -384,7 +413,7 @@ class InteractionSystem {
         if (userData.pageId) {
             // Special handling for Page 4 - Annie interaction
             if (userData.pageId === 'S_Page4') {
-                this.handleAnniePageInteraction(pageObject, userData);
+                this.annieInteraction.handleAnniePageInteraction(pageObject, userData);
                 return;
             }
 
@@ -403,241 +432,6 @@ class InteractionSystem {
         } else {
             console.warn("Tried to pick up a page with no pageId property:", pageObject.name);
         }
-    }
-
-    handleAnniePageInteraction(pageObject, userData) {
-        // Get Annie doll from mansion
-        const annie = this.gameManager.mansion.props.get('annie');
-
-        if (!annie) {
-            console.warn('Annie doll not found! Allowing normal page pickup.');
-            // Fall back to normal page collection
-            this.gameManager.collectPage(userData.pageId);
-            this.animateItemPickup(pageObject, () => {
-                if (pageObject.parent) {
-                    pageObject.parent.remove(pageObject);
-                }
-            });
-            return;
-        }
-
-        // Make camera look at Annie
-        this.lookAtAnnie(annie);
-
-        // Start Annie's dialogue tree
-        this.showDialogueTree({
-            speaker: "Annie",
-            text: "Do you want the paper?",
-            options: [
-                {
-                    text: "Yes",
-                    next: {
-                        speaker: "Annie",
-                        text: "Here you go...",
-                        onComplete: () => {
-                            console.log('🎎 Annie: Giving page to player');
-                            this.stopLookingAtAnnie();
-                            this.gameManager.collectPage(userData.pageId);
-                            this.animateItemPickup(pageObject, () => {
-                                if (pageObject.parent) {
-                                    pageObject.parent.remove(pageObject);
-                                }
-                            });
-                            this.showMessage("Annie lets you take the paper.");
-                        }
-                    }
-                },
-                {
-                    text: "No",
-                    next: {
-                        speaker: "Annie",
-                        text: "Okay... maybe later then.",
-                        onComplete: () => {
-                            console.log('🎎 Annie: Player declined');
-                            this.stopLookingAtAnnie();
-                            this.showMessage("You decide not to take the paper.");
-                        }
-                    }
-                }
-            ]
-        });
-    }
-
-    lookAtAnnie(annie) {
-        // Store original camera state
-        this.originalCameraLookAt = {
-            enabled: true,
-            target: annie
-        };
-
-        // Get Annie's world position
-        const anniePosition = new THREE.Vector3();
-        annie.getWorldPosition(anniePosition);
-
-        // Look higher - add offset to Y coordinate (looking at Annie's face/upper body)
-        anniePosition.y += 0.5; // Adjust this value to look higher or lower
-
-        // Smoothly rotate camera to look at Annie
-        const startQuaternion = this.camera.quaternion.clone();
-        this.camera.lookAt(anniePosition);
-        const endQuaternion = this.camera.quaternion.clone();
-        this.camera.quaternion.copy(startQuaternion);
-
-        // Animate the rotation
-        const duration = 1000; // 1 second
-        const startTime = Date.now();
-
-        const animate = () => {
-            const elapsed = Date.now() - startTime;
-            const progress = Math.min(elapsed / duration, 1);
-            const eased = 1 - Math.pow(1 - progress, 3); // Ease out cubic
-
-            this.camera.quaternion.slerpQuaternions(startQuaternion, endQuaternion, eased);
-
-            if (progress < 1) {
-                requestAnimationFrame(animate);
-            }
-        };
-
-        animate();
-
-        // Freeze controls while looking at Annie
-        if (this.controls) {
-            this.controls.freeze();
-        }
-    }
-
-    stopLookingAtAnnie() {
-        // Unfreeze controls
-        if (this.controls) {
-            this.controls.unfreeze();
-        }
-        this.originalCameraLookAt = null;
-    }
-
-    showDialogueTree(dialogueNode) {
-        if (this.controls) this.controls.freeze();
-        this.currentInteraction = 'dialogue';
-
-        // Create dialogue container at bottom of screen
-        const dialogueBox = document.createElement('div');
-        dialogueBox.id = 'dialogue-box';
-        dialogueBox.style.cssText = `
-            position: fixed;
-            bottom: 50px;
-            left: 50%;
-            transform: translateX(-50%);
-            width: 80%;
-            max-width: 800px;
-            background: rgba(0, 0, 0, 0.9);
-            border: 3px solid #888;
-            border-radius: 10px;
-            padding: 20px;
-            font-family: 'Courier New', monospace;
-            color: white;
-            z-index: 2000;
-            box-shadow: 0 0 20px rgba(0, 0, 0, 0.8);
-        `;
-
-        // Speaker name
-        const speakerName = document.createElement('div');
-        speakerName.textContent = dialogueNode.speaker || 'Unknown';
-        speakerName.style.cssText = `
-            font-size: 18px;
-            font-weight: bold;
-            color: #ffaa55;
-            margin-bottom: 10px;
-        `;
-
-        // Dialogue text
-        const dialogueText = document.createElement('div');
-        dialogueText.textContent = dialogueNode.text;
-        dialogueText.style.cssText = `
-            font-size: 16px;
-            line-height: 1.6;
-            margin-bottom: 20px;
-        `;
-
-        // Options container
-        const optionsContainer = document.createElement('div');
-        optionsContainer.style.cssText = `
-            display: flex;
-            flex-direction: column;
-            gap: 10px;
-        `;
-
-        dialogueBox.appendChild(speakerName);
-        dialogueBox.appendChild(dialogueText);
-        dialogueBox.appendChild(optionsContainer);
-
-        // If there are options, show them
-        if (dialogueNode.options && dialogueNode.options.length > 0) {
-            dialogueNode.options.forEach((option, index) => {
-                const button = document.createElement('button');
-                button.textContent = `${index + 1}. ${option.text}`;
-                button.style.cssText = `
-                    padding: 10px 20px;
-                    background: #444;
-                    color: white;
-                    border: 2px solid #666;
-                    cursor: pointer;
-                    border-radius: 5px;
-                    font-family: 'Courier New', monospace;
-                    font-size: 14px;
-                    transition: all 0.2s;
-                `;
-                button.onmouseover = () => {
-                    button.style.background = '#666';
-                    button.style.borderColor = '#888';
-                };
-                button.onmouseout = () => {
-                    button.style.background = '#444';
-                    button.style.borderColor = '#666';
-                };
-                button.onclick = () => {
-                    document.body.removeChild(dialogueBox);
-
-                    // If this option leads to more dialogue, show it
-                    if (option.next) {
-                        setTimeout(() => {
-                            this.showDialogueTree(option.next);
-                        }, 100);
-                    } else {
-                        // End dialogue
-                        this.currentInteraction = null;
-                        if (this.controls) this.controls.unfreeze();
-                    }
-                };
-                optionsContainer.appendChild(button);
-            });
-        } else {
-            // No options, just a continue button
-            const continueButton = document.createElement('button');
-            continueButton.textContent = 'Continue';
-            continueButton.style.cssText = `
-                padding: 10px 20px;
-                background: #2a5d2a;
-                color: white;
-                border: 2px solid #3a7d3a;
-                cursor: pointer;
-                border-radius: 5px;
-                font-family: 'Courier New', monospace;
-                font-size: 14px;
-            `;
-            continueButton.onclick = () => {
-                document.body.removeChild(dialogueBox);
-                this.currentInteraction = null;
-                if (this.controls) this.controls.unfreeze();
-
-                // Call onComplete if provided
-                if (dialogueNode.onComplete) {
-                    dialogueNode.onComplete();
-                }
-            };
-            optionsContainer.appendChild(continueButton);
-        }
-
-        document.body.appendChild(dialogueBox);
     }
 
     getPageContent(pageId) {
@@ -704,6 +498,21 @@ Run.`
     showPageContent(pageId, onClose = null) {
         console.log(`📄 Showing page content for: ${pageId}`);
 
+        // Immediately hide all prompts BEFORE freezing
+        const currentPrompt = this.interactionPrompt.textContent;
+        if (currentPrompt) {
+            console.log(`📄 Clearing prompt before showing page: "${currentPrompt}"`);
+        }
+        this.interactionPrompt.style.display = 'none';
+        this.interactionPrompt.textContent = '';
+        this.crosshair.style.background = 'white';
+        this.crosshair.style.borderColor = 'rgba(255,255,255,0.8)';
+        this.crosshair.style.width = '4px';
+        this.crosshair.style.height = '4px';
+
+        // Release E key to prevent movement after viewing page
+        this.isEKeyHeld = false;
+
         if (this.controls) this.controls.freeze();
         this.currentInteraction = 'page_view';
 
@@ -718,6 +527,7 @@ Run.`
         // Create old page overlay
         const pageOverlay = document.createElement('div');
         pageOverlay.id = 'page-overlay';
+        pageOverlay.tabIndex = -1; // Make focusable
         pageOverlay.style.cssText = `
             position: fixed;
             top: 0;
@@ -730,6 +540,7 @@ Run.`
             justify-content: center;
             z-index: 3000;
             backdrop-filter: blur(5px);
+            outline: none;
         `;
 
         // Create old page paper
@@ -812,7 +623,14 @@ Run.`
             }
 
             this.currentInteraction = null;
-            if (this.controls) this.controls.unfreeze();
+
+            // Check if inventory popup is open - if so, keep controls frozen
+            const inventoryPopup = document.getElementById('inventory-popup');
+            const isInventoryOpen = inventoryPopup && inventoryPopup.style.display === 'block';
+
+            if (this.controls && !isInventoryOpen) {
+                this.controls.unfreeze();
+            }
 
             // Call onClose callback if provided
             if (onClose && typeof onClose === 'function') {
@@ -838,8 +656,19 @@ Run.`
         pagePaper.appendChild(pageTitle);
         pagePaper.appendChild(pageContent);
         pagePaper.appendChild(closeButton);
+        // Prevent clicks on overlay from passing through
+        pageOverlay.addEventListener('click', (e) => {
+            e.stopPropagation();
+        });
+
         pageOverlay.appendChild(pagePaper);
         document.body.appendChild(pageOverlay);
+
+        // Focus the overlay to capture keyboard events
+        setTimeout(() => {
+            pageOverlay.focus();
+            console.log('📄 Page overlay focused for keyboard input');
+        }, 100);
     }
 
     handlePageSlotInteraction(slotObject, userData) {
@@ -1626,9 +1455,9 @@ Run.`
     }
 
     async handleSofaInteraction(sofa, userData) {
-        // Check if sofa has already been fully moved
+        // Check if sofa has already been fully moved - silently return (no message)
         if (userData.moved) {
-            this.showMessage("The sofa has already been moved as far as it will go.");
+            console.log(`🛋️ Sofa ${sofa.name} already moved, ignoring interaction`);
             return;
         }
 
@@ -1642,13 +1471,311 @@ Run.`
             sofa: sofa,
             userData: userData,
             distanceMoved: userData.distanceMoved, // Use the sofa's tracked distance
-            initialPosition: sofa.position.clone()
+            initialPosition: sofa.position.clone(),
+            sofaName: sofa.name // Store the name explicitly
         };
 
         this.currentInteraction = 'sofa_movement';
 
         console.log(`🛋️ Started pushing ${sofa.name}. Current distance: ${userData.distanceMoved}. Hold E to continue.`);
+        console.log(`🛋️ Sofa userData:`, userData);
         this.showMessage("Pushing sofa... Hold E to continue.", 500);
+    }
+
+    async handleWardrobeInteraction(wardrobe, userData) {
+        // Toggle hiding state
+        if (this.isHiding) {
+            // Exit hiding
+            this.exitHiding();
+        } else {
+            // Enter hiding
+            this.enterHiding(wardrobe);
+        }
+    }
+
+    enterHiding(wardrobe) {
+        console.log(`🚪 Entering hiding in ${wardrobe.name}`);
+
+        this.isHiding = true;
+        this.currentHidingSpot = wardrobe;
+        this.hideStartTime = Date.now();
+        this.currentInteraction = 'hiding';
+
+        // Save original camera position and rotation
+        this.originalCameraPosition = this.camera.position.clone();
+        this.originalCameraQuaternion = this.camera.quaternion.clone();
+
+        // Reset hiding session flags
+        this.monsterInvestigationTriggered = false;
+        this.monsterAggroReductionTriggered = false;
+
+        // Calculate wardrobe's world position
+        const wardrobeWorldPos = new THREE.Vector3();
+        wardrobe.getWorldPosition(wardrobeWorldPos);
+
+        // Get the wardrobe's forward direction (where it faces)
+        const wardrobeForward = new THREE.Vector3(0, 0, 1);
+        wardrobeForward.applyQuaternion(wardrobe.quaternion);
+
+        // Position camera slightly in front of the wardrobe, looking out
+        const hidePosition = wardrobeWorldPos.clone();
+        hidePosition.add(wardrobeForward.multiplyScalar(0.3)); // 0.3 units forward
+        hidePosition.y = this.originalCameraPosition.y; // Keep camera at player eye height
+
+        // Move camera to hiding position
+        this.camera.position.copy(hidePosition);
+
+        // Make camera look back at where the player was standing
+        this.camera.lookAt(this.originalCameraPosition);
+
+        // Store the locked camera position and rotation
+        this.lockedCameraPosition = this.camera.position.clone();
+        this.lockedCameraQuaternion = this.camera.quaternion.clone();
+
+        // Teleport physics body to hiding position to prevent falling/movement
+        if (window.gameControls && window.gameControls.physicsManager) {
+            window.gameControls.physicsManager.teleportTo(hidePosition);
+        }
+
+        // Freeze player controls AFTER setting locked position (prevents mouse look and WASD)
+        if (this.controls) {
+            this.controls.freeze();
+        }
+
+        // Turn off flashlight if it's on
+        if (window.gameControls && window.gameControls.flashlight) {
+            this.flashlightWasOn = window.gameControls.flashlight.isOn;
+            if (this.flashlightWasOn) {
+                window.gameControls.flashlight.toggle();
+                console.log('💡 Flashlight turned off while hiding');
+            }
+        }
+
+        // Create and show hiding overlay
+        this.createHidingOverlay();
+
+        // Show message
+        this.showMessage("Hiding... Press E to exit", 2000);
+    }
+
+    exitHiding() {
+        console.log(`🚪 Exiting hiding`);
+
+        this.isHiding = false;
+        this.currentHidingSpot = null;
+        this.currentInteraction = null;
+
+        // Restore original camera position and rotation
+        if (this.originalCameraPosition && this.originalCameraQuaternion) {
+            // Teleport physics body back to original position
+            if (window.gameControls && window.gameControls.physicsManager) {
+                window.gameControls.physicsManager.teleportTo(this.originalCameraPosition);
+            }
+
+            this.camera.position.copy(this.originalCameraPosition);
+            this.camera.quaternion.copy(this.originalCameraQuaternion);
+        }
+
+        // Unfreeze player controls
+        if (this.controls) {
+            this.controls.unfreeze();
+        }
+
+        // Restore flashlight state if it was on before hiding
+        if (this.flashlightWasOn && window.gameControls && window.gameControls.flashlight) {
+            if (!window.gameControls.flashlight.isOn) {
+                window.gameControls.flashlight.toggle();
+                console.log('💡 Flashlight restored after hiding');
+            }
+        }
+
+        // Remove hiding overlay
+        this.removeHidingOverlay();
+
+        // Clear stored positions
+        this.originalCameraPosition = null;
+        this.originalCameraQuaternion = null;
+        this.lockedCameraPosition = null;
+        this.lockedCameraQuaternion = null;
+        this.flashlightWasOn = false;
+
+        // Reset hiding session flags
+        this.monsterInvestigationTriggered = false;
+        this.monsterAggroReductionTriggered = false;
+
+        // Show message
+        this.showMessage("You exit your hiding spot", 2000);
+    }
+
+    createHidingOverlay() {
+        // Remove existing overlay if any
+        this.removeHidingOverlay();
+
+        // Create main overlay container
+        this.hideOverlay = document.createElement('div');
+        this.hideOverlay.style.cssText = `
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            z-index: 500;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        `;
+
+        // Create left door bar
+        const leftDoor = document.createElement('div');
+        leftDoor.style.cssText = `
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 30%;
+            height: 100%;
+            background: linear-gradient(to right,
+                rgba(0, 0, 0, 1) 0%,
+                rgba(10, 10, 10, 0.98) 50%,
+                rgba(0, 0, 0, 0.9) 100%);
+            box-shadow: inset -20px 0 40px rgba(0,0,0,0.9), inset 10px 0 20px rgba(0,0,0,0.7);
+            border-right: 3px solid rgba(0, 0, 0, 1);
+        `;
+
+        // Create right door bar
+        const rightDoor = document.createElement('div');
+        rightDoor.style.cssText = `
+            position: fixed;
+            top: 0;
+            right: 0;
+            width: 30%;
+            height: 100%;
+            background: linear-gradient(to left,
+                rgba(0, 0, 0, 1) 0%,
+                rgba(10, 10, 10, 0.98) 50%,
+                rgba(0, 0, 0, 0.9) 100%);
+            box-shadow: inset 20px 0 40px rgba(0,0,0,0.9), inset -10px 0 20px rgba(0,0,0,0.7);
+            border-left: 3px solid rgba(0, 0, 0, 1);
+        `;
+
+        // Create center vignette overlay
+        const vignette = document.createElement('div');
+        vignette.style.cssText = `
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: radial-gradient(circle at center, rgba(0,0,0,0.4) 0%, rgba(0,0,0,0.8) 100%);
+            pointer-events: none;
+        `;
+
+        // Add hiding status text
+        const statusText = document.createElement('div');
+        statusText.style.cssText = `
+            position: relative;
+            color: rgba(255,255,255,0.8);
+            font-family: 'Courier New', monospace;
+            font-size: 18px;
+            text-align: center;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.8);
+            z-index: 501;
+        `;
+        statusText.innerHTML = `
+            <p style="margin: 0 0 10px 0;">HIDING</p>
+            <p style="margin: 0; font-size: 14px; color: rgba(255,255,255,0.6);">Press E to exit</p>
+        `;
+
+        this.hideOverlay.appendChild(leftDoor);
+        this.hideOverlay.appendChild(rightDoor);
+        this.hideOverlay.appendChild(vignette);
+        this.hideOverlay.appendChild(statusText);
+        document.body.appendChild(this.hideOverlay);
+    }
+
+    removeHidingOverlay() {
+        if (this.hideOverlay) {
+            document.body.removeChild(this.hideOverlay);
+            this.hideOverlay = null;
+        }
+    }
+
+    triggerMonsterInvestigation() {
+        this.monsterInvestigationTriggered = true;
+
+        // Check if monster is spawned and gameStage is 2
+        if (!window.gameControls || !window.gameControls.monsterAI) {
+            console.log('🚪 Monster investigation skipped - monster not spawned yet');
+            return;
+        }
+
+        if (!window.gameControls.gameManager || window.gameControls.gameManager.gameStage !== 2) {
+            console.log('🚪 Monster investigation skipped - not in stage 2 yet');
+            return;
+        }
+
+        const monsterAI = window.gameControls.monsterAI;
+        const monster = monsterAI.monster;
+
+        if (!monster || !monster.visible) {
+            console.log('🚪 Monster investigation skipped - monster not visible');
+            return;
+        }
+
+        console.log('👾 Monster heard something and is investigating your hiding spot...');
+        this.showMessage("You hear footsteps approaching...", 3000);
+
+        // Get hiding spot position
+        const hidePos = this.lockedCameraPosition.clone();
+
+        // Make monster move to near the hiding spot
+        if (monsterAI.pathfinding) {
+            // Find a navmesh node near the hiding spot
+            const zone = monsterAI.pathfinding.zones[monsterAI.ZONE];
+            const nodes = zone.groups[monsterAI.groupID];
+
+            let closestNode = null;
+            let closestDistance = Infinity;
+
+            for (const node of nodes) {
+                const distance = node.centroid.distanceTo(hidePos);
+                if (distance < closestDistance) {
+                    closestDistance = distance;
+                    closestNode = node;
+                }
+            }
+
+            if (closestNode) {
+                // Move monster to investigation spot
+                monster.position.copy(closestNode.centroid);
+                console.log('👾 Monster arrived at hiding spot');
+
+                // Make monster look around for 3 seconds, then move away
+                setTimeout(() => {
+                    this.showMessage("The footsteps are fading away...", 2000);
+                    console.log('👾 Monster found nothing and is moving away');
+
+                    // Spawn monster somewhere else after investigation
+                    setTimeout(() => {
+                        monsterAI.spawn();
+                    }, 2000);
+                }, 3000);
+            }
+        }
+    }
+
+    reduceMonsterAggression() {
+        this.monsterAggroReductionTriggered = true;
+
+        if (window.gameControls && window.gameControls.monsterAI) {
+            const currentLevel = window.gameControls.monsterAI.aggressionLevel;
+            if (currentLevel > 0) {
+                const newLevel = Math.max(0, currentLevel - 1);
+                window.gameControls.monsterAI.setAggressionLevel(newLevel);
+                console.log(`👾 Monster aggression decreased after hiding for 10 seconds: ${currentLevel} -> ${newLevel}`);
+                this.showMessage("You feel safer now...", 2000);
+            }
+        }
     }
 
     startPuzzle(puzzleData, puzzleObject) {
@@ -1943,6 +2070,25 @@ Run.`
     }
 
     updateCrosshair() {
+        // Don't update crosshair during active interactions (dialogue, page view, etc)
+        // Allow updates for sofa_movement and hiding
+        if (this.currentInteraction && this.currentInteraction !== 'sofa_movement' && this.currentInteraction !== 'hiding') {
+            // Only clear prompts if not showing a message (messages should persist)
+            if (!this.isMessageVisible) {
+                const currentPrompt = this.interactionPrompt.textContent;
+                if (currentPrompt) {
+                    console.log(`[Prompt] Force hiding during interaction: "${currentPrompt}" (currentInteraction: ${this.currentInteraction})`);
+                }
+                this.interactionPrompt.style.display = 'none';
+                this.interactionPrompt.textContent = '';
+                this.crosshair.style.background = 'white';
+                this.crosshair.style.borderColor = 'rgba(255,255,255,0.8)';
+                this.crosshair.style.width = '4px';
+                this.crosshair.style.height = '4px';
+            }
+            return;
+        }
+
         this.raycaster.setFromCamera(new THREE.Vector2(0, 0), this.camera);
         const intersects = this.raycaster.intersectObjects(this.scene.children, true);
 
@@ -1959,6 +2105,8 @@ Run.`
 
                 if (interactableData) {
                     const interactionType = this.interactionTypes[interactableData.data.type];
+                    const objectName = interactableData.object.name || 'unnamed';
+                    const objectType = interactableData.data.type;
 
                     // Check if this is a page/page_slot and puzzle is completed
                     const isPagesLocked = this.gameManager.pagesPuzzleCompleted &&
@@ -1984,10 +2132,16 @@ Run.`
                                                  !interactableData.data.interactable;
 
                     // Never show prompt for Annie (she's triggered through Page 4)
-                    const isAnnie = interactableData.data.type === 'annie';
+                    const isAnnie = this.annieInteraction.isAnnieBlock(interactableData);
+
+                    // Check if sofa has already been moved
+                    const isMovedSofa = interactableData.data.type === 'sofa' && interactableData.data.moved;
 
                     if (isAnnie) {
                         // Don't show any interaction prompt for Annie
+                        isInteractable = false;
+                    } else if (isMovedSofa) {
+                        // Don't show any prompt for sofas that have already been moved
                         isInteractable = false;
                     } else if (isPagesLocked) {
                         blockedMessage = "The pages are sealed in place by ancient magic";
@@ -2023,12 +2177,18 @@ Run.`
 
                                 if (isBeingPushed) {
                                     // Show progress while pushing (handled in updateSofaMovement)
-                                    // Don't override here, let updateSofaMovement handle it
-                                } else if (interactableData.data.moved) {
-                                    interactionPrompt = interactionType.movedPrompt;
+                                    // Skip updating prompt here - updateSofaMovement will handle it
+                                    return;
                                 } else {
+                                    // Moved sofas are handled earlier (isMovedSofa check), so this is only for unmoved sofas
                                     interactionPrompt = interactionType.prompt;
                                 }
+                            }
+                            // Special handling for wardrobe to show different prompt based on hiding state
+                            else if (interactableData.data.type === 'wardrobe') {
+                                interactionPrompt = this.isHiding ?
+                                    interactionType.hidingPrompt :
+                                    interactionType.prompt;
                             } else {
                                 interactionPrompt = interactableData.data.locked ?
                                     (interactionType.lockedPrompt || interactionType.prompt) :
@@ -2040,27 +2200,51 @@ Run.`
             }
         }
 
+        // Only update UI if state has changed (prevents flashing)
+        const currentPromptText = this.interactionPrompt.textContent;
+        const currentPromptVisible = this.interactionPrompt.style.display === 'block';
+
         if (isInteractable) {
-            this.crosshair.style.background = '#00ff00';
-            this.crosshair.style.borderColor = '#00ff00';
-            this.crosshair.style.width = '8px';
-            this.crosshair.style.height = '8px';
-            this.interactionPrompt.textContent = interactionPrompt;
-            this.interactionPrompt.style.display = 'block';
+            // Only update if prompt text changed or visibility changed
+            if (currentPromptText !== interactionPrompt || !currentPromptVisible) {
+                // Get debug info from the last found interactable
+                const debugInfo = intersects.length > 0 ?
+                    this.findInteractableData(intersects[0].object) : null;
+                const objName = debugInfo ? (debugInfo.object.name || 'unnamed') : 'none';
+                const objType = debugInfo ? debugInfo.data.type : 'none';
+
+                console.log(`[Prompt] Showing: "${interactionPrompt}" | Object: ${objName} (${objType}) | Source: updateCrosshair - interactable`);
+                this.crosshair.style.background = '#00ff00';
+                this.crosshair.style.borderColor = '#00ff00';
+                this.crosshair.style.width = '8px';
+                this.crosshair.style.height = '8px';
+                this.interactionPrompt.textContent = interactionPrompt;
+                this.interactionPrompt.style.display = 'block';
+            }
         } else if (blockedMessage) {
-            // Show blocked message with red crosshair
-            this.crosshair.style.background = '#ff6666';
-            this.crosshair.style.borderColor = '#ff6666';
-            this.crosshair.style.width = '6px';
-            this.crosshair.style.height = '6px';
-            this.interactionPrompt.textContent = blockedMessage;
-            this.interactionPrompt.style.display = 'block';
+            // Only update if message changed or visibility changed
+            if (currentPromptText !== blockedMessage || !currentPromptVisible) {
+                console.log(`[Prompt] Showing blocked: "${blockedMessage}" (from updateCrosshair - blocked)`);
+                this.crosshair.style.background = '#ff6666';
+                this.crosshair.style.borderColor = '#ff6666';
+                this.crosshair.style.width = '6px';
+                this.crosshair.style.height = '6px';
+                this.interactionPrompt.textContent = blockedMessage;
+                this.interactionPrompt.style.display = 'block';
+            }
         } else {
-            this.crosshair.style.background = 'white';
-            this.crosshair.style.borderColor = 'rgba(255,255,255,0.8)';
-            this.crosshair.style.width = '4px';
-            this.crosshair.style.height = '4px';
-            this.interactionPrompt.style.display = 'none';
+            // Only hide if currently visible AND not showing a message
+            if (currentPromptVisible && !this.isMessageVisible) {
+                // Log what prompt is being hidden (but only for debugging, not for messages)
+                console.log(`[Prompt] Hiding: "${currentPromptText}" (from updateCrosshair - no interaction)`);
+                this.crosshair.style.background = 'white';
+                this.crosshair.style.borderColor = 'rgba(255,255,255,0.8)';
+                this.crosshair.style.width = '4px';
+                this.crosshair.style.height = '4px';
+                this.interactionPrompt.style.display = 'none';
+                this.interactionPrompt.textContent = ''; // Clear text when hiding
+            }
+            // If a message is visible, leave it alone - processMessageQueue will handle hiding it
         }
     }
 
@@ -2106,6 +2290,38 @@ Run.`
     }
 
     tick(delta) {
+        // Force camera to stay locked while hiding
+        if (this.isHiding && this.lockedCameraPosition && this.lockedCameraQuaternion) {
+            this.camera.position.copy(this.lockedCameraPosition);
+            this.camera.quaternion.copy(this.lockedCameraQuaternion);
+
+            // Also keep physics body locked at hiding position
+            if (window.gameControls && window.gameControls.physicsManager) {
+                const currentPos = window.gameControls.physicsManager.playerBody?.translation();
+                if (currentPos) {
+                    const distance = new THREE.Vector3(currentPos.x, currentPos.y, currentPos.z)
+                        .distanceTo(this.lockedCameraPosition);
+                    // If physics body has moved, teleport it back
+                    if (distance > 0.1) {
+                        window.gameControls.physicsManager.teleportTo(this.lockedCameraPosition);
+                    }
+                }
+            }
+
+            // Check hiding duration for timed events
+            const hidingDuration = (Date.now() - this.hideStartTime) / 1000; // in seconds
+
+            // At 8 seconds, make monster investigate hiding spot
+            if (hidingDuration >= 8 && !this.monsterInvestigationTriggered) {
+                this.triggerMonsterInvestigation();
+            }
+
+            // At 10 seconds, reduce monster aggression
+            if (hidingDuration >= 10 && !this.monsterAggroReductionTriggered) {
+                this.reduceMonsterAggression();
+            }
+        }
+
         if (!this.currentInteraction) {
             // Performance: Only update crosshair every 2nd frame
             this.crosshairUpdateCounter++;
@@ -2139,24 +2355,116 @@ Run.`
             userData.moved = true;
             userData.distanceMoved = distanceMoved;
 
-            this.showMessage("The sofa won't move any further.");
+            // Removed message - sofa just stops moving silently
             console.log(`🛋️ ${sofa.name} fully moved. Final position: (${sofa.position.x.toFixed(2)}, ${sofa.position.y.toFixed(2)}, ${sofa.position.z.toFixed(2)})`);
+            console.log(`🛋️ Sofa final userData:`, userData);
 
-            // Recalculate physics for all child meshes of THIS specific sofa
-            console.log(`🔧 Recalculating physics for ${sofa.name}...`);
-            let recalcCount = 0;
-            sofa.traverse((child) => {
-                if (child.isMesh && child.name) {
-                    try {
-                        this.gameManager.mansion.recalculatePhysicsForObject(child.name);
-                        recalcCount++;
-                        console.log(`  ✓ Recalculated physics for child: ${child.name}`);
-                    } catch (error) {
-                        console.warn(`  ✗ Failed to recalculate physics for ${child.name}:`, error);
-                    }
+            // Recalculate physics for BOTH S_Sofa005 and S_Sofa006 each time either is moved
+            const sofaName = this.movingSofa.sofaName || sofa.name;
+            console.log(`🔧 Checking physics recalculation for sofa: "${sofaName}"`);
+
+            // Check if this is one of the trigger sofas (handle both dot and no-dot naming)
+            if (sofaName.includes('S_Sofa.005') || sofaName.includes('S_Sofa.006') ||
+                sofaName.includes('S_Sofa005') || sofaName.includes('S_Sofa006') ||
+                sofaName.includes('Sofa.005') || sofaName.includes('Sofa.006') ||
+                sofaName.includes('Sofa005') || sofaName.includes('Sofa006')) {
+
+                console.log(`🔧 Recalculating physics for BOTH sofas...`);
+                console.log(`🔧 Available props:`, Array.from(this.gameManager.mansion.props.keys()));
+
+                // Find both sofas in the scene - try multiple naming variations
+                let sofa5 = this.gameManager.mansion.props.get('sofa_S_Sofa.005');
+                if (!sofa5) sofa5 = this.gameManager.mansion.props.get('sofa_S_Sofa005');
+                if (!sofa5) sofa5 = this.gameManager.mansion.props.get('S_Sofa.005');
+                if (!sofa5) sofa5 = this.gameManager.mansion.props.get('S_Sofa005');
+
+                let sofa6 = this.gameManager.mansion.props.get('sofa_S_Sofa.006');
+                if (!sofa6) sofa6 = this.gameManager.mansion.props.get('sofa_S_Sofa006');
+                if (!sofa6) sofa6 = this.gameManager.mansion.props.get('S_Sofa.006');
+                if (!sofa6) sofa6 = this.gameManager.mansion.props.get('S_Sofa006');
+
+                console.log(`🔧 Found sofa 5: ${!!sofa5} (name: ${sofa5?.name})`);
+                console.log(`🔧 Found sofa 6: ${!!sofa6} (name: ${sofa6?.name})`);
+
+                // If we couldn't find them in props, search the scene directly
+                if (!sofa5 || !sofa6) {
+                    console.log(`🔧 Sofas not found in props, searching scene...`);
+                    this.scene.traverse((node) => {
+                        if (node.userData && node.userData.type === 'sofa') {
+                            const nodeName = node.name || '';
+                            console.log(`  🔍 Found sofa in scene: ${nodeName}`);
+                            if (!sofa5 && (nodeName.includes('Sofa.005') || nodeName.includes('Sofa005'))) {
+                                sofa5 = node;
+                                console.log(`  ✓ Assigned to sofa5`);
+                            }
+                            if (!sofa6 && (nodeName.includes('Sofa.006') || nodeName.includes('Sofa006'))) {
+                                sofa6 = node;
+                                console.log(`  ✓ Assigned to sofa6`);
+                            }
+                        }
+                    });
                 }
-            });
-            console.log(`🔧 Recalculated ${recalcCount} physics bodies for ${sofa.name}`);
+
+                // Recalculate sofa 5 first - pass mesh objects instead of names
+                if (sofa5) {
+                    console.log(`🔧 Recalculating physics for S_Sofa005...`);
+                    let recalcCount = 0;
+                    let successCount = 0;
+                    sofa5.traverse((child) => {
+                        if (child.isMesh && child.name) {
+                            try {
+                                // Pass the mesh object itself, not the name
+                                const success = this.gameManager.mansion.recalculatePhysicsForObject(child);
+                                if (success) {
+                                    successCount++;
+                                    console.log(`  ✓ S_Sofa005 child: ${child.name}`);
+                                } else {
+                                    console.log(`  ⚠ S_Sofa005 child not found: ${child.name}`);
+                                }
+                                recalcCount++;
+                                console.log(`  ✓ S_Sofa005 child: ${child.name}`);
+                            } catch (error) {
+                                console.warn(`  ✗ Failed for ${child.name}:`, error);
+                            }
+                        }
+                    });
+                    console.log(`🔧 Recalculated ${successCount}/${recalcCount} physics bodies for S_Sofa005`);
+                } else {
+                    console.warn(`⚠️ Could not find S_Sofa005 in props for recalculation`);
+                }
+
+                // Then recalculate sofa 6 - pass mesh objects instead of names
+                if (sofa6) {
+                    console.log(`🔧 Recalculating physics for S_Sofa006...`);
+                    let recalcCount = 0;
+                    let successCount = 0;
+                    sofa6.traverse((child) => {
+                        if (child.isMesh && child.name) {
+                            try {
+                                // Pass the mesh object itself, not the name
+                                const success = this.gameManager.mansion.recalculatePhysicsForObject(child);
+                                if (success) {
+                                    successCount++;
+                                    console.log(`  ✓ S_Sofa006 child: ${child.name}`);
+                                } else {
+                                    console.log(`  ⚠ S_Sofa006 child not found: ${child.name}`);
+                                }
+                                recalcCount++;
+                                console.log(`  ✓ S_Sofa006 child: ${child.name}`);
+                            } catch (error) {
+                                console.warn(`  ✗ Failed for ${child.name}:`, error);
+                            }
+                        }
+                    });
+                    console.log(`🔧 Recalculated ${successCount}/${recalcCount} physics bodies for S_Sofa006`);
+                } else {
+                    console.warn(`⚠️ Could not find S_Sofa006 in props for recalculation`);
+                }
+
+                console.log(`🔧 Sofa physics recalculation complete for both sofas`);
+            } else {
+                console.log(`⏭️ Skipping physics recalculation for ${sofaName} - not a trigger sofa`);
+            }
 
             this.movingSofa = null;
 
@@ -2180,8 +2488,14 @@ Run.`
 
         // Update prompt to show progress
         const progress = (this.movingSofa.distanceMoved / this.sofaMaxMovement * 100).toFixed(0);
-        this.interactionPrompt.textContent = `Pushing sofa... ${progress}% (Hold E)`;
-        this.interactionPrompt.style.display = 'block';
+        const progressPrompt = `Pushing sofa... ${progress}% (Hold E)`;
+
+        // Only update if changed (prevents spam)
+        if (this.interactionPrompt.textContent !== progressPrompt) {
+            console.log(`[Prompt] Showing: "${progressPrompt}" (from updateSofaMovement)`);
+            this.interactionPrompt.textContent = progressPrompt;
+            this.interactionPrompt.style.display = 'block';
+        }
     }
 
     updateInteractionEffects(delta) {
