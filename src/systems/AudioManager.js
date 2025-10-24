@@ -216,6 +216,18 @@ class AudioManager {
         }
     }
 
+    stopAll(fadeDuration = 0) {
+        console.log(`🔇 Stopping all active sounds (${this.activeSounds.size} sounds)`);
+
+        const soundIds = Array.from(this.activeSounds.keys());
+        soundIds.forEach(soundId => {
+            this.stopSound(soundId, fadeDuration);
+        });
+
+        // Clear the active sounds map
+        this.activeSounds.clear();
+    }
+
 
     // --- Utilities ---
 
