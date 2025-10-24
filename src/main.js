@@ -169,8 +169,8 @@ async function main() {
                 testQTE: (type) => { // Helper function for console testing
                    let options = {};
                    // Define default options for each QTE type for testing
-                   if (type === 'buttonMash') options = { key: 'KeyE', duration: 3000, requiredPresses: 10 };
-                   if (type === 'skillCheck') options = { key: 'Space', duration: 4000, successZoneSize: 30, needleSpeed: 400 };
+                   if (type === 'buttonMash') options = { key: 'KeyE', duration: 4000, requiredPresses: 20 };
+                   if (type === 'skillCheck') options = { key: 'Space', duration: 4000, successZoneSize: 30, needleSpeed: 360 };
                    if (type === 'bouncingRing') options = { key: 'KeyF', duration: 10000, requiredLoops: 6, initialZoneSize: 70, indicatorSpeed: 250 };
                     // Start the QTE using the manager
                     qteManager.startQTE(type || 'buttonMash', {

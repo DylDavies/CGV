@@ -161,7 +161,7 @@ class FirstPersonControls {
                     }
                     break;
 
-                    // Temporary Test key for QTES
+                // Temporary Test key for QTES : (FOR DEV TESTING)
                 // --- QTE Test Trigger ---
                 case 'KeyT':
                     if (this.qteManager && !this.qteManager.isActive()) {

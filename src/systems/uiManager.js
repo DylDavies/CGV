@@ -452,54 +452,70 @@ export class UIManager {
     }
     
     
-    // Quick Time event stuff
+    // ===== Quick Time event stuff =====
 
     // Button Mash
-    showButtonMashQTE(key) {
-        if (this.uiElements.qteButtonMash) {
+    showButtonMashQTE(key){
+        if (this.uiElements.qteButtonMash){
             this.uiElements.mashKeyDisplay.textContent = key;
             this.uiElements.qteButtonMash.classList.remove('hidden');
-        } else { console.error("UI Element 'qteButtonMash' not found"); }
+        } 
+        else{ 
+            console.error("UI Element 'qteButtonMash' not found"); 
+        }
     }
-    hideButtonMashQTE() {
+
+    hideButtonMashQTE(){
         if (this.uiElements.qteButtonMash) this.uiElements.qteButtonMash.classList.add('hidden');
     }
-    updateButtonMashProgress(percentage) {
+
+    updateButtonMashProgress(percentage){
         if (this.uiElements.mashProgressBar) this.uiElements.mashProgressBar.style.width = `${percentage}%`;
     }
-     updateButtonMashTimer(ratio) { // ratio is 0 to 1 (time remaining / total time)
+
+    updateButtonMashTimer(ratio){ // ratio is 0 to 1 (time remaining / total time)
         if (this.uiElements.mashTimerBar) this.uiElements.mashTimerBar.style.width = `${ratio * 100}%`;
     }
 
 
     // Skill Check
-    showSkillCheckQTE(key, zoneStartAngle, zoneSize) {
+    showSkillCheckQTE(key, zoneStartAngle, zoneSize){
         if (this.uiElements.qteSkillCheck) {
             this.uiElements.skillCheckKeyDisplay.textContent = key;
-            // Calculate clip-path for the success zone arc (as defined in QTEManager.js)
+            // Calculate clip-path for the success zone arc
             const points = ['50% 50%']; // Center point
-             const segments = 10; // Number of points to approximate the arc
-             for(let i=0; i <= segments; i++) {
-                 const angle = zoneStartAngle + (zoneSize * i / segments);
-                 // Check if THREE is available or use standard Math
-                 const rad = (typeof THREE !== 'undefined' ? THREE.MathUtils.degToRad(angle - 90) : (angle - 90) * Math.PI / 180); // Offset for CSS rotation
-                 const x = 50 + 50 * Math.cos(rad);
-                 const y = 50 + 50 * Math.sin(rad);
-                 points.push(`${x}% ${y}%`);
-             }
+            const segments = 10; // Number of points to approximate the arc
+
+            for(let i=0; i <= segments; i++) {
+                const angle = zoneStartAngle + (zoneSize * i / segments);
+                
+                // Check if THREE is available or use standard Math
+                const rad = (typeof THREE !== 'undefined' ? THREE.MathUtils.degToRad(angle - 90) : (angle - 90) * Math.PI / 180); // Offset for CSS rotation
+                const x = 50 + 50 * Math.cos(rad);
+                const y = 50 + 50 * Math.sin(rad);
+
+                points.push(`${x}% ${y}%`);
+            }
+
             if (this.uiElements.skillCheckSuccessZone) {
                  this.uiElements.skillCheckSuccessZone.style.clipPath = `polygon(${points.join(', ')})`;
-            } else { console.error("UI Element 'skillCheckSuccessZone' not found"); }
+            } 
+            else{ 
+                console.error("UI Element 'skillCheckSuccessZone' not found"); 
+            }
 
             this.uiElements.qteSkillCheck.classList.remove('hidden');
-        } else { console.error("UI Element 'qteSkillCheck' not found"); }
+        } 
+        else{
+            console.error("UI Element 'qteSkillCheck' not found"); 
+        }
     }
 
-    hideSkillCheckQTE() {
+    hideSkillCheckQTE(){
         if (this.uiElements.qteSkillCheck) this.uiElements.qteSkillCheck.classList.add('hidden');
     }
 
-    updateSkillCheckNeedle(angle) {
+    updateSkillCheckNeedle(angle){
         if (this.uiElements.skillCheckNeedle) this.uiElements.skillCheckNeedle.style.transform = `translateX(-50%) rotate(${angle}deg)`;
     }
 
@@ -520,7 +536,8 @@ export class UIManager {
         // Apply ONLY rotation to the WRAPPER
         if (this.uiElements.bounceIndicatorWrapper) {
             this.uiElements.bounceIndicatorWrapper.style.transform = `rotate(${angle}deg)`;
-        } else {
+        } 
+        else{
             logger.error("UI Element 'bounceIndicatorWrapper' not found for rotation");
         }
     }
@@ -540,6 +557,7 @@ export class UIManager {
                 const y = 50 + 50 * Math.sin(rad);
                 p.push(`${x}% ${y}%`);
             }
+
             return `polygon(${p.join(', ')})`;
         };
 
@@ -548,13 +566,15 @@ export class UIManager {
 
         if (this.uiElements.bounceSafeZoneLeft) {
             this.uiElements.bounceSafeZoneLeft.style.clipPath = getPoints(westZoneCenter, zoneSize);
-        } else {
+        } 
+        else{
             logger.error("UI Element 'bounceSafeZoneLeft' not found for update"); // Use logger
         }
 
         if (this.uiElements.bounceSafeZoneRight) {
             this.uiElements.bounceSafeZoneRight.style.clipPath = getPoints(eastZoneCenter, zoneSize);
-        } else {
+        } 
+        else{
             logger.error("UI Element 'bounceSafeZoneRight' not found for update"); // Use logger
         }
     }

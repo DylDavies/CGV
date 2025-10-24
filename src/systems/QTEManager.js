@@ -1,5 +1,5 @@
 // src/systems/QTEManager.js
-import logger from '../utils/Logger.js'; // Ensure logger is imported
+import logger from '../utils/Logger.js'; 
 
 const QTE_TYPES = {
     BUTTON_MASH: 'buttonMash',
@@ -10,11 +10,9 @@ const QTE_TYPES = {
 class QTEManager {
     constructor(uiManager, controls) {
         this.uiManager = uiManager;
-        this.controls = controls; // PlayerControls instance
-
+        this.controls = controls; // instance of playerControls
         this.activeQTE = null; // { type, key, duration, startTime, timeLeft, onSuccess, onFailure, state }
         this.rafId = null; // For requestAnimationFrame
-
         this.lastTimestamp = null; // Initialize timestamp tracking
 
         logger.log('⚡ QTEManager Initialized');
@@ -67,20 +65,20 @@ class QTEManager {
         // Initialize QTE-specific state and UI
         switch (type) {
             case QTE_TYPES.BUTTON_MASH:
-                // (Button Mash setup remains the same)
                 this.activeQTE.state = {
                     requiredPresses,
                     currentPresses: 0,
                     targetKeyDisplay: key === 'Space' ? 'SPACE' : key.replace('Key', ''),
                 };
+
                 this.uiManager.showButtonMashQTE(this.activeQTE.state.targetKeyDisplay);
                 this.uiManager.updateButtonMashProgress(0);
                 this.uiManager.updateButtonMashTimer(1);
                 break;
 
             case QTE_TYPES.SKILL_CHECK:
-                // (Skill Check setup remains the same)
                 const successZoneStart = Math.random() * (360 - successZoneSize);
+
                 this.activeQTE.state = {
                     needleSpeed,
                     currentAngle: 0,
@@ -89,26 +87,29 @@ class QTEManager {
                     triggered: false,
                     targetKeyDisplay: key === 'Space' ? 'SPACE' : key.replace('Key', ''),
                 };
+
                 this.uiManager.showSkillCheckQTE(
                     this.activeQTE.state.targetKeyDisplay,
                     this.activeQTE.state.successZoneStart,
                     successZoneSize
                 );
+
                 this.uiManager.updateSkillCheckNeedle(0);
                 break;
 
             case QTE_TYPES.BOUNCING_RING:
-                const westZoneCenterBR = 180;
-                const eastZoneCenterBR = 0; // Use 0 for consistency
+                const westZoneCenterBR = 180; // 180 is WEST
+                const eastZoneCenterBR = 0; //  0 is EAST
                 const startNearEastBR = Math.random() > 0.5;
                 const startAngleOffsetBR = initialZoneSize / 4; // Start slightly inside a zone
                 const initialDirectionBR = - 1; //Math.random() > 0.5 ? 1 : -1; // Random initial direction
 
                 // Determine the *first* zone the indicator will move towards
                 let firstTargetZone;
-                if (startNearEastBR) {
+                if (startNearEastBR){
                     firstTargetZone = (initialDirectionBR === 1) ? 'right' : 'left'; // Moving R targets East, L targets West (from near East)
-                } else { // startNearWest
+                } 
+                else{ // startNearWest
                     firstTargetZone = (initialDirectionBR === 1) ? 'right' : 'left'; // Moving R targets East, L targets West (from near West)
                 }
 
@@ -126,8 +127,8 @@ class QTEManager {
                     eastZoneCenter: eastZoneCenterBR, // 0
                     targetKeyDisplay: key === 'Space' ? 'SPACE' : key.replace('Key', ''),
                 };
+
                 this.uiManager.showBouncingRingQTE(this.activeQTE.state.targetKeyDisplay);
-                // Call the simplified UI update
                 this.uiManager.updateBouncingRingZones(this.activeQTE.state.currentZoneSize);
                 this.uiManager.updateBouncingRingProgress(0, requiredLoops);
                 this.uiManager.updateBouncingRingTimer(1); // Start timer bar full
@@ -198,12 +199,15 @@ class QTEManager {
        // Check for timeout failure (Only if no other end condition met yet)
         if (endType === null && this.activeQTE.timeLeft <= 0) {
             logger.log(`QTE Timeout: ${this.activeQTE.type}`); // Log timeout
-             // Check specific failure conditions for each type on timeout
-             if (this.activeQTE.type === QTE_TYPES.SKILL_CHECK && !this.activeQTE.state.triggered) {
+
+            // Check specific failure conditions for each type on timeout
+            if (this.activeQTE.type === QTE_TYPES.SKILL_CHECK && !this.activeQTE.state.triggered){
                 endType = 'failure'; // Skill check fails if not triggered before timeout
-             } else if (this.activeQTE.type === QTE_TYPES.BUTTON_MASH && this.activeQTE.state.currentPresses < this.activeQTE.state.requiredPresses) {
+            } 
+            else if (this.activeQTE.type === QTE_TYPES.BUTTON_MASH && this.activeQTE.state.currentPresses < this.activeQTE.state.requiredPresses){
                 endType = 'failure'; // Button mash fails if not enough presses
-             } else if (this.activeQTE.type === QTE_TYPES.BOUNCING_RING && this.activeQTE.state.completedLoops < this.activeQTE.state.requiredLoops) {
+            } 
+            else if (this.activeQTE.type === QTE_TYPES.BOUNCING_RING && this.activeQTE.state.completedLoops < this.activeQTE.state.requiredLoops){
                 endType = 'failure'; // Bouncing ring fails if not enough loops completed
             }
             // If QTE was successfully completed on the exact frame timeout occurs, endType might already be 'success'.
@@ -211,7 +215,8 @@ class QTEManager {
 
         if (endType !== null) { // Check if end condition met
             this.endQTE(endType === 'success');
-        } else {
+        } 
+        else{
             // Only request next frame if QTE hasn't ended
             this.rafId = requestAnimationFrame(this.update.bind(this));
         }
@@ -235,25 +240,26 @@ class QTEManager {
                 break;
 
             case QTE_TYPES.SKILL_CHECK:
-                 if (this.activeQTE.state.triggered) break; // Prevent multiple triggers
-                 this.activeQTE.state.triggered = true;
+                if (this.activeQTE.state.triggered) break; // Prevent multiple triggers
+                
+                this.activeQTE.state.triggered = true;
 
-                 const angleSC = this.activeQTE.state.currentAngle;
-                 const startSC = this.activeQTE.state.successZoneStart;
-                 const endSC = this.activeQTE.state.successZoneEnd; // Raw end angle
-                 const zoneSizeSC = endSC - startSC;
-                 let inZoneSC = false;
+                const angleSC = this.activeQTE.state.currentAngle;
+                const startSC = this.activeQTE.state.successZoneStart;
+                const endSC = this.activeQTE.state.successZoneEnd; // Raw end angle
+                const zoneSizeSC = endSC - startSC;
+                let inZoneSC = false;
 
                  // Normalize angle relative to the start for easy wrap check
-                 const normalizedAngleSC = (angleSC - startSC + 360) % 360;
+                const normalizedAngleSC = (angleSC - startSC + 360) % 360;
 
                  // Check if the normalized angle falls within the zone size
-                 if (normalizedAngleSC >= 0 && normalizedAngleSC <= zoneSizeSC) {
+                if (normalizedAngleSC >= 0 && normalizedAngleSC <= zoneSizeSC){
                      inZoneSC = true;
-                 }
+                }
 
-                 endType = inZoneSC ? 'success' : 'failure';
-                 logger.log(`Skill Check Input: Angle=${angleSC.toFixed(1)}, Zone=[${startSC.toFixed(1)} to ${(endSC % 360).toFixed(1)} (Size: ${zoneSizeSC.toFixed(1)})], InZone=${inZoneSC}`);
+                endType = inZoneSC ? 'success' : 'failure';
+                logger.log(`Skill Check Input: Angle=${angleSC.toFixed(1)}, Zone=[${startSC.toFixed(1)} to ${(endSC % 360).toFixed(1)} (Size: ${zoneSizeSC.toFixed(1)})], InZone=${inZoneSC}`);
                 break;
 
             case QTE_TYPES.BOUNCING_RING:
@@ -277,11 +283,11 @@ class QTEManager {
                     if (angleBR >= lowerBoundBR || angleBR <= upperBoundBR) {
                         inCorrectZoneBR = true;
                     }
-                    // --- Enhanced Logging ---
-                    logger.log(`Bounce Check (East): Angle=${angleBR.toFixed(1)}, Target=${stateBR.nextBounceTarget}, Zone=[${lowerBoundBR.toFixed(1)}...${upperBoundBR.toFixed(1)}], Size=${(2*halfSizeBR).toFixed(1)}, InZone=${inCorrectZoneBR} (Raw check: ${angleBR} >= ${lowerBoundBR} || ${angleBR} <= ${upperBoundBR})`);
-                    // --- End Enhanced Logging ---
 
-                } else { // Target is West zone (center 180)
+                    logger.log(`Bounce Check (East): Angle=${angleBR.toFixed(1)}, Target=${stateBR.nextBounceTarget}, Zone=[${lowerBoundBR.toFixed(1)}...${upperBoundBR.toFixed(1)}], Size=${(2*halfSizeBR).toFixed(1)}, InZone=${inCorrectZoneBR} (Raw check: ${angleBR} >= ${lowerBoundBR} || ${angleBR} <= ${upperBoundBR})`);
+
+                } 
+                else{ // Target is West zone (center 180)
                     targetCenterBR = stateBR.westZoneCenter; // Should be 180
                     // Bounds do not wrap
                     lowerBoundBR = targetCenterBR - halfSizeBR; // e.g., 165 for size 30
@@ -291,9 +297,8 @@ class QTEManager {
                     if (angleBR >= lowerBoundBR && angleBR <= upperBoundBR) {
                         inCorrectZoneBR = true;
                     }
-                    // --- Enhanced Logging ---
-                     logger.log(`Bounce Check (West): Angle=${angleBR.toFixed(1)}, Target=${stateBR.nextBounceTarget}, Zone=[${lowerBoundBR.toFixed(1)}...${upperBoundBR.toFixed(1)}], Size=${(2*halfSizeBR).toFixed(1)}, InZone=${inCorrectZoneBR} (Raw check: ${angleBR} >= ${lowerBoundBR} && ${angleBR} <= ${upperBoundBR})`);
-                    // --- End Enhanced Logging ---
+                    
+                    logger.log(`Bounce Check (West): Angle=${angleBR.toFixed(1)}, Target=${stateBR.nextBounceTarget}, Zone=[${lowerBoundBR.toFixed(1)}...${upperBoundBR.toFixed(1)}], Size=${(2*halfSizeBR).toFixed(1)}, InZone=${inCorrectZoneBR} (Raw check: ${angleBR} >= ${lowerBoundBR} && ${angleBR} <= ${upperBoundBR})`);
                 }
 
 
@@ -302,15 +307,15 @@ class QTEManager {
                     stateBR.direction *= -1; // Reverse direction
 
                     // If we just successfully hit the LEFT zone, a full loop is completed
-                    if (stateBR.nextBounceTarget === 'left') {
-                         stateBR.completedLoops++;
-                         this.uiManager.updateBouncingRingProgress(stateBR.completedLoops, stateBR.requiredLoops);
+                    if (stateBR.nextBounceTarget === 'left'){
+                        stateBR.completedLoops++;
+                        this.uiManager.updateBouncingRingProgress(stateBR.completedLoops, stateBR.requiredLoops);
 
                          // Shrink zones (make it harder)
-                         stateBR.currentZoneSize *= 0.92; // Shrink by 15%
-                         stateBR.currentZoneSize = Math.max(stateBR.currentZoneSize, 20); // Min size 20 deg
-                         this.uiManager.updateBouncingRingZones(stateBR.currentZoneSize);
-                         logger.log(`Loop ${stateBR.completedLoops} completed. New zone size: ${stateBR.currentZoneSize.toFixed(1)}`);
+                        stateBR.currentZoneSize *= 0.92; // Shrink by 15%
+                        stateBR.currentZoneSize = Math.max(stateBR.currentZoneSize, 20); // Min size 20 deg
+                        this.uiManager.updateBouncingRingZones(stateBR.currentZoneSize);
+                        logger.log(`Loop ${stateBR.completedLoops} completed. New zone size: ${stateBR.currentZoneSize.toFixed(1)}`);
                     }
 
                     // Swap the next target zone for the next hit
@@ -322,7 +327,8 @@ class QTEManager {
                         endType = 'success';
                     }
 
-                } else {
+                } 
+                else {
                     // --- MISSED BOUNCE ---
                     endType = 'failure';
                     logger.log(`Bounce Miss: Angle=${angleBR.toFixed(1)}, Target=${stateBR.nextBounceTarget}. Failure.`);
@@ -338,7 +344,7 @@ class QTEManager {
 
     endQTE(success) {
         if (!this.isActive()) {
-            // logger.warn("endQTE called but no QTE is active."); // Avoid redundant logging if not needed
+            // logger.warn("endQTE called but no QTE is active.");
             return;
         }
 
@@ -356,7 +362,6 @@ class QTEManager {
         const endedQTEType = this.activeQTE.type;
         const callback = success ? this.activeQTE.onSuccess : this.activeQTE.onFailure;
 
-        // --- Critical Fix: Clear activeQTE state BEFORE hiding UI or calling callbacks ---
         this.activeQTE = null; // This makes isActive() return false
 
         // Hide UI based on the *ended* type
@@ -376,20 +381,22 @@ class QTEManager {
         }
 
         // Call appropriate callback *after* clearing state and hiding UI
-        try {
+        try{
             if (callback && typeof callback === 'function') {
                 callback();
             }
-        } catch (e) {
+        } 
+        catch (e) {
              logger.error("Error executing QTE callback:", e);
         }
 
         // Only unfreeze if no OTHER QTE has immediately started (edge case safety)
-        if (!this.isActive()) {
-             // logger.log("Unfreezing controls after QTE end."); // Keep if helpful
-             this.controls?.unfreeze();
-        } else {
-             logger.warn("QTEManager: Another QTE started immediately after ending. Controls remain frozen.");
+        if (!this.isActive()){
+            // logger.log("Unfreezing controls after QTE end."); // Keep if helpful
+            this.controls?.unfreeze();
+        } 
+        else{
+            logger.warn("QTEManager: Another QTE started immediately after ending. Controls remain frozen.");
         }
     }
 
