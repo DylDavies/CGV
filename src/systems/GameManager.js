@@ -11,13 +11,14 @@ const PAGE_DATA = {
 };
 
 class GameManager {
-    constructor(mansion, camera, scene, uiManager, audioManager, controls) {
+    constructor(mansion, camera, scene, uiManager, audioManager, controls, stageManager = null) {
         this.mansion = mansion;
         this.camera = camera;
         this.scene = scene;
         this.uiManager = uiManager;
         this.audioManager = audioManager;
         this.controls = controls;   // NEW: Store the controls object
+        this.stageManager = stageManager;   // Stage manager for stage-aware gameplay
         this.inventory = [];
         this.collectedPages = [];
         this.placedPages = new Array(6).fill(null); // Tracks pages placed on the wall
@@ -65,10 +66,14 @@ class GameManager {
     initializeGame() {
         console.log("🎮 Initializing game...");
 
-        // Make phone start ringing 30 seconds into the game
-        setTimeout(() => {
-            this.startPhoneRingEvent();
-        }, 30000); // 30 seconds
+        // Only initialize mansion-specific gameplay on mansion stage
+        const currentStage = this.stageManager ? this.stageManager.currentStage : 'mansion';
+        if (currentStage === 'mansion') {
+            // Make phone start ringing 30 seconds into the game
+            setTimeout(() => {
+                this.startPhoneRingEvent();
+            }, 30000); // 30 seconds
+        }
 
         this.updateUI();
         this.showWelcomeMessage();

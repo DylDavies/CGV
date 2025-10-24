@@ -3,9 +3,10 @@
 import * as THREE from 'https://unpkg.com/three@0.127.0/build/three.module.js';
 
 class ImprovedFlashlight {
-    constructor(camera, scene) {
+    constructor(camera, scene, stageManager = null) {
         this.camera = camera;
         this.scene = scene;
+        this.stageManager = stageManager;
         this.isOn = true;
 
         // Battery system
@@ -78,7 +79,9 @@ class ImprovedFlashlight {
     }
     
     updateVisibility() {
-        const shouldBeOn = this.isOn && this.currentBattery > 0;
+        // Flashlight is disabled on office stage (only visible on other stages)
+        const isOfficeStage = this.stageManager && this.stageManager.currentStage === 'office';
+        const shouldBeOn = this.isOn && this.currentBattery > 0 && !isOfficeStage;
 
         // Only update if state changed to avoid unnecessary updates
         if (this.light.visible !== shouldBeOn) {
