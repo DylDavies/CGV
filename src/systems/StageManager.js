@@ -37,7 +37,7 @@ export class StageManager {
             },
             mansion: {
                 name: 'Haunted Mansion',
-                modelPath: 'blender/Mansion.glb',
+                modelPath: 'blender/Mansion.glb', 
                 navMeshPath: 'blender/NavMesh.glb',
                 spawnPoint: null, // Will use entrance door spawn
                 ambientIntensity: 0.005, // Dark for horror

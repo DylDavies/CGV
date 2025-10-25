@@ -231,6 +231,63 @@
       "type": "objective",
       "id": "escape_front_door",
       "description": "Escape through the front door."
+    },
+    "monster_angered": {
+        "type": "speechBubble",
+        "title": "You",
+        "text": "What was that crash?! It sounds close... I need to get out!",
+        "duration": 5000
+    },
+    "wrong_key_entrance": {
+        "type": "speechBubble",
+        "title": "You",
+        "text": "This key... it doesn't fit the front door. Where else could it go?",
+        "duration": 4500
+    }
+  },
+
+  "stage3": {
+    "barricaded_door": {
+        "type": "blackScreen",
+        "text": "You slammed the door shut and jammed it. Safe, for now... Find a way out of this garage.",
+        "duration": 6000
+    },
+    "garage_escape_objective": {
+        "type": "objective",
+        "id": "escape_garage",
+        "description": "Get the car working and escape the garage."
+    },
+    "car_wont_start": {
+        "type": "speechBubble",
+        "title": "You",
+        "text": "Damn it, it won't start. What's wrong with it?",
+        "duration": 4000
+    },
+    "need_gas": {
+        "type": "objective",
+        "id": "find_gas",
+        "description": "The fuel gauge is empty. Find some gasoline."
+    },
+    "hood_stuck": {
+        "type": "speechBubble",
+        "title": "You",
+        "text": "The hood release is broken. I need something to pry it open.",
+        "duration": 4000
+    },
+    "need_engine_repair": {
+        "type": "objective",
+        "id": "repair_engine",
+        "description": "The engine is making strange noises. Find tools to fix it."
+    },
+    "car_ready": {
+        "type": "speechBubble",
+        "title": "You",
+        "text": "It's working! Time to get out of here!",
+        "duration": 4000
+    },
+    "monster_breaks_in": {
+        "type": "warning",
+        "text": "The monster has broken through the barricade!"
     }
   },
   "endings": {
