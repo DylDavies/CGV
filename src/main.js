@@ -160,11 +160,39 @@ async function main() {
                 toggleMansion: () => mansionLoader.toggleMansionVisibility(),
                 toggleNavMeshNodes: () => mansionLoader.toggleNavMeshNodesVisualizer(),
                 toggleMinimap: () => minimap.toggle(),
+                spawnMonster: () => {
+                    console.log('👾 DEBUG: Spawning monster...');
+                    if (monsterAI && monsterAI.monster) {
+                        monsterAI.monster.visible = true;
+                        monsterAI.spawn();
+
+                        // Start heartbeat if not already started
+                        if (!monsterAI.heartbeatStarted && audioManager) {
+                            audioManager.playHeartbeat();
+                            monsterAI.heartbeatStarted = true;
+                        }
+
+                        // Set game to stage 2 if not already
+                        if (gameManager.gameStage !== 2) {
+                            gameManager.gameStage = 2;
+                            console.log('👾 DEBUG: Game stage set to 2');
+                        }
+
+                        console.log('👾 DEBUG: Monster spawned successfully');
+                        console.log(`   Position: (${monsterAI.monster.position.x.toFixed(2)}, ${monsterAI.monster.position.y.toFixed(2)}, ${monsterAI.monster.position.z.toFixed(2)})`);
+                        console.log(`   Aggression level: ${monsterAI.aggressionLevel}`);
+                    } else {
+                        console.error('❌ Monster AI not available');
+                    }
+                },
             };
 
             window.game = { mansionLoader, logger };
             logger.log('🔧 Debug controls available in `window.gameControls`.');
             logger.log("庁 To toggle the navigation mesh visualizer, type `gameControls.toggleNavMesh()` in the console.");
+            logger.log('');
+            logger.log('👾 MONSTER DEBUG:');
+            logger.log('   gameControls.spawnMonster()  - Spawn the monster for testing');
             logger.log('');
             logger.log('📝 LOGGING COMMANDS:');
             logger.log('   logger.disable()       - Disable console logging');

@@ -147,6 +147,7 @@ class MansionLoader {
                     this.setupInstancedMeshes()
                     this.setupPageEffects();
                     this.setupSofaEffects(); // Apply green glow to sofas with userData from Blender
+                    this.setupWardrobeEffects(); // Setup wardrobes for hiding mechanic
                     this.randomizePageSpawns(); // Randomly position pages 1, 2, 3, and 5
                     this.setupPuzzleSlots(); // Find and prepare the puzzle slots on the wall
 
@@ -449,6 +450,24 @@ class MansionLoader {
                 this.props.set(`sofa_${node.name}`, node);
 
                 console.log(`🛋️ Found interactive sofa: ${node.name} (moved: ${node.userData.moved}, distance: ${node.userData.distanceMoved})`);
+            }
+        });
+    }
+
+    setupWardrobeEffects() {
+        // Search for wardrobes in the model and mark them as interactable
+        this.model.traverse((node) => {
+            // Check if node name contains "wardrobe" (case-insensitive)
+            const nodeName = (node.name || '').toLowerCase();
+            if (nodeName.includes('wardrobe')) {
+                // Set up userData for wardrobe interaction
+                node.userData.type = 'wardrobe';
+                node.userData.interactable = true;
+
+                // Store in props for easy access
+                this.props.set(`wardrobe_${node.name}`, node);
+
+                console.log(`🚪 Found interactive wardrobe: ${node.name}`);
             }
         });
     }
@@ -1049,15 +1068,28 @@ class MansionLoader {
         return this.physicsManager.createBoxBody(center, size, quaternion);
     }
 
-    recalculatePhysicsForObject(objectName) {
-        console.log(`🔄 Attempting to recalculate physics for "${objectName}"...`);
+    recalculatePhysicsForObject(meshOrName) {
+        // Support both mesh objects and names for backwards compatibility
+        const isMeshObject = typeof meshOrName === 'object' && meshOrName.isMesh;
+        const searchName = isMeshObject ? meshOrName.name : meshOrName;
+
+        console.log(`🔄 Attempting to recalculate physics for "${searchName}"...`);
 
         // Step 1: Find the mesh and its associated physics body.
-        const bodyEntry = this.physicsBodies.find(entry => entry.mesh.name === objectName);
+        // If we have the mesh object, match by reference; otherwise match by name
+        let bodyEntry;
+        if (isMeshObject) {
+            bodyEntry = this.physicsBodies.find(entry => entry.mesh === meshOrName);
+            console.log(`   - Searching by mesh reference`);
+        } else {
+            bodyEntry = this.physicsBodies.find(entry => entry.mesh.name === meshOrName);
+            console.log(`   - Searching by name: "${meshOrName}"`);
+        }
 
         if (!bodyEntry) {
-            console.warn(`[Physics Recalculation] Could not find an object named "${objectName}" with a physics body.`);
-            return;
+            console.warn(`[Physics Recalculation] Could not find "${searchName}" with a physics body.`);
+            console.warn(`   - Available bodies: ${this.physicsBodies.length}`);
+            return false;
         }
 
         const { mesh, body: oldBody } = bodyEntry;
@@ -1065,27 +1097,28 @@ class MansionLoader {
         // Step 2: Remove the old body from the physics world and our tracking array.
         this.physicsManager.removeBody(oldBody);
 
-        const index = this.physicsBodies.findIndex(entry => entry.mesh.name === objectName);
+        const index = this.physicsBodies.findIndex(entry => entry.mesh === mesh);
         if (index !== -1) {
             this.physicsBodies.splice(index, 1);
+            console.log(`   - Removed from tracking array at index ${index}`);
         }
 
-        console.log(`   - Old body for "${objectName}" removed.`);
+        console.log(`   - Old body for "${searchName}" removed from physics world.`);
 
         // Step 3: Create a new physics body using its current transform.
-        // We use the same reliable function we built before.
         const newBody = this.createPhysicsBodyFromMesh(mesh);
 
         if (newBody) {
             // Step 4: Add the new body to our tracking array and the physics manager.
-            // Assign the same userData so debug labels still work.
             newBody.userData = { name: mesh.name };
             this.physicsBodies.push({ mesh: mesh, body: newBody });
-            this.physicsManager.addBody(newBody); // Explicitly add to the manager's list.
-            
-            console.log(`   - New body for "${objectName}" created and added successfully.`);
+            this.physicsManager.addBody(newBody);
+
+            console.log(`   - New body for "${searchName}" created and added successfully.`);
+            return true;
         } else {
-            console.error(`[Physics Recalculation] Failed to create a new physics body for "${objectName}".`);
+            console.error(`[Physics Recalculation] Failed to create a new physics body for "${searchName}".`);
+            return false;
         }
     }
 
