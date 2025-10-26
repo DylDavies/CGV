@@ -21,6 +21,7 @@ import { MonsterAI } from './components/Monster/MonsterAI.js';
 import { ColorPuzzle } from './puzzles/colorPuzzle/ColorPuzzle.js';
 import { WirePuzzle } from './puzzles/wirePuzzle/WirePuzzle.js';
 import { KeypadPuzzle } from './puzzles/keypadPuzzle/KeypadPuzzle.js';
+import { TicTacToePuzzle } from './puzzles/ticTacToePuzzle/TicTacToePuzzle.js';
 import { PauseMenu } from './systems/PauseMenu.js';
 import { AudioManager } from './systems/AudioManager.js';
 import { Minimap } from './systems/Minimap.js';
@@ -59,6 +60,8 @@ async function main() {
         await wirePuzzle.loadLevels();
 
         const keypadPuzzle = new KeypadPuzzle(uiManager);
+
+        const ticTacToePuzzle = new TicTacToePuzzle();
 
 
         // --- UI Manager loading --- 
@@ -116,7 +119,7 @@ async function main() {
             monster.visible = false;
 
             uiManager.updateLoadingProgress(85, "Preparing your escape...");
-            const controls = new FirstPersonControls(camera, renderer.domElement, physicsManager, { colorPuzzle, wirePuzzle, keypadPuzzle }, monsterAI, mansionLoader);
+            const controls = new FirstPersonControls(camera, renderer.domElement, physicsManager, { colorPuzzle, wirePuzzle, keypadPuzzle, ticTacToePuzzle }, monsterAI, mansionLoader);
             uiManager.setControls(controls);
             const flashlight = new ImprovedFlashlight(camera, scene);
             // Pass the loop to the PauseMenu
@@ -126,14 +129,16 @@ async function main() {
             const puzzleSystem = new PuzzleSystem(scene, gameManager);
             const interactionSystem = new InteractionSystem(camera, scene, gameManager, uiManager, controls);
 
-            controls.puzzles = { colorPuzzle, wirePuzzle, keypadPuzzle };
+            controls.puzzles = { colorPuzzle, wirePuzzle, keypadPuzzle, ticTacToePuzzle };
             colorPuzzle.setControls(controls);
             wirePuzzle.setControls(controls);
             keypadPuzzle.setControls(controls);
+            ticTacToePuzzle.setControls(controls);
 
             puzzleSystem.registerPuzzle('colorPuzzle', colorPuzzle);
             puzzleSystem.registerPuzzle('wirePuzzle', wirePuzzle);
             puzzleSystem.registerPuzzle('keypadPuzzle', keypadPuzzle);
+            puzzleSystem.registerPuzzle('ticTacToePuzzle', ticTacToePuzzle);
 
             uiManager.updateLoadingText("Creating minimap...");
             const minimap = new Minimap(scene, camera, mansionLoader, renderer);
@@ -154,7 +159,7 @@ async function main() {
 
             window.gameControls = {
                 camera, scene, flashlight, physicsManager, mansionLoader, gameManager,
-                interactionSystem, puzzleSystem, atmosphere, colorPuzzle, wirePuzzle, keypadPuzzle,
+                interactionSystem, puzzleSystem, atmosphere, colorPuzzle, wirePuzzle, keypadPuzzle, ticTacToePuzzle,
                 audioManager, monsterAI, narrativeManager, uiManager, minimap,
                 toggleNavMesh: () => mansionLoader.toggleNavMeshVisualizer(),
                 toggleMansion: () => mansionLoader.toggleMansionVisibility(),

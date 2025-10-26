@@ -27,6 +27,7 @@ export class UIManager {
         await this._loadHTML('src/ui/clueScreen/clue-screen.html', 'clue-screen-container');
         await this._loadHTML('src/ui/resultScreen/result-screen.html', 'result-screen-container');
         await this._loadHTML('src/ui/keypad/keypad.html', 'keypad-container');
+        await this._loadHTML('src/ui/ticTacToe/tictactoe-puzzle.html', 'tictactoe-puzzle-container');
 
         // Now that the HTML is loaded, cache the elements inside it
         this.uiElements = {
@@ -39,7 +40,8 @@ export class UIManager {
             monsterIcon: document.getElementById('monster-icon'), 
             loadingText: document.getElementById('loading-text'),
             puzzleContainer: document.getElementById('puzzle-container'),
-            wirePuzzleContainer: document.getElementById('wire-puzzle-container'), 
+            wirePuzzleContainer: document.getElementById('wire-puzzle-container'),
+            ticTacToePuzzleContainer: document.getElementById('tictactoe-puzzle-container'),
             crosshair: document.getElementById('crosshair'),
             interactionPrompt: document.getElementById('interaction-prompt'),
             creditsScreen: document.getElementById('credits-screen'),

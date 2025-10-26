@@ -257,6 +257,36 @@ class MansionLoader {
                 console.log(`🎎 Found prop: ${node.name} (Annie Doll)`);
             }
 
+            // Mirror detection - check by name or by custom property type
+            if (node.name === 'S_tic_tac_toe_mirror' || node.userData?.type === 'mirror') {
+                console.log(`🪞 Found mirror: ${node.name}`);
+                this.props.set('tic_tac_toe_mirror', node);
+
+                // Set userData on the parent group
+                node.userData = node.userData || {};
+                node.userData.type = 'tic_tac_toe_mirror';
+                node.userData.interactable = true;
+                node.userData.won = false;
+
+                // IMPORTANT: Also set userData on all child meshes so raycasts work!
+                node.traverse((child) => {
+                    if (child.isMesh) {
+                        child.userData = child.userData || {};
+                        child.userData.type = 'tic_tac_toe_mirror';
+                        child.userData.interactable = true;
+                        child.userData.won = false;
+                    }
+                });
+
+                console.log(`✅ Mirror ready for interaction:`, node.userData);
+            }
+
+            // DEBUG: Log any object with "mirror" or "tic" in name to help find the mirror
+            const nodeLower = node.name.toLowerCase();
+            if (nodeLower.includes('mirror') || nodeLower.includes('tic')) {
+                console.log(`🔍 DEBUG: Found ${node.type} named "${node.name}", userData.type: "${node.userData?.type}"`);
+            }
+
             // Note: Sofas are now detected in setupSofaEffects() method (like pages)
 
             // Detect page spawn points with pattern: p_[page number]_spawn_point_[spawn point number]
@@ -372,8 +402,28 @@ class MansionLoader {
     setupPageEffects() {
         console.log('✨ Searching for pages to apply glow effect...');
         this.model.traverse((node) => {
-            if (node.isMesh && node.userData.type === 'page') {
+            // Check if it's a page by custom property OR by name pattern
+            const isPageByType = node.isMesh && node.userData.type === 'page';
+            const isPageByName = node.name.startsWith('S_Page') && node.name.match(/S_Page\d+/);
+
+            if (isPageByType || (isPageByName && node.isMesh)) {
                 console.log(`✨ Found page: ${node.name}. Applying glow effect.`);
+
+                // Ensure it's marked as a page type
+                if (!node.userData.type) {
+                    node.userData.type = 'page';
+                }
+
+                // Set the pageId based on the object name (e.g., "S_Page1" -> "S_Page1")
+                if (!node.userData.pageId) {
+                    node.userData.pageId = node.name;
+                }
+
+                // Ensure page is interactable
+                if (node.userData.interactable === undefined) {
+                    node.userData.interactable = true;
+                }
+
                 node.material = node.material.clone();
                 node.material.emissive = new THREE.Color(0xff0000);
                 node.material.emissiveIntensity = 0;

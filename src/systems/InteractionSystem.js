@@ -264,6 +264,11 @@ class InteractionSystem {
                 prompt: "Press E to hide",
                 hidingPrompt: "Press E to exit",
                 handler: this.handleWardrobeInteraction.bind(this)
+            },
+            tic_tac_toe_mirror: {
+                prompt: "Press E to play the haunted mirror game",
+                unlockedPrompt: "The mirror gleams peacefully",
+                handler: this.handleTicTacToeMirrorInteraction.bind(this)
             }
         };
     }
@@ -360,14 +365,40 @@ class InteractionSystem {
         // Cast ray from camera center
         this.raycaster.setFromCamera(new THREE.Vector2(0, 0), this.camera);
         const intersects = this.raycaster.intersectObjects(this.scene.children, true);
-        
+
+        console.log('🎯 checkInteraction: ' + intersects.length + ' intersections found');
+
         if (intersects.length > 0) {
-            const intersectedObject = intersects[0].object;
-            const distance = intersects[0].distance;
-            
+            // Log first 3 intersections
+            for (let i = 0; i < Math.min(3, intersects.length); i++) {
+                const interactData = this.findInteractableData(intersects[i].object);
+                console.log(`  [${i}] ${intersects[i].object.name} - type: ${interactData?.data?.type}, distance: ${intersects[i].distance.toFixed(2)}`);
+            }
+
+            // PRIORITY: Check if mirror is in the raycast hits (prioritize mirror over page 6)
+            let intersectedObject = intersects[0].object;
+            let distance = intersects[0].distance;
+
+            let mirrorHit = null;
+            for (let i = 0; i < intersects.length; i++) {
+                const interactData = this.findInteractableData(intersects[i].object);
+                if (interactData?.data?.type === 'tic_tac_toe_mirror' && intersects[i].distance <= this.interactionRange) {
+                    mirrorHit = { object: intersects[i].object, distance: intersects[i].distance, index: i };
+                    console.log('🪞 Mirror prioritized for interaction');
+                    break;
+                }
+            }
+
+            // Use mirror if found, otherwise use closest interactable
+            if (mirrorHit) {
+                intersectedObject = mirrorHit.object;
+                distance = mirrorHit.distance;
+            }
+
             if (distance <= this.interactionRange) {
                 const interactableData = this.findInteractableData(intersectedObject);
                 if (interactableData) {
+                    console.log('💬 Performing interaction for:', interactableData.data.type);
                     this.performInteraction(interactableData.object, interactableData.data);
                 }
             } else {
@@ -410,18 +441,52 @@ class InteractionSystem {
             return;
         }
 
-        if (userData.pageId) {
+        // Extract the actual page ID (handle child meshes like S_Page6_Symbol)
+        let pageId = userData.pageId;
+        if (!pageId) {
+            console.warn('No pageId found');
+            return;
+        }
+
+        // If pageId is a child like "S_Page6_Symbol", extract the parent page ID
+        const pageMatch = pageId.match(/^(S_Page\d+)/);
+        if (pageMatch) {
+            pageId = pageMatch[1];
+        }
+
+        console.log(`📄 Page interaction: "${userData.pageId}" -> "${pageId}"`);
+
+        if (pageId) {
+            // Special handling for Page 6 - Tic-tac-toe mirror puzzle requirement
+            if (pageId === 'S_Page6') {
+                console.log('🎮 Page 6 interaction - checking mirror status');
+                // Check if the player has won the tic-tac-toe puzzle
+                const mirror = this.gameManager.mansion.props.get('tic_tac_toe_mirror');
+                console.log('Mirror found:', !!mirror, 'Won:', mirror?.userData?.won);
+                if (!mirror || !mirror.userData || !mirror.userData.won) {
+                    console.log('❌ Mirror not won - blocking page 6');
+                    this.showMessage("The page is sealed by ghostly hands... A game must be played at the nearby mirror first.");
+                    // Force unfreeze immediately AND after a delay
+                    if (this.controls) {
+                        this.controls.isFrozen = false;
+                        this.controls.unfreeze();
+                    }
+                    return;
+                }
+                console.log('✅ Mirror won - allowing page 6 collection');
+            }
+
             // Special handling for Page 4 - Annie interaction
-            if (userData.pageId === 'S_Page4') {
+            if (pageId === 'S_Page4') {
                 this.annieInteraction.handleAnniePageInteraction(pageObject, userData);
                 return;
             }
 
             // Show page content first, then collect it
-            this.showPageContent(userData.pageId, () => {
+            this.showPageContent(pageId, () => {
                 // After viewing, collect the page (with slight delay to prevent double-click)
                 setTimeout(() => {
-                    this.gameManager.collectPage(userData.pageId);
+                    this.gameManager.collectPage(pageId);
                     this.animateItemPickup(pageObject, () => {
                         if (pageObject.parent) {
                             pageObject.parent.remove(pageObject);
@@ -2097,8 +2162,24 @@ Run.`
         let blockedMessage = '';
 
         if (intersects.length > 0) {
-            const distance = intersects[0].distance;
-            const hitObject = intersects[0].object;
+            // PRIORITY: Check if mirror is in the raycast hits (prioritize mirror over page 6)
+            let hitObject = intersects[0].object;
+            let distance = intersects[0].distance;
+
+            let mirrorHit = null;
+            for (let i = 0; i < intersects.length; i++) {
+                const interactData = this.findInteractableData(intersects[i].object);
+                if (interactData?.data?.type === 'tic_tac_toe_mirror' && intersects[i].distance <= this.interactionRange) {
+                    mirrorHit = { object: intersects[i].object, distance: intersects[i].distance, index: i };
+                    break;
+                }
+            }
+
+            // Use mirror if found, otherwise use closest interactable
+            if (mirrorHit) {
+                hitObject = mirrorHit.object;
+                distance = mirrorHit.distance;
+            }
 
             if (distance <= this.interactionRange) {
                 const interactableData = this.findInteractableData(hitObject);
@@ -2945,6 +3026,70 @@ Run.`
         if (window.moveBook) {
             delete window.moveBook;
         }
+    }
+
+    /**
+     * Handle interaction with the tic-tac-toe mirror
+     */
+    async handleTicTacToeMirrorInteraction(mirror, userData) {
+        console.log('🪞 Mirror interaction handler called');
+        console.log('  userData.won:', userData.won);
+
+        // Check if player has already won the tic-tac-toe puzzle
+        if (userData.won) {
+            console.log('  Already won - showing unlocked message');
+            this.showMessage(this.interactionTypes.tic_tac_toe_mirror.unlockedPrompt);
+            return;
+        }
+
+        // Show the tic-tac-toe puzzle
+        console.log('  Freezing controls and starting puzzle...');
+        if (this.controls) this.controls.freeze();
+        this.currentInteraction = 'tic_tac_toe';
+
+        // Get the puzzle from the controls
+        const ticTacToePuzzle = this.controls.puzzles.ticTacToePuzzle;
+        console.log('  Puzzle found:', !!ticTacToePuzzle);
+
+        if (!ticTacToePuzzle) {
+            console.error('❌ Tic-tac-toe puzzle not found in controls.puzzles');
+            console.log('  Available puzzles:', Object.keys(this.controls.puzzles || {}));
+            if (this.controls) this.controls.unfreeze();
+            return;
+        }
+
+        // Set up the win callback
+        ticTacToePuzzle.onSolve(() => {
+            console.log('🎮 Tic-tac-toe puzzle won!');
+
+            // Mark the mirror as won so player can collect page 6
+            userData.won = true;
+
+            // Make page 6 interactable
+            const page6 = this.gameManager.mansion.pages.find(p => p.name === 'S_Page6');
+            if (page6) {
+                page6.userData.interactable = true;
+                console.log('✨ Page 6 is now unlocked!');
+            }
+
+            // Unfreeze controls
+            if (this.controls) this.controls.unfreeze();
+
+            // Show success message
+            this.showMessage('The ghost has released page 6. Collect it to progress...');
+        });
+
+        // Set up the close callback
+        ticTacToePuzzle.onClose(() => {
+            console.log('🎮 Puzzle closed');
+            if (this.controls) this.controls.unfreeze();
+            this.currentInteraction = null;
+        });
+
+        // Show the puzzle UI
+        console.log('🎮 Calling ticTacToePuzzle.show()...');
+        ticTacToePuzzle.show();
+        console.log('🎮 ticTacToePuzzle.show() returned');
     }
 }
 
