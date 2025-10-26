@@ -32,6 +32,96 @@
       "description": "Find the study and answer the telephone"
     }
   },
+  "office": {
+    "phone_ring": {
+      "type": "speechBubble",
+      "title": "You",
+      "text": "A telephone... still ringing. I should answer it.",
+      "duration": 3000
+    },
+    "phone_answered": {
+      "type": "speechBubble",
+      "title": "Editor",
+      "text": "You'd better have a real story on this 'Mansion' lead, or you're finished!",
+      "duration": 3000
+    },
+    "computer_objective": {
+      "type": "objective",
+      "id": "use_computer",
+      "description": "Use the computer to investigate the mansion"
+    },
+    "login_objective": {
+      "type": "objective",
+      "id": "computer_login",
+      "description": "Find a way to log in to the computer"
+    },
+    "search_computer_objective": {
+      "type": "objective",
+      "id": "search_computer",
+      "description": "Search for useful information on the computer"
+    },
+    "investigate_objective": {
+      "type": "objective",
+      "id": "investigate_hint",
+      "description": "Investigate my first big break - check the newspaper"
+    },
+    "newspaper_hint": {
+      "type": "speechBubble",
+      "title": "You",
+      "text": "A newspaper headline: MINE COLLAPSE. That was my biggest story... Wait, could that be the password?",
+      "duration": 4000
+    },
+    "computer_password_objective": {
+      "type": "objective",
+      "id": "unlock_computer",
+      "description": "Use the newspaper headline as password for the computer"
+    },
+    "evidence_found": {
+      "type": "speechBubble",
+      "title": "You",
+      "text": "Hmmm, these are some notes for a password...",
+      "duration": 3000
+    },
+    "missing_persons_hint": {
+      "type": "speechBubble",
+      "title": "You",
+      "text": "A missing persons report... There's a connection here I need to investigate. I should find that report.",
+      "duration": 4000
+    },
+    "missing_persons_objective": {
+      "type": "objective",
+      "id": "find_case_file",
+      "description": "Find the missing persons report for the Miller case"
+    },
+    "zip_password_objective": {
+      "type": "objective",
+      "id": "zip_password",
+      "description": "Use the case number from the missing persons report as ZIP password"
+    },
+    "case_file_found": {
+      "type": "speechBubble",
+      "title": "You",
+      "text": "There it is... The missing persons report for the Miller disappearance. This is the piece I was missing.",
+      "duration": 4000
+    },
+    "zip_password_realization": {
+      "type": "speechBubble",
+      "title": "You",
+      "text": "The case number on this report... That must be the password for the evidence file.",
+      "duration": 3000
+    },
+    "capture_triggered": {
+      "type": "blackScreen",
+      "text": "You wanted a story. Now you have one.",
+      "duration": 2000
+    },
+    "transition_to_mansion": {
+      "type": "stageTransition",
+      "stage": "mansion",
+      "fadeOutDuration": 2000,
+      "fadeInDuration": 2000
+    }
+  },
   "stage1": {
     "phone_ring_speech": {
       "type": "speechBubble",

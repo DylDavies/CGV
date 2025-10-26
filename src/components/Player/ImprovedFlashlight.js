@@ -42,13 +42,15 @@ class ImprovedFlashlight {
         this.light.shadow.normalBias = 0.02;  // Add normal bias for flat surfaces like pages
         this.light.shadow.radius = 1.0;       // Slightly softer shadow edges
 
-        // IMPORTANT: Add light to scene, not camera
+        // IMPORTANT: Add light to initial scene
         this.scene.add(this.light);
+        this.lightCurrentScene = this.scene;
 
         // Create target in scene
         this.target = new THREE.Object3D();
         this.target.name = 'flashlight_target';
         this.scene.add(this.target);
+        this.targetCurrentScene = this.scene;
         this.light.target = this.target;
 
         // No ambient boost - was causing lag spikes on toggle
@@ -110,19 +112,37 @@ class ImprovedFlashlight {
         // Update battery
         if (this.isOn && this.currentBattery > 0) {
             this.currentBattery = Math.max(0, this.currentBattery - this.batteryDrainRate * delta);
-            
+
             if (this.currentBattery === 0) {
                 this.isOn = false;
                 console.log('🔋 Battery dead!');
             }
         }
-        
+
+        // CRITICAL: Handle multi-scene switching - ensure light is in the current scene
+        if (this.stageManager) {
+            const currentScene = this.stageManager.getCurrentScene();
+            if (currentScene && this.lightCurrentScene !== currentScene) {
+                // Remove light and target from old scene
+                if (this.lightCurrentScene) {
+                    this.lightCurrentScene.remove(this.light);
+                    this.lightCurrentScene.remove(this.target);
+                }
+                // Add light and target to new scene
+                currentScene.add(this.light);
+                currentScene.add(this.target);
+                this.lightCurrentScene = currentScene;
+                this.targetCurrentScene = currentScene;
+                console.log(`🔦 Flashlight moved to ${this.stageManager.currentStage} scene`);
+            }
+        }
+
         // Update visibility
         this.updateVisibility();
-        
+
         // CRITICAL: Update light position and target in world space
         this.updateLightPosition();
-        
+
         // Update helper if it exists
         if (this.helper) {
             this.helper.update();

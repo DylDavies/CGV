@@ -335,7 +335,7 @@ class PauseMenu {
 
     applySettings() {
         // Anti-aliasing requires page reload
-        if (this.settings.antialiasing !== this.renderer.getContext().getContextAttributes().antialias) {
+        if (this.renderer && this.settings.antialiasing !== this.renderer.getContext().getContextAttributes().antialias) {
             console.log('⚠️ Anti-aliasing change requires restart');
 
             // Show notification

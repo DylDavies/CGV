@@ -3,9 +3,10 @@
 import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.127.0/build/three.module.js';
 
 class InteractionSystem {
-   constructor(camera, scene, gameManager, uiManager, controls) {
+   constructor(camera, scene, gameManager, uiManager, controls, stageManager = null) {
         this.camera = camera;
-        this.scene = scene;
+        this.scene = scene; // Fallback scene for single-scene mode
+        this.stageManager = stageManager; // For multi-scene support
         this.gameManager = gameManager;
         this.uiManager = uiManager; // uiManager was missing from the original constructor but is used, so I've added it.
         this.controls = controls; // NEW: Store the controls object
@@ -14,7 +15,7 @@ class InteractionSystem {
         this.interactableObjects = new Map();
         this.highlightedObject = null;
         this.currentInteraction = null;
-        this.interactionRange = 5; // Maximum interaction distance
+        this.interactionRange = 2.5; // Maximum interaction distance
 
         // Performance: Throttle crosshair raycasting
         this.crosshairUpdateCounter = 0;
@@ -229,6 +230,22 @@ class InteractionSystem {
             bucket: {
                 prompt: "Press E to pick up bucket",
                 handler: this.handleBucketInteraction.bind(this)
+            },
+            computer: {
+                prompt: "Press E to use computer",
+                handler: this.handleComputerInteraction.bind(this)
+            },
+            notepad: {
+                prompt: "Press E to read notepad",
+                handler: this.handleNotepadInteraction.bind(this)
+            },
+            newspaper: {
+                prompt: "Press E to read newspaper",
+                handler: this.handleNewspaperInteraction.bind(this)
+            },
+            loose_book: {
+                prompt: "Press E to examine book",
+                handler: this.handleLooseBookInteraction.bind(this)
             }
         };
     }
@@ -295,10 +312,19 @@ class InteractionSystem {
         }
     }
 
+    getCurrentScene() {
+        // Get the current scene - use stageManager if available, otherwise use this.scene
+        if (this.stageManager) {
+            return this.stageManager.getCurrentScene();
+        }
+        return this.scene;
+    }
+
     checkInteraction() {
         // Cast ray from camera center
         this.raycaster.setFromCamera(new THREE.Vector2(0, 0), this.camera);
-        const intersects = this.raycaster.intersectObjects(this.scene.children, true);
+        const currentScene = this.getCurrentScene();
+        const intersects = this.raycaster.intersectObjects(currentScene.children, true);
         
         if (intersects.length > 0) {
             const intersectedObject = intersects[0].object;
@@ -334,6 +360,24 @@ class InteractionSystem {
     }
 
     performInteraction(object, userData) {
+        // Check if interaction should be available based on current objective
+        if (userData.type === 'notepad') {
+            // Only allow notepad interaction if we're at the computer interaction or have login objective
+            // Allow reading once login objective is triggered
+            if (!userData.loginAttempted) {
+                this.showMessage("I should try to interact with the computer first.");
+                return;
+            }
+        }
+
+        if (userData.type === 'newspaper') {
+            // Only allow newspaper interaction if investigate objective is active
+            if (!userData.notepadRead) {
+                this.showMessage("I should read that notepad first.");
+                return;
+            }
+        }
+
         const interactionType = this.interactionTypes[userData.type];
         if (interactionType && interactionType.handler) {
             interactionType.handler(object, userData);
@@ -343,6 +387,12 @@ class InteractionSystem {
     }
 
     handlePageInteraction(pageObject, userData) {
+        // CRITICAL FIX: Check if phone has been answered before allowing page pickup
+        if (!this.gameManager.telephoneAnswered) {
+            this.showMessage("These pages seem important. I should answer the phone call first.");
+            return;
+        }
+
         // NEW: Check if pages puzzle is completed
         if (this.gameManager.pagesPuzzleCompleted) {
             this.showMessage("The pages are sealed in place by an ancient magic.");
@@ -599,16 +649,28 @@ class InteractionSystem {
             // Interpolate the pivot's rotation.
             pivot.rotation.y = startRotationY + (targetRotationY - startRotationY) * easedProgress;
 
-            for (const child of door.children) {
-                this.gameManager.mansion.recalculatePhysicsForObject(child.name);
-            }
-
             if (progress < 1) {
                 requestAnimationFrame(animate);
             } else {
                 pivot.rotation.y = targetRotationY; // Snap to the final rotation.
                 door.userData.isOpening = false;
                 door.userData.isOpen = true;
+
+                // CRITICAL FIX: Remove door collision when fully opened
+                // Use correct loader for multi-scene support
+                const currentLoader = this.stageManager ? this.stageManager.currentLoader : this.gameManager.mansion;
+
+                if (currentLoader && currentLoader.removeCollisionForObject) {
+                    // Remove collision for the door object itself
+                    currentLoader.removeCollisionForObject(door.name);
+
+                    // Also remove collision for any child objects
+                    for (const child of door.children) {
+                        currentLoader.removeCollisionForObject(child.name);
+                    }
+
+                    console.log(`🚪 Door collision removed after opening: ${door.name}`);
+                }
             }
         };
 
@@ -851,8 +913,10 @@ class InteractionSystem {
 
             // Turn off the lamps (but not fireplace - that stays lit)
             this.gameManager.lightsOn = false;
-            if (this.gameManager.mansion) {
-                this.gameManager.mansion.setLampsEnabled(false);
+            // Use the current loader from stageManager instead of cached mansion
+            const currentLoader = this.gameManager.stageManager ? this.gameManager.stageManager.currentLoader : this.gameManager.mansion;
+            if (currentLoader) {
+                currentLoader.setLampsEnabled(false);
             }
 
             await window.gameControls.narrativeManager.triggerEvent('stage2.lights_out');
@@ -897,8 +961,10 @@ class InteractionSystem {
         diary.userData.interactable = false;
 
         // Stop the diary from glowing
-        if (this.gameManager.mansion) {
-            this.gameManager.mansion.disableDiaryGlow();
+        // Use correct loader for multi-scene support
+        const currentLoaderForGlow = this.stageManager ? this.stageManager.currentLoader : this.gameManager.mansion;
+        if (currentLoaderForGlow) {
+            currentLoaderForGlow.disableDiaryGlow();
         }
 
         // Show the diary page
@@ -907,13 +973,22 @@ class InteractionSystem {
         // Wait a moment for the user to see the diary, then trigger the objective change
         setTimeout(async () => {
             // Make both fireplace objects interactable
-            const fireplace = this.gameManager.mansion.props.get('fireplace');
-            if (fireplace) {
-                fireplace.userData.interactable = true;
-            }
-            const fireplaceFire = this.gameManager.mansion.props.get('fireplace_fire');
-            if (fireplaceFire) {
-                fireplaceFire.userData.interactable = true;
+            // Use correct loader for multi-scene support
+            const currentLoader = this.stageManager ? this.stageManager.currentLoader : this.gameManager.mansion;
+
+            if (currentLoader) {
+                const fireplace = currentLoader.props.get('fireplace');
+                if (fireplace) {
+                    fireplace.userData.interactable = true;
+                    console.log(`🔥 Fireplace made interactable`);
+                }
+                const fireplaceFire = currentLoader.props.get('fireplace_fire');
+                if (fireplaceFire) {
+                    fireplaceFire.userData.interactable = true;
+                    console.log(`🔥 Fireplace fire made interactable`);
+                }
+            } else {
+                console.warn(`⚠️ Could not access current loader to make fireplace interactable`);
             }
 
             // Complete read diary objective - this will mark it complete visually
@@ -1035,17 +1110,20 @@ class InteractionSystem {
             return;
         }
 
+        // Get the correct loader for multi-scene support
+        const currentLoader = this.stageManager ? this.stageManager.currentLoader : this.gameManager.mansion;
+
         // Check if player has bucket and fire is not out yet
         if (this.gameManager.hasItem('Bucket') && !userData.fireOut) {
             console.log('🔥 Player has bucket, putting out fire...');
 
             // Mark both fireplace objects as fire out
             userData.fireOut = true;
-            const fireplaceObj = this.gameManager.mansion.props.get('fireplace');
+            const fireplaceObj = currentLoader.props.get('fireplace');
             if (fireplaceObj && fireplaceObj.userData) {
                 fireplaceObj.userData.fireOut = true;
             }
-            const fireplaceFire = this.gameManager.mansion.props.get('fireplace_fire');
+            const fireplaceFire = currentLoader.props.get('fireplace_fire');
             if (fireplaceFire && fireplaceFire.userData) {
                 fireplaceFire.userData.fireOut = true;
             }
@@ -1053,7 +1131,7 @@ class InteractionSystem {
             this.showMessage("You pour the water on the fire...");
 
             // Extinguish ALL fires in the mansion (same method as when lights go out)
-            this.gameManager.mansion.setFireplacesEnabled(false);
+            currentLoader.setFireplacesEnabled(false);
 
             // Remove bucket from inventory
             this.gameManager.removeFromInventory('Bucket');
@@ -1093,11 +1171,11 @@ class InteractionSystem {
         if (!userData.inspected) {
             // Mark both fireplace objects as inspected
             userData.inspected = true;
-            const fireplaceObj = this.gameManager.mansion.props.get('fireplace');
+            const fireplaceObj = currentLoader.props.get('fireplace');
             if (fireplaceObj && fireplaceObj.userData) {
                 fireplaceObj.userData.inspected = true;
             }
-            const fireplaceFire = this.gameManager.mansion.props.get('fireplace_fire');
+            const fireplaceFire = currentLoader.props.get('fireplace_fire');
             if (fireplaceFire && fireplaceFire.userData) {
                 fireplaceFire.userData.inspected = true;
             }
@@ -1106,7 +1184,7 @@ class InteractionSystem {
             this.gameManager.completeObjective('inspect_fireplace');
 
             // Make bucket interactable
-            const bucket = this.gameManager.mansion.props.get('bucket');
+            const bucket = currentLoader.props.get('bucket');
             if (bucket) {
                 bucket.userData.interactable = true;
             }
@@ -1437,7 +1515,8 @@ class InteractionSystem {
 
     updateCrosshair() {
         this.raycaster.setFromCamera(new THREE.Vector2(0, 0), this.camera);
-        const intersects = this.raycaster.intersectObjects(this.scene.children, true);
+        const currentScene = this.getCurrentScene();
+        const intersects = this.raycaster.intersectObjects(currentScene.children, true);
 
         let isInteractable = false;
         let interactionPrompt = '';
@@ -1466,11 +1545,14 @@ class InteractionSystem {
                     const isLaptopBlocked = interactableData.data.type === 'laptop' &&
                                            this.gameManager.collectedPages.length < 6;
 
-                    // Check if item is interactable (for diary, fireplace, bucket, fuse_box)
+                    // Check if item is interactable (for diary, fireplace, bucket, fuse_box, notepad, newspaper, loose_book)
                     const isNotYetInteractable = (interactableData.data.type === 'diary' ||
                                                   interactableData.data.type === 'fireplace' ||
                                                   interactableData.data.type === 'bucket' ||
-                                                  interactableData.data.type === 'fuse_box') &&
+                                                  interactableData.data.type === 'fuse_box' ||
+                                                  interactableData.data.type === 'notepad' ||
+                                                  interactableData.data.type === 'newspaper' ||
+                                                  interactableData.data.type === 'loose_book') &&
                                                  !interactableData.data.interactable;
 
                     if (isPagesLocked) {
@@ -2009,6 +2091,1013 @@ class InteractionSystem {
                 }
             }
         );
+    }
+
+    // ========== OFFICE STAGE INTERACTIONS ==========
+
+
+    async handleComputerInteraction(computer, userData) {
+        console.log('💻 Player interacting with computer', userData);
+
+        // Check if this is the office stage
+        const currentStage = this.gameManager.stageManager ? this.gameManager.stageManager.currentStage : 'office';
+        if (currentStage !== 'office') {
+            console.warn(`⚠️ Computer interaction called on ${currentStage} stage, ignoring`);
+            this.showMessage("The computer doesn't respond.");
+            return;
+        }
+
+        // Prevent multiple simultaneous interactions
+        if (this.currentInteraction) return;
+        this.currentInteraction = 'computer';
+
+        try {
+            if (!userData.loggedIn) {
+                await this.showComputerLogin(userData);
+            } else {
+                await this.showComputerDesktop(userData);
+            }
+        } finally {
+            this.currentInteraction = null;
+        }
+    }
+
+    async showComputerLogin(userData) {
+        return new Promise(resolve => {
+            // Freeze controls to disable game input while login screen is open
+            if (this.controls) this.controls.freeze();
+
+            const overlay = document.createElement('div');
+            overlay.id = 'office-computer-login';
+            overlay.style.cssText = `
+                position: fixed;
+                top: 0;
+                left: 0;
+                width: 100%;
+                height: 100%;
+                background: #0a0a0a;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                z-index: 2000;
+            `;
+            overlay.innerHTML = `
+                <div style="
+                    background: #0a0a0a;
+                    border: 2px solid #00ff00;
+                    padding: 40px;
+                    border-radius: 5px;
+                    max-width: 500px;
+                    font-family: 'Courier New', monospace;
+                    color: #00ff00;
+                    text-shadow: 0 0 10px #00ff00;
+                ">
+                    <h1 style="margin-top: 0; text-align: center; letter-spacing: 2px;">LOGIN</h1>
+                    <div style="margin-bottom: 20px;">
+                        <label style="display: block; margin-bottom: 5px;">Username:</label>
+                        <input id="office-username" type="text" value="journalist" disabled style="
+                            width: 100%;
+                            padding: 8px;
+                            background: #0a0a0a;
+                            border: 1px solid #00ff00;
+                            color: #00ff00;
+                            font-family: 'Courier New', monospace;
+                            box-sizing: border-box;
+                        ">
+                    </div>
+                    <div style="margin-bottom: 20px;">
+                        <label style="display: block; margin-bottom: 5px;">Password:</label>
+                        <input id="office-password" type="password" placeholder="Enter password..." autocomplete="off" style="
+                            width: 100%;
+                            padding: 8px;
+                            background: #0a0a0a;
+                            border: 1px solid #00ff00;
+                            color: #00ff00;
+                            font-family: 'Courier New', monospace;
+                            box-sizing: border-box;
+                        ">
+                    </div>
+                    <button id="office-login-btn" style="
+                        width: 100%;
+                        padding: 10px;
+                        background: #0a0a0a;
+                        border: 1px solid #00ff00;
+                        color: #00ff00;
+                        font-family: 'Courier New', monospace;
+                        cursor: pointer;
+                        margin-bottom: 10px;
+                    ">LOGIN</button>
+                    <button id="office-login-cancel" style="
+                        width: 100%;
+                        padding: 10px;
+                        background: #0a0a0a;
+                        border: 1px solid #00ff00;
+                        color: #00ff00;
+                        font-family: 'Courier New', monospace;
+                        cursor: pointer;
+                        margin-bottom: 10px;
+                    ">EXIT</button>
+                    <div id="office-login-error" style="color: #ff0000; text-align: center;"></div>
+                </div>
+            `;
+
+            document.body.appendChild(overlay);
+
+            const passwordInput = document.getElementById('office-password');
+            const loginBtn = document.getElementById('office-login-btn');
+            const errorMsg = document.getElementById('office-login-error');
+
+            const handleLogin = async () => {
+                const password = passwordInput.value.toUpperCase().replace(/\s+/g, '');
+                console.log(password)
+                if (password === 'MINECOLLAPSE') {
+                    overlay.remove();
+                    if (userData) {
+                        userData.loggedIn = true;
+                    }
+
+                    // Show desktop
+                    await this.showComputerDesktop(userData);
+
+                    resolve();
+                } else {
+                    errorMsg.textContent = 'Incorrect password';
+                    passwordInput.value = '';
+                }
+            };
+
+            const cancelBtn = document.getElementById('office-login-cancel');
+
+            loginBtn.addEventListener('click', handleLogin);
+            passwordInput.addEventListener('keypress', (e) => {
+                if (e.key === 'Enter') {
+                    handleLogin();
+                }
+            });
+
+            // Cancel button - unfreeze controls and close login screen
+            cancelBtn.addEventListener('click', async () => {
+                overlay.remove();
+                // Unfreeze controls to re-enable game input
+                if (this.controls) this.controls.unfreeze();
+
+                // Trigger narrative on first exit from login
+                if (!userData.loginAttempted) {
+                    userData.loginAttempted = true;
+
+                    // Enable notepad interaction
+                    const notepadObject = this.gameManager?.mansion?.props?.get('notepad');
+                    if (notepadObject) {
+                        notepadObject.userData.interactable = true;
+                        notepadObject.userData.loginAttempted = true;
+                    }
+
+                    // Trigger objective to find password
+                    setTimeout(async () => {
+                        await window.gameControls.narrativeManager.triggerEvent('office.login_objective');
+                    }, 500);
+                }
+
+                // Prevent interaction immediately after closing login
+                this.justClosedUI = true;
+                setTimeout(() => {
+                    this.justClosedUI = false;
+                }, 100);
+                this.currentInteraction = null;
+                resolve();
+            });
+
+            // Focus password field
+            setTimeout(() => passwordInput.focus(), 100);
+        });
+    }
+
+    async showComputerDesktop(userData) {
+        return new Promise(resolve => {
+            // Freeze controls to disable game input while desktop is open
+            if (this.controls) this.controls.freeze();
+
+            const overlay = document.createElement('div');
+            overlay.id = 'office-computer-desktop';
+            overlay.style.cssText = `
+                position: fixed;
+                top: 0;
+                left: 0;
+                width: 100%;
+                height: 100%;
+                background: #0a0a0a;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                z-index: 2000;
+            `;
+            overlay.innerHTML = `
+                <div style="
+                    background: #0a0a0a;
+                    border: 2px solid #00ff00;
+                    width: 90%;
+                    max-width: 700px;
+                    padding: 20px;
+                    border-radius: 5px;
+                    font-family: 'Courier New', monospace;
+                    color: #00ff00;
+                ">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; border-bottom: 1px solid #00ff00; padding-bottom: 10px;">
+                        <span>Journalist's Computer</span>
+                        <button id="office-close-desktop" style="
+                            background: #0a0a0a;
+                            border: 1px solid #00ff00;
+                            color: #00ff00;
+                            padding: 5px 10px;
+                            cursor: pointer;
+                            font-family: 'Courier New', monospace;
+                        ">✕</button>
+                    </div>
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
+                        <div class="office-file-icon" data-file="interview" style="cursor: pointer; text-align: center; padding: 20px; border: 1px solid #00ff00; border-radius: 3px;">
+                            <div style="font-size: 40px; margin-bottom: 10px;">🎵</div>
+                            <div>Interview.wav</div>
+                        </div>
+                        <div class="office-file-icon" data-file="mansion_layout" style="cursor: pointer; text-align: center; padding: 20px; border: 1px solid #00ff00; border-radius: 3px;">
+                            <div style="font-size: 40px; margin-bottom: 10px;">🗺️</div>
+                            <div>Mansion_Layout.jpg</div>
+                        </div>
+                        <div class="office-file-icon" data-file="note" style="cursor: pointer; text-align: center; padding: 20px; border: 1px solid #00ff00; border-radius: 3px;">
+                            <div style="font-size: 40px; margin-bottom: 10px;">📝</div>
+                            <div>NOTE.txt</div>
+                        </div>
+                        <div class="office-file-icon" data-file="evidence" style="cursor: pointer; text-align: center; padding: 20px; border: 1px solid #00ff00; border-radius: 3px;">
+                            <div style="font-size: 40px; margin-bottom: 10px;">🔒</div>
+                            <div>Evidence.zip</div>
+                        </div>
+                    </div>
+                </div>
+            `;
+
+            document.body.appendChild(overlay);
+
+            // Setup file click handlers
+            overlay.querySelectorAll('.office-file-icon').forEach(icon => {
+                icon.addEventListener('click', async () => {
+                    const fileType = icon.dataset.file;
+                    await this.handleOfficeFileClick(fileType);
+                });
+            });
+
+            // Close button
+            overlay.querySelector('#office-close-desktop').addEventListener('click', () => {
+                overlay.remove();
+                // Unfreeze controls to re-enable game input
+                if (this.controls) this.controls.unfreeze();
+                // Prevent interaction immediately after closing desktop
+                this.justClosedUI = true;
+                setTimeout(() => {
+                    this.justClosedUI = false;
+                }, 100);
+                resolve();
+            });
+
+            if (!userData.hasDoneSearchObjective) {
+                userData.hasDoneSearchObjective = true;
+                
+                // Trigger search objective after desktop is shown
+                setTimeout(async () => {
+                    await window.gameControls.narrativeManager.triggerEvent('office.search_computer_objective');
+                }, 500);
+            }
+        });
+    }
+
+    async handleOfficeFileClick(fileType) {
+        console.log(`📂 Opening file: ${fileType}`);
+
+        switch (fileType) {
+            case 'interview':
+                if (this.gameManager.audioManager) {
+                    this.gameManager.audioManager.play('interview_audio');
+                }
+                this.showDesktopNotification('Playing interview audio...');
+                break;
+
+            case 'mansion_layout':
+                this.showImageOverlay('Mansion Layout', '/assets/mansion_blueprint.jpg');
+                break;
+
+            case 'note':
+                this.showDesktopNotification('Case number from missing persons report is needed for ZIP file.');
+
+                // Trigger narrative events on first NOTE.txt read
+                if (!this.noteNarrativeTriggered) {
+                    this.noteNarrativeTriggered = true;
+                    setTimeout(async () => {
+                        try {
+                            console.log('[InteractionSystem] Starting narrative triggers for NOTE.txt');
+                            await window.gameControls.narrativeManager.triggerEvent('office.evidence_found');
+                            console.log('[InteractionSystem] evidence_found done');
+                            await window.gameControls.narrativeManager.triggerEvent('office.missing_persons_hint');
+                            console.log('[InteractionSystem] missing_persons_hint done');
+                            await window.gameControls.narrativeManager.triggerEvent('office.missing_persons_objective');
+                            console.log('[InteractionSystem] missing_persons_objective done');
+
+                            // Enable the loose book for interaction
+                            if (this.gameManager.mansion && this.gameManager.mansion.props) {
+                                const looseBook = this.gameManager.mansion.props.get('loose_book');
+                                if (looseBook) {
+                                    looseBook.userData.interactable = true;
+                                    console.log('📖 Loose book is now interactable');
+                                }
+                            }
+                        } catch (e) {
+                            console.error('Error triggering narrative events:', e);
+                        }
+                    }, 1000);
+                }
+                break;
+
+            case 'evidence':
+                // Use custom password UI instead of browser prompt
+                this.promptForZipPasswordUI();
+                break;
+        }
+    }
+
+    promptForZipPasswordUI() {
+        const overlay = document.createElement('div');
+        overlay.id = 'zip-password-overlay';
+        overlay.style.cssText = `
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.8);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 2100;
+        `;
+
+        const passwordDialog = document.createElement('div');
+        passwordDialog.style.cssText = `
+            background: #0a0a0a;
+            border: 2px solid #00ff00;
+            border-radius: 5px;
+            padding: 30px;
+            max-width: 400px;
+            font-family: 'Courier New', monospace;
+            color: #00ff00;
+            text-align: center;
+            box-shadow: 0 0 20px rgba(0, 255, 0, 0.5);
+        `;
+
+        passwordDialog.innerHTML = `
+            <h2 style="margin: 0 0 20px 0; font-size: 1.3em; text-shadow: 0 0 10px rgba(0, 255, 0, 0.8);">
+                EVIDENCE.ZIP - PASSWORD REQUIRED
+            </h2>
+            <p style="margin: 0 0 20px 0; color: #aaa; font-size: 0.9em;">
+                Enter the case number from the missing persons report:
+            </p>
+            <input type="password" id="zip-password-input" placeholder="Case Number" style="
+                width: 100%;
+                padding: 10px;
+                background: #1a1a1a;
+                border: 2px solid #00ff00;
+                color: #00ff00;
+                font-family: 'Courier New', monospace;
+                font-size: 1em;
+                box-sizing: border-box;
+                margin-bottom: 15px;
+            ">
+            <div id="zip-error-message" style="
+                color: #ff0000;
+                margin-bottom: 15px;
+                min-height: 20px;
+                font-size: 0.9em;
+            "></div>
+            <div style="display: flex; gap: 10px;">
+                <button id="zip-submit-btn" style="
+                    flex: 1;
+                    padding: 10px;
+                    background: #00ff00;
+                    color: #000;
+                    border: none;
+                    font-weight: bold;
+                    cursor: pointer;
+                    font-family: 'Courier New', monospace;
+                    border-radius: 3px;
+                    transition: all 0.3s ease;
+                ">UNLOCK</button>
+                <button id="zip-cancel-btn" style="
+                    flex: 1;
+                    padding: 10px;
+                    background: transparent;
+                    color: #00ff00;
+                    border: 2px solid #00ff00;
+                    font-weight: bold;
+                    cursor: pointer;
+                    font-family: 'Courier New', monospace;
+                    border-radius: 3px;
+                    transition: all 0.3s ease;
+                ">CANCEL</button>
+            </div>
+        `;
+
+        overlay.appendChild(passwordDialog);
+        document.body.appendChild(overlay);
+
+        const passwordInput = document.getElementById('zip-password-input');
+        const errorMessage = document.getElementById('zip-error-message');
+        const submitBtn = document.getElementById('zip-submit-btn');
+        const cancelBtn = document.getElementById('zip-cancel-btn');
+
+        submitBtn.addEventListener('mouseover', (e) => {
+            e.target.style.background = '#00dd00';
+            e.target.style.boxShadow = '0 0 10px rgba(0, 255, 0, 0.8)';
+        });
+
+        submitBtn.addEventListener('mouseout', (e) => {
+            e.target.style.background = '#00ff00';
+            e.target.style.boxShadow = 'none';
+        });
+
+        const handleSubmit = async () => {
+            const password = passwordInput.value;
+            if (password === '8013') {
+                overlay.remove();
+
+                // Close the computer desktop
+                const desktopOverlay = document.getElementById('office-computer-desktop');
+                if (desktopOverlay) {
+                    desktopOverlay.remove();
+                }
+
+                // Close any remaining overlays (double-check)
+                const allOverlays = document.querySelectorAll('[id$="-overlay"], [id$="-desktop"]');
+                allOverlays.forEach(el => el.remove());
+
+                // Unfreeze controls
+                if (this.controls) this.controls.unfreeze();
+
+                // Clear the zip password objective
+                if (this.gameManager && this.gameManager.uiManager) {
+                    this.gameManager.uiManager.markObjectiveComplete('zip_password');
+                }
+
+                // Show lore screen first (blocks all input)
+                await this.showLoreScreen();
+
+                // Trigger capture sequence
+                await this.triggerCaptureSequence();
+            } else if (password) {
+                errorMessage.textContent = 'Incorrect password. Check the missing persons report.';
+                passwordInput.value = '';
+                passwordInput.focus();
+            }
+        };
+
+        submitBtn.addEventListener('click', handleSubmit);
+        cancelBtn.addEventListener('click', () => {
+            overlay.remove();
+        });
+
+        passwordInput.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') {
+                handleSubmit();
+            }
+        });
+
+        // Focus on input
+        setTimeout(() => {
+            passwordInput.focus();
+        }, 100);
+    }
+
+    showDesktopNotification(message) {
+        // Show notification within the desktop overlay
+        const notification = document.createElement('div');
+        notification.style.cssText = `
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            background: #0a0a0a;
+            border: 2px solid #00ff00;
+            color: #00ff00;
+            padding: 15px 20px;
+            border-radius: 5px;
+            font-family: 'Courier New', monospace;
+            z-index: 2010;
+            max-width: 300px;
+            white-space: pre-wrap;
+            text-shadow: 0 0 10px #00ff00;
+        `;
+        notification.textContent = message;
+        document.body.appendChild(notification);
+
+        // Auto-remove after 4 seconds
+        setTimeout(() => {
+            notification.remove();
+        }, 4000);
+    }
+
+    async showLoreScreen() {
+        // Create a blocking lore screen overlay that cannot be closed
+        const overlay = document.createElement('div');
+        overlay.id = 'lore-screen-overlay';
+        overlay.style.cssText = `
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.9);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 10000;
+            font-family: 'Courier New', monospace;
+            color: #c2c2c2;
+            cursor: not-allowed;
+        `;
+
+        const content = document.createElement('div');
+        content.style.cssText = `
+            max-width: 800px;
+            text-align: center;
+            padding: 40px;
+            border: 2px solid #770000;
+            background: rgba(0, 5, 16, 0.95);
+        `;
+
+        content.innerHTML = `
+            <h2 style="color: #ff6b6b; margin-bottom: 30px; font-size: 24px;">CLASSIFIED</h2>
+            <p style="font-size: 14px; line-height: 1.8; margin-bottom: 20px;">
+                The Miller family vanished without a trace three months ago. No witnesses. No evidence.
+                Just an empty home and questions that demand answers.
+            </p>
+            <p style="font-size: 14px; line-height: 1.8; margin-bottom: 20px; color: #ff9999;">
+                Someone out there knows what happened. Someone has been hiding the truth.
+            </p>
+            <p style="font-size: 12px; color: #999; margin-top: 40px;">
+                [ You cannot escape what comes next ]
+            </p>
+        `;
+
+        overlay.appendChild(content);
+        document.body.appendChild(overlay);
+
+        // Prevent any interaction with the screen
+        overlay.addEventListener('click', (e) => e.stopPropagation());
+        overlay.addEventListener('contextmenu', (e) => e.preventDefault());
+        overlay.addEventListener('wheel', (e) => e.preventDefault());
+
+        // Wait 4 seconds then auto-remove
+        await new Promise(resolve => setTimeout(resolve, 4000));
+
+        overlay.remove();
+    }
+
+    async triggerCaptureSequence() {
+        console.log('⚠️ Capture sequence triggered!');
+
+        // Close any remaining overlays first (except the lore screen which already auto-removed)
+        const allOverlays = document.querySelectorAll('[id$="-overlay"]:not(#capture-blackout), [id$="-desktop"]');
+        allOverlays.forEach(overlay => overlay.remove());
+
+        // Create persistent blackout overlay that will stay for entire transition
+        const blackoutOverlay = document.createElement('div');
+        blackoutOverlay.id = 'capture-blackout';
+        blackoutOverlay.style.cssText = `
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 1);
+            z-index: 20000;
+            pointer-events: none;
+        `;
+        document.body.appendChild(blackoutOverlay);
+
+        // Unfreeze controls
+        if (this.controls) this.controls.unfreeze();
+
+        // Reset interaction state so updateCrosshair will resume in next frame
+        this.currentInteraction = null;
+
+        // Disable office stage interactables before transition
+        this.disableOfficeInteractables();
+
+        // Close computer screen while player is blacked out
+        const computerUI = document.getElementById('computer-desktop');
+        if (computerUI) {
+            computerUI.remove();
+            console.log('💻 Computer screen closed before transition');
+        }
+
+        // Play the capture/knockout sound sequence (all while blacked out)
+        const audioManager = this.gameManager.audioManager;
+        if (audioManager) {
+            // First bang on the door
+            await audioManager.play('door_bang_1');
+            await new Promise(resolve => setTimeout(resolve, 800));
+
+            // Unlock sound
+            await audioManager.play('door_unlock_click');
+            await new Promise(resolve => setTimeout(resolve, 600));
+
+            // Final loud bang
+            await audioManager.play('door_bang_2_loud');
+            await new Promise(resolve => setTimeout(resolve, 1000));
+        }
+
+        // Stop all remaining audio
+        if (audioManager) {
+            audioManager.stopAll();
+        }
+
+        // Play capture narrative (also while blacked out)
+        await window.gameControls.narrativeManager.triggerEvent('office.capture_triggered');
+
+        // Brief dramatic pause (still blacked out)
+        await new Promise(resolve => setTimeout(resolve, 1000));
+
+        // Transition to mansion (blackout persists throughout)
+        await window.gameControls.narrativeManager.triggerEvent('office.transition_to_mansion');
+
+        // Wait a moment for the new stage to fully load and player to be positioned
+        await new Promise(resolve => setTimeout(resolve, 500));
+
+        // Now fade out the blackout to reveal the mansion
+        blackoutOverlay.style.transition = 'opacity 1.5s ease-out';
+        blackoutOverlay.style.opacity = '0';
+
+        // Remove the blackout after fade completes
+        await new Promise(resolve => setTimeout(resolve, 1500));
+        if (blackoutOverlay.parentNode) {
+            blackoutOverlay.remove();
+        }
+
+        console.log('✅ Transition sequence complete - blackout removed');
+    }
+
+    /**
+     * Disable all office stage interactables before transitioning away
+     */
+    disableOfficeInteractables() {
+        const officeInteractables = ['computer', 'notepad', 'newspaper', 'loose_book'];
+
+        this.scene.traverse((object) => {
+            if (object.userData && officeInteractables.includes(object.userData.type)) {
+                object.userData.interactable = false;
+                console.log(`[InteractionSystem] Disabled interactable: ${object.userData.type}`);
+            }
+        });
+    }
+
+    showImageOverlay(title, imagePath) {
+        const overlay = document.createElement('div');
+        overlay.style.cssText = `
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.9);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 2001;
+        `;
+        overlay.innerHTML = `
+            <div style="position: relative; max-width: 90%; max-height: 90%;">
+                <button style="
+                    position: absolute;
+                    top: 10px;
+                    right: 10px;
+                    background: rgba(255,255,255,0.2);
+                    border: 1px solid white;
+                    color: white;
+                    padding: 5px 15px;
+                    cursor: pointer;
+                    z-index: 2002;
+                ">Close</button>
+                <img src="${imagePath}" alt="${title}" style="max-width: 100%; max-height: 100%; object-fit: contain;">
+            </div>
+        `;
+
+        document.body.appendChild(overlay);
+        overlay.querySelector('button').addEventListener('click', () => {
+            overlay.remove();
+        });
+    }
+
+    async handleNotepadInteraction(notepad, userData) {
+        console.log('📝 Player reading notepad');
+
+        // Freeze controls while reading notepad
+        if (this.controls) this.controls.freeze();
+
+        const overlay = document.createElement('div');
+        overlay.id = 'notepad-overlay';
+        overlay.style.cssText = `
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.7);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 2000;
+        `;
+
+        const notepadDiv = document.createElement('div');
+        notepadDiv.style.cssText = `
+            width: 500px;
+            height: 600px;
+            background: #fef9e7;
+            border: 3px solid #8b7355;
+            border-radius: 3px;
+            padding: 40px;
+            box-shadow: 0 0 30px rgba(0, 0, 0, 0.8), inset 0 0 10px rgba(0, 0, 0, 0.1);
+            position: relative;
+            font-family: 'Courier New', monospace;
+            overflow: hidden;
+        `;
+
+        notepadDiv.innerHTML = `
+            <div style="
+                position: absolute;
+                top: 0;
+                left: 0;
+                right: 0;
+                height: 2px;
+                background: linear-gradient(to bottom, rgba(0,0,0,0.1), transparent);
+            "></div>
+            <h2 style="
+                margin: 0 0 20px 0;
+                color: #333;
+                font-size: 18px;
+                border-bottom: 2px solid #ccc;
+                padding-bottom: 10px;
+                text-align: center;
+            ">Password Hint</h2>
+            <div style="
+                color: #333;
+                font-size: 16px;
+                line-height: 1.8;
+                text-align: center;
+                margin-bottom: 30px;
+            ">
+                <p style="margin: 10px 0; font-style: italic;">"My first big break"</p>
+            </div>
+        `;
+
+        // Create close button separately
+        const closeBtn = document.createElement('button');
+        closeBtn.textContent = 'Close';
+        closeBtn.style.cssText = `
+            position: absolute;
+            bottom: 30px;
+            right: 30px;
+            padding: 10px 20px;
+            background: #8b7355;
+            color: #fef9e7;
+            border: 1px solid #5d4a37;
+            border-radius: 3px;
+            cursor: pointer;
+            font-family: 'Courier New', monospace;
+            font-size: 14px;
+        `;
+
+        notepadDiv.appendChild(closeBtn);
+        overlay.appendChild(notepadDiv);
+        document.body.appendChild(overlay);
+
+        // Close button handler
+        closeBtn.addEventListener('click', async () => {
+            overlay.remove();
+            // Unfreeze controls
+            if (this.controls) this.controls.unfreeze();
+
+            // Trigger investigate objective on first notepad read
+            if (!userData.notepadRead) {
+                userData.notepadRead = true;
+
+                // Enable newspaper interaction
+                const newspaperObject = this.gameManager?.mansion?.props?.get('newspaper');
+                if (newspaperObject) {
+                    newspaperObject.userData.interactable = true;
+                    newspaperObject.userData.notepadRead = true;
+                }
+
+                await window.gameControls.narrativeManager.triggerEvent('office.investigate_objective');
+            }
+
+            // Prevent immediate re-interaction
+            this.justClosedUI = true;
+            setTimeout(() => {
+                this.justClosedUI = false;
+            }, 200);
+        });
+
+        // Allow clicking outside to close
+        overlay.addEventListener('click', async (e) => {
+            if (e.target === overlay) {
+                overlay.remove();
+                // Unfreeze controls
+                if (this.controls) this.controls.unfreeze();
+
+                // Enable newspaper on first notepad read
+                if (!userData.notepadRead) {
+                    userData.notepadRead = true;
+
+                    // Enable newspaper interaction
+                    const newspaperObject = this.gameManager?.mansion?.props?.get('newspaper');
+                    if (newspaperObject) {
+                        newspaperObject.userData.interactable = true;
+                        newspaperObject.userData.notepadRead = true;
+                    }
+
+                    await window.gameControls.narrativeManager.triggerEvent('office.investigate_objective');
+                }
+
+                // Prevent immediate re-interaction
+                this.justClosedUI = true;
+                setTimeout(() => {
+                    this.justClosedUI = false;
+                }, 200);
+            }
+        });
+    }
+
+    async handleNewspaperInteraction(newspaper, userData) {
+        console.log('📰 Player reading newspaper');
+
+        // Freeze controls while reading newspaper
+        if (this.controls) this.controls.freeze();
+
+        const overlay = document.createElement('div');
+        overlay.id = 'newspaper-overlay';
+        overlay.style.cssText = `
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.7);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 2000;
+        `;
+
+        const newspaperDiv = document.createElement('div');
+        newspaperDiv.style.cssText = `
+            width: 600px;
+            height: 700px;
+            background: #e8e4d9;
+            border: 4px solid #654321;
+            border-radius: 2px;
+            padding: 30px;
+            box-shadow: 0 0 40px rgba(0, 0, 0, 0.9), inset 0 0 15px rgba(0, 0, 0, 0.1);
+            position: relative;
+            font-family: 'Times New Roman', serif;
+            overflow-y: auto;
+        `;
+
+        newspaperDiv.innerHTML = `
+            <div style="
+                text-align: center;
+                margin-bottom: 20px;
+                border-bottom: 3px double #654321;
+                padding-bottom: 15px;
+            ">
+                <h1 style="
+                    margin: 0 0 5px 0;
+                    color: #000;
+                    font-size: 32px;
+                    letter-spacing: 2px;
+                ">MINE COLLAPSE</h1>
+                <p style="
+                    margin: 5px 0 0 0;
+                    color: #333;
+                    font-size: 12px;
+                    font-style: italic;
+                ">Your Biggest Investigative Piece</p>
+            </div>
+            <div style="
+                color: #000;
+                font-size: 14px;
+                line-height: 1.8;
+                columns: 2;
+                column-gap: 20px;
+                text-align: justify;
+            ">
+                <p>In what investigators are calling one of the most significant industrial disasters of the decade, the Blackstone Mine collapsed early this morning, trapping 47 workers underground.</p>
+                <p>The mine, operated by Meridian Mining Corporation, had been flagged by safety inspectors multiple times in the past year. Documents obtained by this reporter reveal systematic negligence and ignored safety violations.</p>
+                <p>Rescue efforts continue as emergency crews work around the clock. The company has released no official statement regarding the incident.</p>
+            </div>
+        `;
+
+        // Create close button separately
+        const closeBtn = document.createElement('button');
+        closeBtn.textContent = 'Close';
+        closeBtn.style.cssText = `
+            position: absolute;
+            bottom: 20px;
+            right: 20px;
+            padding: 10px 20px;
+            background: #654321;
+            color: #e8e4d9;
+            border: 1px solid #3d2817;
+            border-radius: 2px;
+            cursor: pointer;
+            font-family: 'Times New Roman', serif;
+            font-size: 14px;
+        `;
+
+        newspaperDiv.appendChild(closeBtn);
+        overlay.appendChild(newspaperDiv);
+        document.body.appendChild(overlay);
+
+        // Close button handler
+        closeBtn.addEventListener('click', async () => {
+            overlay.remove();
+            // Unfreeze controls
+            if (this.controls) this.controls.unfreeze();
+
+            // Trigger narrative events on first newspaper read
+            if (!userData.hasRead) {
+                userData.hasRead = true;
+                setTimeout(async () => {
+                    await window.gameControls.narrativeManager.triggerEvent('office.newspaper_hint');
+                    await window.gameControls.narrativeManager.triggerEvent('office.computer_password_objective');
+                }, 500);
+            }
+
+            // Prevent immediate re-interaction
+            this.justClosedUI = true;
+            setTimeout(() => {
+                this.justClosedUI = false;
+            }, 200);
+        });
+
+        // Allow clicking outside to close
+        overlay.addEventListener('click', async (e) => {
+            if (e.target === overlay) {
+                overlay.remove();
+                // Unfreeze controls
+                if (this.controls) this.controls.unfreeze();
+
+                // Trigger narrative events on first newspaper read
+                if (!userData.hasRead) {
+                    userData.hasRead = true;
+                    setTimeout(async () => {
+                        await window.gameControls.narrativeManager.triggerEvent('office.newspaper_hint');
+                        await window.gameControls.narrativeManager.triggerEvent('office.computer_password_objective');
+                    }, 500);
+                }
+
+                // Prevent immediate re-interaction
+                this.justClosedUI = true;
+                setTimeout(() => {
+                    this.justClosedUI = false;
+                }, 200);
+            }
+        });
+    }
+
+    async handleLooseBookInteraction(book, userData) {
+        console.log('📖 Player finding missing persons report');
+
+        if (!userData.found) {
+            userData.found = true;
+            // Make book non-interactable after finding it
+            userData.interactable = false;
+
+            // Add to inventory
+            this.gameManager.addToInventory({
+                name: 'Missing Persons Report',
+                type: 'document',
+                description: 'Case report for the Miller disappearance. Case No. 8013',
+                caseNumber: 8013
+            });
+
+            this.showMessage('You found a hidden missing persons report! Case No. 8013');
+
+            // Trigger narrative events on finding case file
+            setTimeout(async () => {
+                await window.gameControls.narrativeManager.triggerEvent('office.case_file_found');
+                await window.gameControls.narrativeManager.triggerEvent('office.zip_password_realization');
+                await window.gameControls.narrativeManager.triggerEvent('office.zip_password_objective');
+                // Mark that the missing persons objective has been found
+                this.gameManager.completeObjective('find_case_file');
+            }, 500);
+        } else {
+            this.showMessage('The book is now empty.');
+        }
     }
 
     dispose() {

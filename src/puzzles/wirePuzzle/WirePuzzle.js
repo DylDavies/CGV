@@ -20,9 +20,9 @@ export class WirePuzzle {
         });
         
         this.result = new PuzzleResult(
-            'wire-puzzle-result-overlay',
-            'wire-result-title',
-            'wire-result-subtitle'
+            'result-screen-overlay',
+            'result-title',
+            'result-subtitle'
         );
 
         document.getElementById('wire-reset-puzzle-btn').addEventListener('click', () => this.startCurrentLevel());

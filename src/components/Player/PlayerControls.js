@@ -4,11 +4,13 @@ import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.127.0/build/three.m
 import { PointerLockControls } from 'https://cdn.jsdelivr.net/npm/three@0.127.0/examples/jsm/controls/PointerLockControls.js';
 
 class FirstPersonControls {
-   constructor(camera, domElement, physicsManager = null, puzzles = {}, monsterAI = null, mansionLoader = null) {
+   constructor(camera, renderer, physicsManager = null, puzzles = {}, monsterAI = null, mansionLoader = null) {
         this.camera = camera;
-        this.monsterAI = monsterAI; 
-        this.controls = new PointerLockControls(camera, domElement);
-        this.domElement = domElement;
+        this.monsterAI = monsterAI;
+        this.renderer = renderer;
+        // Initialize controls with the renderer's canvas
+        this.controls = new PointerLockControls(camera, renderer.domElement);
+        this.domElement = renderer.domElement;
         this.physicsManager = physicsManager;
         this.mansionLoader = mansionLoader;
 
@@ -91,21 +93,23 @@ class FirstPersonControls {
                 //         this.controls.unlock();
                 //     }
                 //     break;
+                case 'F9':
+                    event.preventDefault();
+                    this.devMode = !this.devMode;
+                    console.log(`🔧 Dev mode ${this.devMode ? 'ON' : 'OFF'}`);
+                    break;
+                case 'F10':
+                    event.preventDefault();
+                    if (this.devMode) {
+                        this.fixedY = !this.fixedY;
+                        console.log(`🛸 Fixed Y mode (fly) ${this.fixedY ? 'ON' : 'OFF'}`);
+                    } else {
+                        console.log('🔧 Enable dev mode first (F9)');
+                    }
+                    break;
                 case 'F11':
                     event.preventDefault();
                     this.toggleStats();
-                    break;
-                case 'KeyP': // Remove this later, just here for testing
-                    console.log("Triggering color puzzle for testing");
-                    if (this.puzzles && this.puzzles.colorPuzzle) {
-                        this.puzzles.colorPuzzle.show(4);
-                    }
-                    break;
-                case 'KeyL':
-                    if (this.puzzles && this.puzzles.wirePuzzle) {
-                        console.log("Triggering wire puzzle for testing");
-                        this.puzzles.wirePuzzle.show(1); // Show difficulty 1
-                    }
                     break;
                 case 'KeyG': 
                     if (this.monsterAI) {
@@ -294,7 +298,9 @@ class FirstPersonControls {
                 isRunning: this.isRunning,
                 isCrouching: this.isCrouching,
                 flyUp: this.flyUp,
-                flyDown: this.flyDown
+                flyDown: this.flyDown,
+                fixedYMode: this.fixedY,
+                devMode: this.devMode
             };
 
             // Let physics manager handle movement

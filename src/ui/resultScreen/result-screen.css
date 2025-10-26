@@ -1,5 +1,5 @@
 /*====THE FAILURE OR SUCCESS MESSAGE===*/
-#puzzle-result-overlay {
+#result-screen-overlay {
   position: fixed;
   top: 0;
   left: 0;
@@ -9,12 +9,12 @@
   justify-content: center;
   align-items: center;
   background-color: rgba(0, 0, 0, 0.7);
-  z-index: 2000;
+  z-index: 9999;
   opacity: 1;
   transition: opacity 0.5s ease-out;
 }
 
-#puzzle-result-overlay.hidden {
+#result-screen-overlay.hidden {
   opacity: 0;
   pointer-events: none;
 }
@@ -39,7 +39,7 @@
 }
 
 /* --- Success Style --- */
-#puzzle-result-overlay.success #result-title {
+#result-screen-overlay.success #result-title {
   font-family: 'Creepster', cursive; 
   font-size: 8em;
   color: #00ff00;
@@ -48,15 +48,15 @@
 }
 
 /* --- Failure Style --- */
-#puzzle-result-overlay.failure {
+#result-screen-overlay.failure {
   background-color: rgba(0, 0, 0, 0.95);
 }
 
-#puzzle-result-overlay.failure #result-message {
+#result-screen-overlay.failure #result-message {
   animation: souls-death-fade-in 3s ease-out forwards;
 }
 
-#puzzle-result-overlay.failure #result-title {
+#result-screen-overlay.failure #result-title {
   font-family: 'Cinzel', serif; 
   font-size: 9em;
   font-weight: 700;
@@ -64,7 +64,7 @@
   text-shadow: 0 0 25px #ff0000;
 }
 
-#puzzle-result-overlay.failure #result-subtitle {
+#result-screen-overlay.failure #result-subtitle {
   font-family: 'Courier New', Courier, monospace;
   font-size: 1.5em;
   color: #a1a1a1;
