@@ -22,7 +22,7 @@ export class ColorPuzzle {
             }
         });
 
-        this.result = new PuzzleResult();
+        this.result = new PuzzleResult('result-screen-overlay', 'result-title', 'result-subtitle');
         this.onSolveCallback = null;
         this.successMessage = 'The mechanism clicks open.';
     }

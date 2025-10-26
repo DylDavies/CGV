@@ -56,7 +56,7 @@ export class UIManager {
             clueScreen: document.getElementById('clue-screen'),
             closeClueButton: document.getElementById('close-clue-btn'),
 
-            resultOverlay: document.getElementById('puzzle-result-overlay'),
+            resultOverlay: document.getElementById('result-screen-overlay'),
 
             // Keypad
             keypadContainer: document.getElementById('keypad-container'),
@@ -97,7 +97,14 @@ export class UIManager {
             console.error(`Error loading HTML from ${url}:`, error);
         }
     }
-    
+
+    async reloadResultScreen() {
+        // Reload the result screen HTML to ensure it persists across stage transitions
+        await this._loadHTML('src/ui/resultScreen/result-screen.html', 'result-screen-container');
+        // Recache the result overlay element
+        this.uiElements.resultOverlay = document.getElementById('result-screen-overlay');
+    }
+
     _addMenuEventListeners() {
         this.uiElements.settingsButton.onclick = () => {
             this.uiElements.welcomeScreen.style.display = 'none';

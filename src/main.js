@@ -36,22 +36,11 @@ async function main() {
         logger.log('噫 Initializing Project HER...');
         await RAPIER.init();
         logger.log(`📊 Logger initialized - File logging: ${logger.fileLoggingEnabled ? 'ENABLED' : 'DISABLED'}`);
+        
+        const canvas = document.querySelector('#game-canvas');
 
         // --- Initialize Core Systems that EXIST OUTSIDE the loading screen ---
         const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 50);
-
-        // Create canvas element
-        const canvas = document.createElement('canvas');
-        canvas.id = 'game-canvas';
-        canvas.style.cssText = `
-            position: absolute;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            display: block;
-        `;
-        document.getElementById('game-container').appendChild(canvas);
 
         const renderer = createRenderer(canvas);
         renderer.setSize(window.innerWidth, window.innerHeight);
@@ -180,11 +169,13 @@ async function main() {
                 toMansion: async () => {
                     console.log('🚀 Transitioning to mansion...');
                     await stageManager.switchToStage('mansion');
+                    await uiManager.reloadResultScreen();
                     console.log('✅ Arrived at mansion');
                 },
                 toOffice: async () => {
                     console.log('🚀 Transitioning to office...');
                     await stageManager.switchToStage('office');
+                    await uiManager.reloadResultScreen();
                     console.log('✅ Arrived at office');
                 },
                 toggleNavMesh: () => stageManager.currentLoader?.toggleNavMeshVisualizer?.(),
@@ -331,7 +322,6 @@ async function main() {
                     setTimeout(async () => {
                         uiManager.hideLoadingScreen();
                         canvas.style.visibility = 'visible';
-                        canvas.style.zIndex = '10';
                         document.body.classList.add('game-active');
 
                         // Start stage-specific gameplay
