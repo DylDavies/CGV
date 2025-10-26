@@ -137,8 +137,10 @@ class GameManager {
         await window.gameControls.narrativeManager.triggerEvent('stage1.objective_find_pages');
 
         // Enable page glow now that phone is answered
-        if (this.mansion) {
-            this.mansion.enablePageGlow();
+        const currentLoader = this.stageManager ? this.stageManager.currentLoader : this.mansion;
+
+        if (currentLoader) {
+            currentLoader.enablePageGlow();
         }
     }
     
@@ -228,9 +230,11 @@ class GameManager {
             this.completeObjective('place_pages');
 
             // Make all placed pages glow
+            // Use correct loader for multi-scene support
+            const currentLoader = this.stageManager ? this.stageManager.currentLoader : this.mansion;
             this.pageSolution.forEach((pageId) => {
-                if (this.mansion) {
-                    this.mansion.activatePageSymbolGlow(pageId);
+                if (currentLoader) {
+                    currentLoader.activatePageSymbolGlow(pageId);
                 }
             });
 
@@ -611,8 +615,10 @@ class GameManager {
         this.placedPages[slotIndex] = null;
 
         // Tell the MansionLoader to visually hide the page from the slot.
-        if (this.mansion) {
-            this.mansion.hidePageOnSlot(slotIndex);
+        // Use currentLoader pattern to support multi-stage gameplay
+        const currentLoader = this.stageManager ? this.stageManager.currentLoader : this.mansion;
+        if (currentLoader) {
+            currentLoader.hidePageOnSlot(slotIndex);
         }
 
         this.checkPageOrder(); // Re-check the solution.
@@ -1200,7 +1206,8 @@ class GameManager {
         if (this.gameState !== 'playing') return;
 
         // Get the room the player is currently in
-        const detectedRoom = this.mansion.getCurrentRoom(this.camera.position);
+        const currentLoader = this.stageManager ? this.stageManager.currentLoader : this.mansion;
+        const detectedRoom = currentLoader ? currentLoader.getCurrentRoom(this.camera.position) : null;
 
         // Check if the room has changed since the last frame
         if (detectedRoom !== this.currentRoom) {
@@ -1321,7 +1328,7 @@ class GameManager {
             objectives: this.objectives,
             gameStats: this.gameStats,
             currentRoom: this.currentRoom?.id,
-            mansionSeed: this.mansion.seed, // If mansion uses seed for generation
+            mansionSeed: (this.stageManager ? this.stageManager.currentLoader : this.mansion)?.seed, // If mansion uses seed for generation
             version: '1.0'
         };
         

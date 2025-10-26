@@ -28,7 +28,7 @@ class MansionLoader {
 
         // Occlusion culling settings
         this.frustumCulling = true;
-        this.occlusionCulling = true;
+        this.occlusionCulling = false;
         this.playerPosition = new THREE.Vector3();
         this.visibleRooms = new Set();
         this.occlusionVizEnabled = false; // Track if visualization is active for real-time updates
@@ -105,6 +105,32 @@ class MansionLoader {
             if (entry.body) {
                 this.physicsManager.addBody(entry.body);
             }
+        }
+    }
+
+    /**
+     * Remove collision body for a specific object (e.g., when a door opens)
+     * @param {string} objectName - Name of the mesh/object to remove collision for
+     */
+    removeCollisionForObject(objectName) {
+        if (!this.physicsManager || !objectName) {
+            return;
+        }
+
+        // Find the physics body entry for this object
+        const index = this.physicsBodies.findIndex(entry => entry.mesh.name === objectName);
+
+        if (index !== -1) {
+            const entry = this.physicsBodies[index];
+            if (entry.body) {
+                // Remove the body from physics world
+                this.physicsManager.removeBody(entry.body);
+                // Remove from tracking array
+                this.physicsBodies.splice(index, 1);
+                logger.log(`🚪 Removed collision body for object: ${objectName}`);
+            }
+        } else {
+            logger.warn(`⚠️ Could not find physics body for object: ${objectName}`);
         }
     }
 
@@ -558,13 +584,38 @@ class MansionLoader {
             return;
         }
 
-        const pageIndex = this.pages.findIndex(p => p.name === pageId);
-        if (pageIndex === -1) {
-            console.error(`Could not find page object with ID ${pageId} to place. It might have already been placed.`);
-            return;
+        // CRITICAL FIX: Check if page is already placed on a different slot
+        // If so, remove it from that slot first (allow re-placing)
+        let pageObject = null;
+        let currentSlotIndex = -1;
+
+        for (let i = 0; i < this.pageSlots.length; i++) {
+            const slot = this.pageSlots[i];
+            if (slot && slot.userData.placedPage && slot.userData.placedPage.name === pageId) {
+                pageObject = slot.userData.placedPage;
+                currentSlotIndex = i;
+                break;
+            }
         }
-        
-        const pageObject = this.pages[pageIndex];
+
+        // If not found on a slot, search in unplaced pages array
+        let pageIndex = -1;
+        if (!pageObject) {
+            pageIndex = this.pages.findIndex(p => p.name === pageId);
+            if (pageIndex === -1) {
+                console.error(`Could not find page object with ID ${pageId} to place. Not in pages array or on any slot.`);
+                return;
+            }
+            pageObject = this.pages[pageIndex];
+        } else {
+            // Page was on another slot, remove it from there
+            if (currentSlotIndex !== slotIndex) {
+                console.log(`🔄 Removing page ${pageId} from slot ${currentSlotIndex} to place on slot ${slotIndex}`);
+                // Remove from old slot
+                this.pageSlots[currentSlotIndex].userData.placedPage = null;
+                // Note: We don't re-add to this.pages here, it stays in the scene
+            }
+        }
 
         pageObject.traverse((node) => {
         if (node.isMesh && node.material) {
@@ -645,17 +696,33 @@ class MansionLoader {
         // Symbols: 0x333333 @ 0.6 intensity
         // Pages: 0x222222 @ 0.4 intensity
 
-        // Remove the page from the animation array so it no longer pulses
-        this.pages.splice(pageIndex, 1);
+        // Remove the page from the animation array only if it was found there
+        if (pageIndex !== -1) {
+            this.pages.splice(pageIndex, 1);
+        }
 
          // NEW: Add this line to create a reference between the slot and the page object.
         slotObject.userData.placedPage = pageObject;
     }
 
     activatePageSymbolGlow(pageId) {
-        const pageObject = this.scene.getObjectByName(pageId);
+        // CRITICAL FIX: Search in slot objects where placed pages are stored
+        // When pages are placed on slots, they're removed from this.pages array
+        // and stored on the slot object as slotObject.userData.placedPage
+
+        let pageObject = null;
+
+        // Search through all page slots for a placed page with matching ID
+        for (let i = 0; i < this.pageSlots.length; i++) {
+            const slot = this.pageSlots[i];
+            if (slot && slot.userData.placedPage && slot.userData.placedPage.name === pageId) {
+                pageObject = slot.userData.placedPage;
+                break;
+            }
+        }
+
         if (!pageObject) {
-            console.warn(`Could not find page ${pageId} to activate symbol glow.`);
+            console.warn(`Could not find page ${pageId} to activate symbol glow. (Searched in ${this.pageSlots.length} slots)`);
             return;
         }
 
@@ -668,8 +735,9 @@ class MansionLoader {
             // Clone the material to ensure we're not affecting other objects.
             symbolMesh.material = symbolMesh.material.clone();
 
-            // Set the emissive (glow) color to red.
+            // Set the emissive (glow) color to RED and make it glow immediately
             symbolMesh.material.emissive.setHex(0xff0000);
+            symbolMesh.material.emissiveIntensity = 1.0; // Start glowing immediately
 
             // Add it to our array for animation in the tick method.
             this.glowingSymbols.push(symbolMesh);
@@ -1372,6 +1440,7 @@ toggleNavMeshNodesVisualizer() {
         const fireParticles = new THREE.Points(geometry, material);
         fireParticles.position.copy(firePosition);
         fireParticles.raycast = () => {}; // Make fire particles non-raycastable so clicks go through
+        fireParticles.userData.isParticles = true; // Mark as particles so occlusion culling never hides them
         this.scene.add(fireParticles);
         const fireLight = new THREE.PointLight(0xff6600, 4.0, 10, 2); // Reduced intensity from 8.0 to 4.0 for less brightness
         fireLight.position.copy(firePosition);
@@ -1428,16 +1497,62 @@ toggleNavMeshNodesVisualizer() {
         if (!this.occlusionCulling || !this.model) return;
 
         const closestPoint = new THREE.Vector3();
+        const cullingBuffer = 3.0; // Extra distance to keep objects visible for shadow casting
+        const hardDistance = this.maxVisibleDistance + cullingBuffer;
 
         // Traverse all objects and cull based on distance
         this.model.traverse((node) => {
             if (node === this.model) return; // Skip the root model node
             if (node.userData.lockVisibility) return; // Don't cull locked objects
 
-            let shouldBeVisible = true;
+            // CRITICAL FIX 1: NEVER cull lights
+            // Lights affect the entire scene, culling them causes sudden darkness/brightness changes
+            if (node.isLight) {
+                node.visible = true;
+                return;
+            }
 
-            // For meshes: check bounding box closest point
-            if (node.isMesh && node.geometry) {
+            // CRITICAL FIX 2: Don't cull non-leaf nodes (groups/containers)
+            // In Three.js, if parent is hidden, all children are hidden too
+            // Only cull leaf meshes that actually render geometry
+            if (!node.isMesh) {
+                node.visible = true;
+                return;
+            }
+
+            // CRITICAL FIX 5: NEVER cull interactive or puzzle objects
+            // Interactive objects need to be visible for raycasting to work
+            // Also preserve objects that might become interactive later
+            if (node.userData.interactable || node.userData.type === 'fireplace' ||
+                node.userData.type === 'page' || node.userData.type === 'safe' ||
+                node.userData.type === 'bucket' || node.userData.type === 'diary' ||
+                node.userData.type === 'notepad' || node.userData.type === 'newspaper' ||
+                node.userData.type === 'loose_book' || node.userData.type === 'computer') {
+                node.visible = true;
+                return;
+            }
+
+            // CRITICAL FIX 6: NEVER cull emissive objects (glowing items like pages/symbols)
+            // If emissive object is culled, its glow disappears
+            const hasEmissive = node.material && (node.material.emissive || (Array.isArray(node.material) && node.material.some(m => m && m.emissive)));
+            const isEmissiveActive = hasEmissive &&
+                ((node.material.emissiveIntensity !== undefined && node.material.emissiveIntensity > 0) ||
+                 (Array.isArray(node.material) && node.material.some(m => m && m.emissiveIntensity !== undefined && m.emissiveIntensity > 0)));
+
+            if (isEmissiveActive) {
+                node.visible = true;
+                return;
+            }
+
+            // CRITICAL FIX 7: NEVER cull particle systems
+            // Particle effects must always be visible
+            if (node.isPoints || node.type === 'Points' || node.userData.isParticles) {
+                node.visible = true;
+                return;
+            }
+
+            // Only process meshes from here on
+            if (node.geometry) {
                 // Compute bounding box if it doesn't have one
                 if (!node.geometry.boundingBox) {
                     node.geometry.computeBoundingBox();
@@ -1452,25 +1567,45 @@ toggleNavMeshNodesVisualizer() {
 
                 // Distance from camera to closest point on bounding box
                 const distance = cameraPosition.distanceTo(closestPoint);
-                shouldBeVisible = distance <= this.maxVisibleDistance;
-            }
-            // For lights: check world position distance
-            else if (node.isLight) {
-                const worldPos = new THREE.Vector3();
-                node.getWorldPosition(worldPos);
-                const distance = cameraPosition.distanceTo(worldPos);
-                shouldBeVisible = distance <= this.maxVisibleDistance;
-            }
-            // For groups/containers/non-renderables: ALWAYS KEEP VISIBLE
-            // Groups don't render, only their children (meshes) do
-            // Children's visibility is controlled individually above
-            // Keeping groups visible ensures children can render if they need to
-            else {
-                shouldBeVisible = true;
-            }
 
-            // Update visibility
-            node.visible = shouldBeVisible;
+                // CRITICAL FIX 3: Add culling buffer for shadow casting
+                // Keep geometry visible slightly beyond hard distance to maintain shadow continuity
+                const shouldBeVisible = distance <= hardDistance;
+
+                // CRITICAL FIX 4: Add hysteresis to prevent flickering at boundaries
+                // If object was visible before, keep it visible slightly longer (prevents frame-to-frame jitter)
+                if (!node._occlusionState) {
+                    node._occlusionState = { visible: true, distance: distance };
+                }
+
+                const fadeInDistance = this.maxVisibleDistance - 1.0;
+                const fadeOutDistance = hardDistance + 1.0;
+
+                if (distance <= fadeInDistance) {
+                    // Well within range - definitely visible
+                    node._occlusionState.visible = true;
+                } else if (distance <= hardDistance) {
+                    // In fade zone - check previous state for hysteresis
+                    // Keep previously visible objects visible to reduce flickering
+                    if (node._occlusionState.visible) {
+                        node._occlusionState.visible = true;
+                    } else {
+                        // Object wasn't visible before, still not visible
+                        node._occlusionState.visible = false;
+                    }
+                } else if (distance <= fadeOutDistance) {
+                    // Just outside hard distance - start fading out
+                    // But keep visible briefly to prevent popping
+                    // Use previous state: fade out gradually
+                    node._occlusionState.visible = false;
+                } else {
+                    // Well outside range - definitely invisible
+                    node._occlusionState.visible = false;
+                }
+
+                node.visible = node._occlusionState.visible;
+                node._occlusionState.distance = distance;
+            }
         });
     }
 

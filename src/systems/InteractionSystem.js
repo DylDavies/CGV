@@ -387,6 +387,12 @@ class InteractionSystem {
     }
 
     handlePageInteraction(pageObject, userData) {
+        // CRITICAL FIX: Check if phone has been answered before allowing page pickup
+        if (!this.gameManager.telephoneAnswered) {
+            this.showMessage("These pages seem important. I should answer the phone call first.");
+            return;
+        }
+
         // NEW: Check if pages puzzle is completed
         if (this.gameManager.pagesPuzzleCompleted) {
             this.showMessage("The pages are sealed in place by an ancient magic.");
@@ -643,16 +649,28 @@ class InteractionSystem {
             // Interpolate the pivot's rotation.
             pivot.rotation.y = startRotationY + (targetRotationY - startRotationY) * easedProgress;
 
-            for (const child of door.children) {
-                this.gameManager.mansion.recalculatePhysicsForObject(child.name);
-            }
-
             if (progress < 1) {
                 requestAnimationFrame(animate);
             } else {
                 pivot.rotation.y = targetRotationY; // Snap to the final rotation.
                 door.userData.isOpening = false;
                 door.userData.isOpen = true;
+
+                // CRITICAL FIX: Remove door collision when fully opened
+                // Use correct loader for multi-scene support
+                const currentLoader = this.stageManager ? this.stageManager.currentLoader : this.gameManager.mansion;
+
+                if (currentLoader && currentLoader.removeCollisionForObject) {
+                    // Remove collision for the door object itself
+                    currentLoader.removeCollisionForObject(door.name);
+
+                    // Also remove collision for any child objects
+                    for (const child of door.children) {
+                        currentLoader.removeCollisionForObject(child.name);
+                    }
+
+                    console.log(`🚪 Door collision removed after opening: ${door.name}`);
+                }
             }
         };
 
@@ -943,8 +961,10 @@ class InteractionSystem {
         diary.userData.interactable = false;
 
         // Stop the diary from glowing
-        if (this.gameManager.mansion) {
-            this.gameManager.mansion.disableDiaryGlow();
+        // Use correct loader for multi-scene support
+        const currentLoaderForGlow = this.stageManager ? this.stageManager.currentLoader : this.gameManager.mansion;
+        if (currentLoaderForGlow) {
+            currentLoaderForGlow.disableDiaryGlow();
         }
 
         // Show the diary page
@@ -953,13 +973,22 @@ class InteractionSystem {
         // Wait a moment for the user to see the diary, then trigger the objective change
         setTimeout(async () => {
             // Make both fireplace objects interactable
-            const fireplace = this.gameManager.mansion.props.get('fireplace');
-            if (fireplace) {
-                fireplace.userData.interactable = true;
-            }
-            const fireplaceFire = this.gameManager.mansion.props.get('fireplace_fire');
-            if (fireplaceFire) {
-                fireplaceFire.userData.interactable = true;
+            // Use correct loader for multi-scene support
+            const currentLoader = this.stageManager ? this.stageManager.currentLoader : this.gameManager.mansion;
+
+            if (currentLoader) {
+                const fireplace = currentLoader.props.get('fireplace');
+                if (fireplace) {
+                    fireplace.userData.interactable = true;
+                    console.log(`🔥 Fireplace made interactable`);
+                }
+                const fireplaceFire = currentLoader.props.get('fireplace_fire');
+                if (fireplaceFire) {
+                    fireplaceFire.userData.interactable = true;
+                    console.log(`🔥 Fireplace fire made interactable`);
+                }
+            } else {
+                console.warn(`⚠️ Could not access current loader to make fireplace interactable`);
             }
 
             // Complete read diary objective - this will mark it complete visually
@@ -1081,17 +1110,20 @@ class InteractionSystem {
             return;
         }
 
+        // Get the correct loader for multi-scene support
+        const currentLoader = this.stageManager ? this.stageManager.currentLoader : this.gameManager.mansion;
+
         // Check if player has bucket and fire is not out yet
         if (this.gameManager.hasItem('Bucket') && !userData.fireOut) {
             console.log('🔥 Player has bucket, putting out fire...');
 
             // Mark both fireplace objects as fire out
             userData.fireOut = true;
-            const fireplaceObj = this.gameManager.mansion.props.get('fireplace');
+            const fireplaceObj = currentLoader.props.get('fireplace');
             if (fireplaceObj && fireplaceObj.userData) {
                 fireplaceObj.userData.fireOut = true;
             }
-            const fireplaceFire = this.gameManager.mansion.props.get('fireplace_fire');
+            const fireplaceFire = currentLoader.props.get('fireplace_fire');
             if (fireplaceFire && fireplaceFire.userData) {
                 fireplaceFire.userData.fireOut = true;
             }
@@ -1099,7 +1131,7 @@ class InteractionSystem {
             this.showMessage("You pour the water on the fire...");
 
             // Extinguish ALL fires in the mansion (same method as when lights go out)
-            this.gameManager.mansion.setFireplacesEnabled(false);
+            currentLoader.setFireplacesEnabled(false);
 
             // Remove bucket from inventory
             this.gameManager.removeFromInventory('Bucket');
@@ -1139,11 +1171,11 @@ class InteractionSystem {
         if (!userData.inspected) {
             // Mark both fireplace objects as inspected
             userData.inspected = true;
-            const fireplaceObj = this.gameManager.mansion.props.get('fireplace');
+            const fireplaceObj = currentLoader.props.get('fireplace');
             if (fireplaceObj && fireplaceObj.userData) {
                 fireplaceObj.userData.inspected = true;
             }
-            const fireplaceFire = this.gameManager.mansion.props.get('fireplace_fire');
+            const fireplaceFire = currentLoader.props.get('fireplace_fire');
             if (fireplaceFire && fireplaceFire.userData) {
                 fireplaceFire.userData.inspected = true;
             }
@@ -1152,7 +1184,7 @@ class InteractionSystem {
             this.gameManager.completeObjective('inspect_fireplace');
 
             // Make bucket interactable
-            const bucket = this.gameManager.mansion.props.get('bucket');
+            const bucket = currentLoader.props.get('bucket');
             if (bucket) {
                 bucket.userData.interactable = true;
             }

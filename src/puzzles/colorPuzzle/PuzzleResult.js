@@ -16,11 +16,16 @@ export class PuzzleResult {
     show(isSuccess, onComplete, successMessage = 'The mechanism clicks open.') {
         if (!this.resultOverlay) return;
 
+        // Set the title and message
+        this.resultTitle.textContent = isSuccess ? 'Success' : 'Failure';
+
         if (isSuccess){
-            this.resultOverlay.className = 'success';
-            this.resultTitle.textContent = 'Success';
             this.resultSubtitle.textContent = successMessage;
-        } 
+            // Use classList to properly add/remove classes
+            this.resultOverlay.classList.remove('hidden');
+            this.resultOverlay.classList.add('success');
+            this.resultOverlay.classList.remove('failure');
+        }
         else{
             const failureMessages = [
                 "A floorboard creaks above you.",
@@ -30,16 +35,19 @@ export class PuzzleResult {
                 "A guttural growl echoes from the darkness."
             ];
 
-            this.resultOverlay.className = 'failure';
-            this.resultTitle.textContent = 'Failure';
             this.resultSubtitle.textContent = failureMessages[Math.floor(Math.random() * failureMessages.length)];
+            // Use classList to properly add/remove classes
+            this.resultOverlay.classList.remove('hidden');
+            this.resultOverlay.classList.add('failure');
+            this.resultOverlay.classList.remove('success');
         }
 
-        this.resultOverlay.classList.remove('hidden');
-
+        // Show result for 1.5 seconds, then hide and allow player to regain control
         setTimeout(() => {
-            this.resultOverlay.className = 'hidden';
+            this.resultOverlay.classList.add('hidden');
+            this.resultOverlay.classList.remove('success');
+            this.resultOverlay.classList.remove('failure');
             if (onComplete) onComplete();
-        }, 3500);
+        }, 1500);
     }
 }
