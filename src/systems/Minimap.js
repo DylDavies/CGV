@@ -121,6 +121,21 @@ class Minimap {
 
             const meshName = node.name.toLowerCase();
 
+            // Check if object is inside the "Outside" collection (forest, etc.)
+            let isOutside = false;
+            let parent = node.parent;
+            while (parent) {
+                const parentName = parent.name.toLowerCase();
+                if (parentName.includes('outside')) {
+                    isOutside = true;
+                    break;
+                }
+                parent = parent.parent;
+            }
+
+            // Skip all objects in the Outside collection
+            if (isOutside) return;
+
             // Check if it's a special S_Door object (these should be included)
             const isSpecialDoor = meshName.includes('s_door');
 

@@ -947,6 +947,7 @@ class MansionLoader {
             const isPortrait = nodeName.includes('portrait') || nodeName.includes('painting') || nodeName.includes('picture') || nodeName.includes('frame');
             const isDoor = !isSpecialDoor && (nodeName.includes('door') || nodeName.includes('doors') || nodeName.includes('doorway') || nodeName.includes('opening'));
             const isNoCollision = nodeName.includes('nocollision');
+            const isSkyBox = nodeName.includes('skybox');
 
             // Check parent hierarchy for door/nocollision flags (but skip if it's an S_Door)
             let shouldSkipByHierarchy = false;
@@ -984,7 +985,7 @@ class MansionLoader {
             }
 
             // If the object meets any of the exclusion criteria, skip it.
-            if (isDebugObject || hasDebugMaterial || isPortrait || isDoor || isNoCollision || shouldSkipByHierarchy) {
+            if (isDebugObject || hasDebugMaterial || isPortrait || isDoor || isNoCollision || isSkyBox || shouldSkipByHierarchy) {
                 skippedCount++;
                 return; // Skip to the next node
             }
