@@ -3,11 +3,11 @@ import { Clock } from 'https://unpkg.com/three@0.127.0/build/three.module.js';
 const clock = new Clock();
 
 class Loop {
-  constructor(camera, scene, rendererManager, stats, labelRenderer = null, stageManager = null) {
+  constructor(camera, scene, renderer, stats, labelRenderer = null, stageManager = null) {
     this.camera = camera;
     this.scene = scene; // Kept for backwards compatibility, but stageManager takes priority
     this.stageManager = stageManager; // Multi-scene support
-    this.rendererManager = rendererManager;  // Single renderer managed here
+    this.renderer = renderer;  // Single renderer
     this.stats = stats;
     this.labelRenderer = labelRenderer;
     this.updatables = []; // Array of objects with a .tick() method
@@ -17,13 +17,12 @@ class Loop {
 
   start() {
     this.isRunning = true;
-    const renderer = this.rendererManager.getRenderer();
-    if (!renderer) {
+    if (!this.renderer) {
       console.error('❌ No renderer available');
       return;
     }
 
-    renderer.setAnimationLoop(() => {
+    this.renderer.setAnimationLoop(() => {
         this.stats.begin();
 
       // Get the time since the last frame
@@ -54,7 +53,7 @@ class Loop {
         // Render current scene with single renderer
         // Use stageManager's current scene if available, otherwise fall back to this.scene
         const sceneToRender = this.stageManager ? this.stageManager.getCurrentScene() : this.scene;
-        renderer.render(sceneToRender, this.camera);
+        this.renderer.render(sceneToRender, this.camera);
 
         if (this.labelRenderer) {
           this.labelRenderer.render(sceneToRender, this.camera);
@@ -72,9 +71,8 @@ class Loop {
   stop() {
     this.isRunning = false;
     // Stop animation loop on the single renderer
-    const renderer = this.rendererManager.getRenderer();
-    if (renderer) {
-      renderer.setAnimationLoop(null);
+    if (this.renderer) {
+      this.renderer.setAnimationLoop(null);
     }
   }
 

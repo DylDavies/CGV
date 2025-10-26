@@ -8,8 +8,7 @@ import logger from '../utils/Logger.js';
 import { MansionLoader } from './MansionLoader.js';
 
 export class StageManager {
-    constructor(rendererManager, physicsManager, camera, quality = 'medium', loop = null, audioManager = null) {
-        this.rendererManager = rendererManager;
+    constructor(physicsManager, camera, quality = 'medium', loop = null, audioManager = null) {
         this.physicsManager = physicsManager;
         this.camera = camera;
         this.quality = quality;

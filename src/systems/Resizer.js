@@ -1,18 +1,18 @@
-const setSize = (camera, rendererManager) => {
+const setSize = (camera, renderer) => {
   camera.aspect = window.innerWidth / window.innerHeight;
   camera.updateProjectionMatrix();
-  // Update single renderer when window resizes
-  rendererManager.onWindowResize();
+  renderer.setSize(window.innerWidth, window.innerHeight);
+  renderer.setPixelRatio(window.devicePixelRatio);
 };
 
 class Resizer {
-  constructor(camera, rendererManager) {
+  constructor(camera, renderer) {
     // Set initial size
-    setSize(camera, rendererManager);
+    setSize(camera, renderer);
 
     // Listen for resize events
     window.addEventListener('resize', () => {
-      setSize(camera, rendererManager);
+      setSize(camera, renderer);
     });
   }
 }

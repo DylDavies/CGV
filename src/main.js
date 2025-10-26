@@ -8,7 +8,7 @@ import { Loop } from './systems/Loop.js';
 import { createStats } from './systems/Stats.js';
 import { UIManager } from './systems/uiManager.js';
 import { RapierPhysicsManager } from './systems/RapierPhysicsManager.js';
-import { RendererManager } from './systems/RendererManager.js';
+import { createRenderer } from './systems/Renderer.js';
 import { MansionLoader } from './systems/MansionLoader.js';
 import { StageManager } from './systems/StageManager.js';
 import { GameManager } from './systems/GameManager.js';
@@ -39,8 +39,23 @@ async function main() {
 
         // --- Initialize Core Systems that EXIST OUTSIDE the loading screen ---
         const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 50);
-        const rendererManager = new RendererManager('game-container');
-        const renderer = rendererManager.initialize(); // Initialize single WebGL context
+
+        // Create canvas element
+        const canvas = document.createElement('canvas');
+        canvas.id = 'game-canvas';
+        canvas.style.cssText = `
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            display: block;
+        `;
+        document.getElementById('game-container').appendChild(canvas);
+
+        const renderer = createRenderer(canvas);
+        renderer.setSize(window.innerWidth, window.innerHeight);
+
         const stats = createStats();
         // We will now declare 'loop' here but define it INSIDE the callback.
         let loop;
@@ -73,7 +88,7 @@ async function main() {
             const physicsManager = new RapierPhysicsManager(null, camera, null);
 
             // Initialize StageManager with proper multi-scene architecture
-            const stageManager = new StageManager(rendererManager, physicsManager, camera, settings.quality || 'medium', null, audioManager);
+            const stageManager = new StageManager(physicsManager, camera, settings.quality || 'medium', null, audioManager);
 
             // Load all stages (mansion and office)
             const initResult = await stageManager.initializeAllStages((progress, message) => {
@@ -90,7 +105,7 @@ async function main() {
             const atmosphere = new SimpleAtmosphere(scene, camera, settings.quality || 'medium');
 
             // Create the game loop (with multi-scene support via stageManager)
-            loop = new Loop(camera, scene, rendererManager, stats, physicsManager.labelRenderer, stageManager);
+            loop = new Loop(camera, scene, renderer, stats, physicsManager.labelRenderer, stageManager);
             stageManager.loop = loop; // Connect loop to stage manager
 
             // Create NarrativeManager with StageManager support
@@ -133,7 +148,7 @@ async function main() {
             uiManager.updateLoadingText("Creating minimap...");
             const minimap = new Minimap(scene, camera, stageManager, renderer);
 
-            new Resizer(camera, rendererManager);
+            new Resizer(camera, renderer);
 
             // Initialize Performance Analyzer
             const performanceAnalyzer = new PerformanceAnalyzer(renderer, scene);
@@ -315,7 +330,8 @@ async function main() {
                     uiManager.updateLoadingProgress(100, "Ready to play!");
                     setTimeout(async () => {
                         uiManager.hideLoadingScreen();
-                        rendererManager.showCanvas(); // Make canvas visible when game starts
+                        canvas.style.visibility = 'visible';
+                        canvas.style.zIndex = '10';
                         document.body.classList.add('game-active');
 
                         // Start stage-specific gameplay

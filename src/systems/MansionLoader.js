@@ -414,7 +414,6 @@ class MansionLoader {
         logger.log(`   Total meshes: ${totalMeshes}`);
 
         this.materialCache = materialMap;
-        this.organizeByRooms();
     }
 
     setupInstancedMeshes() {
@@ -845,67 +844,10 @@ class MansionLoader {
         return JSON.stringify(props);
     }
 
-    organizeByRooms() {
-        logger.log('🗂️ Organizing rooms from collections...');
-
-        // Try to find the main parent group - could be 'Mansion' or 'Scene' or the model itself
-        let mansionNode = this.model.getObjectByName('Mansion');
-
-        if (!mansionNode) {
-            // Try 'Scene' as fallback (common in Blender exports)
-            mansionNode = this.model.getObjectByName('Scene');
-        }
-
-        if (!mansionNode) {
-            // If no specific collection found, use the model root itself
-            logger.log("ℹ️ No 'Mansion' or 'Scene' collection found, using model root");
-            mansionNode = this.model;
-        }
-
-        mansionNode.children.forEach((node) => {
-            // This check ensures we only process children that are actual groups (your room collections)
-            if (node.type === 'Object3D' && node.children.length > 0) {
-                const roomName = node.name;
-
-                const box = new THREE.Box3().setFromObject(node);
-                const center = new THREE.Vector3();
-                box.getCenter(center);
-
-                // Collect all descendant meshes (not just direct children)
-                const allMeshes = [];
-                node.traverse((child) => {
-                    if (child.isMesh) {
-                        allMeshes.push(child);
-                    }
-                });
-
-                const roomData = {
-                    name: roomName,
-                    group: node, // Store the group node itself
-                    children: node.children, // Direct children
-                    meshes: allMeshes, // All meshes in the room hierarchy
-                    bounds: box,
-                    center: center,
-                    visible: true
-                };
-
-                this.rooms.set(roomName, roomData);
-                logger.log(`✅ Room "${roomName}" registered with ${allMeshes.length} meshes.`);
-            }
-        });
-
-        if (this.rooms.size === 0) {
-            logger.warn("⚠️ No rooms were registered. Check that your room collections are direct children of the 'Mansion' group.");
-        }
-    }
-
-
     hideDebugObjects() {
         logger.log('🔍 Scanning for debug/leftover objects and portraits...');
 
         let hiddenCount = 0;
-        let visibleCount = 0;
-        let materialResetCount = 0;
         this.model.traverse((node) => {
             if (node.isMesh) {
                 const nodeName = node.name.toLowerCase();
@@ -927,37 +869,11 @@ class MansionLoader {
                 } else if (isPortrait) {
                     node.visible = false;
                     hiddenCount++;
-                } else {
-                    // CRITICAL FIX: Ensure all non-debug, non-portrait meshes are visible
-                    // This fixes the issue where meshes are hidden by default in Blender exports
-                    node.visible = true;
-                    if (!node.visible) visibleCount++;
-
-                    // CRITICAL FIX 2: Reset material transparency/opacity
-                    // Materials might have opacity=0 from loading/transition
-                    const materials = Array.isArray(node.material) ? node.material : [node.material];
-                    for (const mat of materials) {
-                        if (mat) {
-                            // Ensure material is not rendering as transparent with opacity 0
-                            if (mat.opacity === 0) {
-                                mat.opacity = 1.0;
-                                materialResetCount++;
-                            }
-                            if (mat.transparent === true && !mat.map) {
-                                // Only keep transparent if it has a texture, otherwise disable
-                                mat.transparent = false;
-                                materialResetCount++;
-                            }
-                            mat.needsUpdate = true;
-                        }
-                    }
                 }
             }
         });
 
         logger.log(`✅ Hidden ${hiddenCount} debug/helper objects and portraits`);
-        logger.log(`✅ Ensured ${visibleCount} meshes are visible`);
-        logger.log(`✅ Reset material opacity on ${materialResetCount} materials`);
     }
 
     generatePhysics() {
@@ -1290,6 +1206,7 @@ toggleNavMeshNodesVisualizer() {
                     lightDistance = 6;
                     lightType = 'lamp';
                 }
+
                 if (nodeName.includes('fluorescent')) {
                     // For fluorescent fixtures, create multiple point lights along the length
                     const box = new THREE.Box3().setFromObject(node);
@@ -1316,6 +1233,15 @@ toggleNavMeshNodesVisualizer() {
                         } else {
                             lampLight.position.z = lampPosition.z - width / 2 + spacing * (i + 1);
                         }
+
+                        const shadowMapSize = this.shadowMapSize;
+                        lampLight.shadow.mapSize.width = shadowMapSize;
+                        lampLight.shadow.mapSize.height = shadowMapSize;
+                        lampLight.shadow.camera.near = 0.5;
+                        lampLight.shadow.camera.far = lightDistance;
+                        lampLight.shadow.bias = -0.0001; // Reduced for sharper shadows
+                        lampLight.shadow.normalBias = 0; // No normal bias for extreme contrast
+                        lampLight.shadow.radius = 0.5;
 
                         lampLight.visible = true;
                         this.scene.add(lampLight);
@@ -1355,21 +1281,18 @@ toggleNavMeshNodesVisualizer() {
 
                     // Enable shadow casting based on quality settings with extreme shadows
                     const isChandelier = nodeName.includes('chandelier');
-                    const isFluorescent = nodeName.includes('fluorescent');
                     // Chandeliers always cast shadows in medium+, all lamps in high+
                     lampLight.castShadow = isChandelier || this.lampShadows;
                     if (lampLight.castShadow) {
                         // Fluorescent lights get higher resolution for smoother shadows
-                        const shadowMapSize = isFluorescent ? Math.max(this.shadowMapSize * 2, 1024) : this.shadowMapSize;
+                        const shadowMapSize = this.shadowMapSize;
                         lampLight.shadow.mapSize.width = shadowMapSize;
                         lampLight.shadow.mapSize.height = shadowMapSize;
                         lampLight.shadow.camera.near = 0.5;
                         lampLight.shadow.camera.far = lightDistance;
                         lampLight.shadow.bias = -0.0001; // Reduced for sharper shadows
                         lampLight.shadow.normalBias = 0; // No normal bias for extreme contrast
-                        // Fluorescent lights in office get softer shadows for more natural lighting
-                        // Other lights (mansion) get sharp shadows for horror atmosphere
-                        lampLight.shadow.radius = isFluorescent ? 2.0 : 0.5;
+                        lampLight.shadow.radius = 0.5;
                     }
 
                     // CRITICAL FIX: Start with light visible!
