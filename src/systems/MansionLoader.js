@@ -31,6 +31,7 @@ class MansionLoader {
         this.occlusionCulling = true;
         this.playerPosition = new THREE.Vector3();
         this.visibleRooms = new Set();
+        this.occlusionVizEnabled = false; // Track if visualization is active for real-time updates
 
         // Lamp system
         this.lamps = [];
@@ -69,13 +70,51 @@ class MansionLoader {
         logger.log(`🔒 Physics exclusions set: ${this.physicsExclusions.join(', ')}`);
     }
 
+    /**
+     * Deactivate physics for this stage (remove all bodies from the physics world)
+     * Called when switching away from this stage
+     */
+    deactivatePhysics() {
+        if (!this.physicsManager || !this.physicsBodies.length) {
+            return;
+        }
+
+        logger.log(`🚫 Deactivating physics for ${this.physicsBodies.length} bodies`);
+
+        // Remove all physics bodies from the world
+        for (const entry of this.physicsBodies) {
+            if (entry.body) {
+                this.physicsManager.removeBody(entry.body);
+            }
+        }
+    }
+
+    /**
+     * Activate physics for this stage (add all bodies to the physics world)
+     * Called when switching to this stage
+     */
+    activatePhysics() {
+        if (!this.physicsManager || !this.physicsBodies.length) {
+            return;
+        }
+
+        logger.log(`✅ Activating physics for ${this.physicsBodies.length} bodies`);
+
+        // Re-add all physics bodies to the world
+        for (const entry of this.physicsBodies) {
+            if (entry.body) {
+                this.physicsManager.addBody(entry.body);
+            }
+        }
+    }
+
     setQualityPreset(preset) {
         const presets = {
             low: {
                 fireParticles: 15,
                 lampUpdateRate: 4,
                 fireplaceUpdateRate: 4,
-                maxVisibleDistance: 12,
+                maxVisibleDistance: 17,
                 maxActiveLights: 6,
                 lampShadows: false,
                 fireplaceShadows: false,
@@ -86,7 +125,7 @@ class MansionLoader {
                 fireParticles: 25,
                 lampUpdateRate: 3,
                 fireplaceUpdateRate: 3,
-                maxVisibleDistance: 15,
+                maxVisibleDistance: 17,
                 maxActiveLights: 8,
                 lampShadows: false, // Only chandeliers
                 fireplaceShadows: false, // Too expensive with many lights
@@ -97,7 +136,7 @@ class MansionLoader {
                 fireParticles: 50,
                 lampUpdateRate: 2,
                 fireplaceUpdateRate: 2,
-                maxVisibleDistance: 20,
+                maxVisibleDistance: 18,
                 maxActiveLights: 12,
                 lampShadows: false, // Only chandeliers
                 fireplaceShadows: true, // 1-2 fireplaces
@@ -108,7 +147,7 @@ class MansionLoader {
                 fireParticles: 100,
                 lampUpdateRate: 1,
                 fireplaceUpdateRate: 1,
-                maxVisibleDistance: 25,
+                maxVisibleDistance: 20,
                 maxActiveLights: 15,
                 lampShadows: true,
                 fireplaceShadows: true,
@@ -160,6 +199,11 @@ class MansionLoader {
                     this.setupPuzzleSlots(); // Find and prepare the puzzle slots on the wall
 
                     this.scene.add(this.model);
+
+                    // CRITICAL: Update matrix world after positioning so physics uses correct positions
+                    this.model.updateMatrixWorld(true);
+
+                    logger.log(`✅ Added mansion model to scene. Model visible: ${this.model.visible}, Scene children count: ${this.scene.children.length}`);
                     this.hideDebugObjects();
 
                     if (this.physicsManager) {
@@ -253,10 +297,86 @@ class MansionLoader {
                 console.log(`🔑 Found prop: ${node.name} (Key Behind Fire)`);
             }
             
-            if (node.name === 'S_Safe') { 
+            if (node.name === 'S_Safe') {
                 this.props.set('safe', node);
                 node.userData = { type: 'safe', interactable: true };
                 console.log(`🔒 Found prop: ${node.name} (Safe)`);
+            }
+
+            // ========== OFFICE STAGE OBJECTS ==========
+
+            // Computer (Office stage only)
+            if (node.name === 'S_Computer' || node.name === 'Computer') {
+                this.props.set('computer', node);
+                node.userData = { type: 'computer', interactable: true, phoneAnswered: false, loggedIn: false };
+                console.log(`💻 Found prop: ${node.name} (Computer)`);
+            }
+
+            // Notepad
+            if (node.name === 'S_Notepad' || node.name === 'Notepad' || node.name.toLowerCase().includes('notepad')) {
+                this.props.set('notepad', node);
+                node.userData = { type: 'notepad', interactable: false, loginAttempted: false, notepadRead: false };
+                console.log(`📝 Found prop: ${node.name} (Notepad)`);
+            }
+
+            // Newspaper
+            if (node.name === 'S_Newspaper' || node.name === 'Newspaper' || node.name === 'S_Paper' || node.name.toLowerCase().includes('newspaper')) {
+                this.props.set('newspaper', node);
+                node.userData = { type: 'newspaper', interactable: false, notepadRead: false, hasRead: false };
+
+                // Ensure visibility and proper material
+                node.visible = true;
+
+                // Make sure all parent groups are visible
+                let parent = node.parent;
+                while (parent) {
+                    parent.visible = true;
+                    parent = parent.parent;
+                }
+
+                if (node.isMesh && !node.material) {
+                    // Create a basic white material if none exists
+                    node.material = new THREE.MeshStandardMaterial({ color: 0xffffff });
+                }
+                if (node.material) {
+                    node.material.transparent = false;
+                    node.material.opacity = 1.0;
+                    node.material.side = THREE.DoubleSide;
+                    node.material.needsUpdate = true;
+                }
+
+                // Traverse children to ensure all parts are visible
+                node.traverse((child) => {
+                    if (child.isMesh) {
+                        child.visible = true;
+                        if (!child.material) {
+                            // Create fallback material if none exists
+                            child.material = new THREE.MeshStandardMaterial({ color: 0xffffff });
+                        }
+                        if (child.material) {
+                            child.material.transparent = false;
+                            child.material.opacity = 1.0;
+                            child.material.side = THREE.DoubleSide;
+                            child.material.needsUpdate = true;
+                        }
+                        child.castShadow = true;
+                        child.receiveShadow = true;
+                    }
+                });
+
+                // Debug: Check what we found
+                let meshCount = 0;
+                node.traverse((child) => {
+                    if (child.isMesh) meshCount++;
+                });
+                console.log(`📰 Found prop: ${node.name} (Newspaper) - Type: ${node.type}, IsMesh: ${node.isMesh}, Children with meshes: ${meshCount}`);
+            }
+
+            // Loose Book / Missing Persons Report
+            if (node.name === 'S_LooseBook' || node.name === 'LooseBook' || node.name === 'S_Book' || node.name.toLowerCase().includes('loose')) {
+                this.props.set('loose_book', node);
+                node.userData = { type: 'loose_book', interactable: false, found: false };
+                console.log(`📖 Found prop: ${node.name} (Loose Book)`);
             }
 
             if (node.isMesh) {
@@ -626,6 +746,11 @@ class MansionLoader {
         if (cameraPosition) {
             this.updateOcclusionCulling(cameraPosition);
 
+            // Update occlusion culling visualization in real-time if enabled
+            if (this.occlusionVizEnabled) {
+                this.updateOcclusionVizualization();
+            }
+
             // Only update shadows if player has moved significantly (optimization)
             const hasPlayerMoved = !this.lastShadowUpdatePos ||
                 this.lastShadowUpdatePos.distanceTo(cameraPosition) > 2.0; // Update every 2 units of movement
@@ -667,7 +792,7 @@ class MansionLoader {
     }
 
     optimizeMaterial(material) {
-        // Optimize the material AND enhance visual quality for horror atmosphere
+        // Optimize the material for performance
 
         // Set precision to medium for better performance
         material.precision = 'mediump';
@@ -769,8 +894,6 @@ class MansionLoader {
             }
         });
 
-        console.log(this.rooms)
-
         if (this.rooms.size === 0) {
             logger.warn("⚠️ No rooms were registered. Check that your room collections are direct children of the 'Mansion' group.");
         }
@@ -781,6 +904,8 @@ class MansionLoader {
         logger.log('🔍 Scanning for debug/leftover objects and portraits...');
 
         let hiddenCount = 0;
+        let visibleCount = 0;
+        let materialResetCount = 0;
         this.model.traverse((node) => {
             if (node.isMesh) {
                 const nodeName = node.name.toLowerCase();
@@ -802,11 +927,37 @@ class MansionLoader {
                 } else if (isPortrait) {
                     node.visible = false;
                     hiddenCount++;
+                } else {
+                    // CRITICAL FIX: Ensure all non-debug, non-portrait meshes are visible
+                    // This fixes the issue where meshes are hidden by default in Blender exports
+                    node.visible = true;
+                    if (!node.visible) visibleCount++;
+
+                    // CRITICAL FIX 2: Reset material transparency/opacity
+                    // Materials might have opacity=0 from loading/transition
+                    const materials = Array.isArray(node.material) ? node.material : [node.material];
+                    for (const mat of materials) {
+                        if (mat) {
+                            // Ensure material is not rendering as transparent with opacity 0
+                            if (mat.opacity === 0) {
+                                mat.opacity = 1.0;
+                                materialResetCount++;
+                            }
+                            if (mat.transparent === true && !mat.map) {
+                                // Only keep transparent if it has a texture, otherwise disable
+                                mat.transparent = false;
+                                materialResetCount++;
+                            }
+                            mat.needsUpdate = true;
+                        }
+                    }
                 }
             }
         });
 
         logger.log(`✅ Hidden ${hiddenCount} debug/helper objects and portraits`);
+        logger.log(`✅ Ensured ${visibleCount} meshes are visible`);
+        logger.log(`✅ Reset material opacity on ${materialResetCount} materials`);
     }
 
     generatePhysics() {
@@ -1018,12 +1169,12 @@ class MansionLoader {
                 }
                 this.navMesh = navMeshNode;
                 // Hide the original navmesh model
-                this.navMesh.visible = false; 
+                this.navMesh.visible = false;
 
                 logger.log('🧠 Building navigation zone...');
                 const zone = Pathfinding.createZone(navMeshNode.geometry);
                 this.pathfinding.setZoneData(this.ZONE, zone);
-                logger.log('✅ Navigation mesh created successfully.');
+                logger.log('✅ Navigation mesh created successfully');
 
                 this.createNavMeshVisualizer();
                 this.createNavMeshNodesVisualizer();
@@ -1046,6 +1197,7 @@ class MansionLoader {
         const visualMesh = new THREE.Mesh(geometry, material);
         this.navMeshVisualizer = visualMesh;
         this.navMeshVisualizer.visible = false;
+
         this.scene.add(this.navMeshVisualizer);
         logger.log("✅ Navigation mesh visualizer created. Toggle with gameControls.toggleNavMeshVisualizer()");
     }
@@ -1203,16 +1355,21 @@ toggleNavMeshNodesVisualizer() {
 
                     // Enable shadow casting based on quality settings with extreme shadows
                     const isChandelier = nodeName.includes('chandelier');
+                    const isFluorescent = nodeName.includes('fluorescent');
                     // Chandeliers always cast shadows in medium+, all lamps in high+
                     lampLight.castShadow = isChandelier || this.lampShadows;
                     if (lampLight.castShadow) {
-                        lampLight.shadow.mapSize.width = this.shadowMapSize;
-                        lampLight.shadow.mapSize.height = this.shadowMapSize;
+                        // Fluorescent lights get higher resolution for smoother shadows
+                        const shadowMapSize = isFluorescent ? Math.max(this.shadowMapSize * 2, 1024) : this.shadowMapSize;
+                        lampLight.shadow.mapSize.width = shadowMapSize;
+                        lampLight.shadow.mapSize.height = shadowMapSize;
                         lampLight.shadow.camera.near = 0.5;
                         lampLight.shadow.camera.far = lightDistance;
                         lampLight.shadow.bias = -0.0001; // Reduced for sharper shadows
                         lampLight.shadow.normalBias = 0; // No normal bias for extreme contrast
-                        lampLight.shadow.radius = 0.5; // Sharp shadows for horror atmosphere
+                        // Fluorescent lights in office get softer shadows for more natural lighting
+                        // Other lights (mansion) get sharp shadows for horror atmosphere
+                        lampLight.shadow.radius = isFluorescent ? 2.0 : 0.5;
                     }
 
                     // CRITICAL FIX: Start with light visible!
@@ -1345,21 +1502,53 @@ toggleNavMeshNodesVisualizer() {
     }
 
     updateOcclusionCulling(cameraPosition) {
-        if (!this.occlusionCulling) return;
-        this.playerPosition.copy(cameraPosition);
-        for (const [roomName, roomData] of this.rooms) {
-            const distance = this.playerPosition.distanceTo(roomData.center);
-            const shouldBeVisible = distance <= this.maxVisibleDistance;
-            if (roomData.visible !== shouldBeVisible) {
-                roomData.visible = shouldBeVisible;
-                roomData.group.visible = shouldBeVisible;
-                if (shouldBeVisible) {
-                    this.visibleRooms.add(roomName);
-                } else {
-                    this.visibleRooms.delete(roomName);
+        if (!this.occlusionCulling || !this.model) return;
+
+        const closestPoint = new THREE.Vector3();
+
+        // Traverse all objects and cull based on distance
+        this.model.traverse((node) => {
+            if (node === this.model) return; // Skip the root model node
+            if (node.userData.lockVisibility) return; // Don't cull locked objects
+
+            let shouldBeVisible = true;
+
+            // For meshes: check bounding box closest point
+            if (node.isMesh && node.geometry) {
+                // Compute bounding box if it doesn't have one
+                if (!node.geometry.boundingBox) {
+                    node.geometry.computeBoundingBox();
                 }
+
+                // Get the world bounding box
+                const boundingBox = node.geometry.boundingBox.clone();
+                boundingBox.applyMatrix4(node.matrixWorld);
+
+                // Find closest point on bounding box to camera
+                boundingBox.clampPoint(cameraPosition, closestPoint);
+
+                // Distance from camera to closest point on bounding box
+                const distance = cameraPosition.distanceTo(closestPoint);
+                shouldBeVisible = distance <= this.maxVisibleDistance;
             }
-        }
+            // For lights: check world position distance
+            else if (node.isLight) {
+                const worldPos = new THREE.Vector3();
+                node.getWorldPosition(worldPos);
+                const distance = cameraPosition.distanceTo(worldPos);
+                shouldBeVisible = distance <= this.maxVisibleDistance;
+            }
+            // For groups/containers/non-renderables: ALWAYS KEEP VISIBLE
+            // Groups don't render, only their children (meshes) do
+            // Children's visibility is controlled individually above
+            // Keeping groups visible ensures children can render if they need to
+            else {
+                shouldBeVisible = true;
+            }
+
+            // Update visibility
+            node.visible = shouldBeVisible;
+        });
     }
 
     getCurrentRoom(position) {
@@ -1861,6 +2050,149 @@ toggleNavMeshNodesVisualizer() {
         return this.physicsBodies;
     }
 
+    validateStageLoaded() {
+        if (!this.model) {
+            logger.error('❌ VALIDATION FAILED: No model in loader');
+            return false;
+        }
+
+        let totalMeshes = 0, visibleMeshes = 0, opaqueCount = 0;
+        const issues = [];
+
+        this.model.traverse((node) => {
+            if (node.isMesh) {
+                totalMeshes++;
+                if (node.visible) visibleMeshes++;
+
+                // Check material opacity
+                const materials = Array.isArray(node.material) ? node.material : [node.material];
+                for (const mat of materials) {
+                    if (mat && mat.opacity > 0) opaqueCount++;
+                }
+            }
+        });
+
+        if (totalMeshes === 0) {
+            issues.push('No meshes found in model');
+        }
+        if (visibleMeshes === 0) {
+            issues.push('No visible meshes');
+        }
+        if (opaqueCount === 0) {
+            issues.push('No opaque materials found (all transparent?)');
+        }
+
+        if (issues.length > 0) {
+            logger.error('❌ VALIDATION FAILED:', issues.join(', '));
+            return false;
+        }
+
+        logger.log(`✅ VALIDATION PASSED: ${visibleMeshes}/${totalMeshes} meshes visible, ${opaqueCount} opaque materials`);
+        return true;
+    }
+
+    /**
+     * Visualize occlusion culling by showing/hiding visible rooms
+     * Shows currently visible rooms in green, culled rooms in red
+     */
+    visualizeOcclusionCulling(enabled) {
+        if (!this.model) {
+            logger.warn('⚠️ Model not loaded yet');
+            return;
+        }
+
+        console.log(`👁️ Occlusion Culling Visualization (per-object): ${enabled ? 'ON' : 'OFF'}`);
+        this.occlusionVizEnabled = enabled;
+
+        // Force an update of visible objects before visualization
+        if (enabled && typeof window !== 'undefined' && window.gameControls && window.gameControls.camera) {
+            console.log(`🔄 Forcing occlusion culling update before visualization...`);
+            this.updateOcclusionCulling(window.gameControls.camera.position);
+        }
+
+        let visibleMeshes = 0;
+        let culledMeshes = 0;
+        let totalMeshes = 0;
+
+        this.model.traverse((node) => {
+            if (!node.isMesh) return;
+
+            totalMeshes++;
+
+            if (enabled) {
+                // Apply visualization colors
+                if (!node.userData.originalMaterial) {
+                    node.userData.originalMaterial = node.material;
+                }
+
+                // Color based on current visibility state
+                const isVisible = node.visible;
+                const color = isVisible ? 0x00ff00 : 0xff0000; // Green for visible, red for culled
+
+                const visMaterial = new THREE.MeshBasicMaterial({
+                    color: color,
+                    wireframe: false,
+                    transparent: true,
+                    opacity: 0.3
+                });
+
+                node.material = visMaterial;
+
+                if (isVisible) {
+                    visibleMeshes++;
+                } else {
+                    culledMeshes++;
+                }
+            } else {
+                // Restore original materials
+                if (node.userData.originalMaterial) {
+                    node.material = node.userData.originalMaterial;
+                    delete node.userData.originalMaterial;
+                }
+            }
+        });
+
+        console.log(`👁️ Visualization Updated - Visible: ${visibleMeshes}, Culled: ${culledMeshes}, Total: ${totalMeshes}`);
+
+        // Debug info
+        if (enabled && window.gameControls && window.gameControls.camera) {
+            const camPos = window.gameControls.camera.position;
+            console.log(`👁️ Camera position (world): x=${camPos.x.toFixed(2)}, y=${camPos.y.toFixed(2)}, z=${camPos.z.toFixed(2)}`);
+            console.log(`👁️ Max visible distance: ${this.maxVisibleDistance}`);
+        }
+    }
+
+    /**
+     * Update visualization colors in real-time as visibility changes
+     * Called every frame when visualization is enabled
+     */
+    updateOcclusionVizualization() {
+        if (!this.model) return;
+
+        let visibleMeshes = 0;
+        let culledMeshes = 0;
+
+        this.model.traverse((node) => {
+            if (!node.isMesh) return;
+
+            // Update material color based on current visibility state
+            const isVisible = node.visible;
+            const color = isVisible ? 0x00ff00 : 0xff0000; // Green for visible, red for culled
+
+            // Only update if we have a visualization material
+            if (node.material && node.userData.originalMaterial) {
+                if (node.material instanceof THREE.MeshBasicMaterial) {
+                    node.material.color.setHex(color);
+                    if (isVisible) {
+                        visibleMeshes++;
+                    } else {
+                        culledMeshes++;
+                    }
+                }
+            }
+        });
+    }
+
     dispose() {
         logger.log('🧹 Disposing mansion loader...');
 
@@ -1899,15 +2231,30 @@ toggleNavMeshNodesVisualizer() {
 
         // Clean up model and its materials/geometries
         if (this.model) {
+            logger.log(`🗑️ Removing model from scene. Model name: ${this.model.name}, Children count before: ${this.scene.children.length}`);
             this.scene.remove(this.model);
+            logger.log(`✅ Model removed. Children count after: ${this.scene.children.length}`);
             this.model.traverse((node) => {
                 if (node.isMesh) {
+                    // Dispose geometry
                     if (node.geometry) node.geometry.dispose();
+
+                    // Dispose materials and their textures
                     if (node.material) {
-                        if (Array.isArray(node.material)) {
-                            node.material.forEach(mat => mat.dispose());
-                        } else {
-                            node.material.dispose();
+                        const materials = Array.isArray(node.material) ? node.material : [node.material];
+                        for (const material of materials) {
+                            // Dispose all textures in this material
+                            Object.values(material).forEach((value) => {
+                                if (value && typeof value === 'object' && value.isTexture) {
+                                    // Close ImageBitmap if present (critical for GLB files)
+                                    if (value.source?.data?.close) {
+                                        value.source.data.close();
+                                    }
+                                    value.dispose();
+                                }
+                            });
+                            // Dispose the material itself
+                            material.dispose();
                         }
                     }
                 }

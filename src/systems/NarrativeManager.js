@@ -72,6 +72,7 @@ export class NarrativeManager {
      * @param {number} fadeInDuration - Duration of fade in in ms
      */
     async transitionToStage(stageName, fadeOutDuration = 1000, fadeInDuration = 1000) {
+        console.log("transitioning to stage")
         if (!this.stageManager) {
             console.error('❌ StageManager not available for narrative stage transition');
             return;
@@ -80,7 +81,7 @@ export class NarrativeManager {
         console.log(`🎬 Narrative triggering stage transition to: ${stageName}`);
 
         try {
-            await this.stageManager.transitionToStage(stageName, {
+            await this.stageManager.switchToStage(stageName, {
                 fadeOutDuration,
                 fadeInDuration,
                 onProgress: (progress, message) => {
@@ -90,6 +91,36 @@ export class NarrativeManager {
                 }
             });
             console.log(`✅ Stage transition to "${stageName}" complete`);
+
+            // Initialize stage-specific gameplay when entering mansion
+            if (stageName === 'mansion') {
+                console.log('🏚️ Initializing mansion stage...');
+
+                // Reinitialize minimap for the new stage
+                if (window.gameControls && window.gameControls.minimap) {
+                    window.gameControls.minimap.reinitialize();
+                }
+
+                // Brief pause for player to get oriented
+                await new Promise(resolve => setTimeout(resolve, 1000));
+
+
+                // Schedule phone ring after 30 seconds (like initial game start)
+                if (window.gameControls && window.gameControls.gameManager) {
+                    setTimeout(async () => {
+                        // Show stage 1 title
+                        console.log("showing")
+                        await this.triggerEvent('intro.stage_1_title');
+
+                        await this.playIntroSequence();
+
+                        setTimeout(() => {
+                            window.gameControls.gameManager.startPhoneRingEvent();
+                        }, 1000);
+                    }, 1000);
+                }
+            }
+
         } catch (error) {
             console.error(`❌ Failed to transition to stage "${stageName}":`, error);
         }
