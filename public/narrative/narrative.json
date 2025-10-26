@@ -230,7 +230,7 @@
     "escape_front_door": {
       "type": "objective",
       "id": "escape_front_door",
-      "description": "Escape through the front door."
+      "description": "Try to escape through the front door"
     },
     "monster_angered": {
         "type": "speechBubble",

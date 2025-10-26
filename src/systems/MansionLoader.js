@@ -194,6 +194,8 @@ class MansionLoader {
         const materialMap = new Map(); // Track materials by their properties
 
         this.model.traverse((node) => {
+            if(node.name == "S_Wall_hider") node.visible = false;
+
             // Find and store specific, named props
             if (node.name === 'S_Telephone001') {
                 this.props.set('telephone', node);
@@ -796,7 +798,9 @@ class MansionLoader {
                         if (color.b > 0.9 && color.r < 0.1 && color.g < 0.1) hasDebugMaterial = true;
                     }
                 }
-                if (isDebugObject || hasDebugMaterial) {
+
+                if(node.name == "gas_can_body") console.log(node.name, " ", hasDebugMaterial);
+                if (isDebugObject) {
                     node.visible = false;
                     hiddenCount++;
                 } else if (isPortrait) {

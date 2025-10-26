@@ -212,6 +212,7 @@ class InteractionSystem {
             },
             entrance_door: {
                 prompt: "Press E to open the door",
+                lockedPrompt: "The door is locked",
                 handler: this.handleEntranceDoorInteraction.bind(this)
             },
             diary: {
@@ -229,6 +230,18 @@ class InteractionSystem {
             bucket: {
                 prompt: "Press E to pick up bucket",
                 handler: this.handleBucketInteraction.bind(this)
+            },
+            garage_door: { 
+                prompt: "Press E to unlock door",
+                lockedPrompt: "The door is locked.",
+                openPrompt: "Press E to open door",
+                closePrompt: "Press E to close door",
+                barricadePrompt: "Press E to barricade door",
+                handler: this.handleGarageDoorInteraction.bind(this)
+            },
+            plank: { 
+                prompt: "Press E to pick up plank",
+                handler: this.handlePlankPickup.bind(this) // We might just animate directly
             }
         };
     }
