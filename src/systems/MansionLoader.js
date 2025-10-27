@@ -196,6 +196,18 @@ class MansionLoader {
         this.model.traverse((node) => {
             if(node.name == "S_Wall_hider") node.visible = false;
 
+            // finding the empty interactables:
+            if(node.name == "driver_door_interact_zone") {
+                console.log("=============I HAVE FOUND THE DRIVER SIDE INTERACT ZONE!!!!===========");
+                node.visible = true;
+                console.log("NODE DATA FOR DRIVER DOOR: ", node);
+            }
+            if(node.name == "engine_interact_zone") {
+                console.log("=============I HAVE FOUND THE ENGINE INTERACT ZONE!!!!===========")
+                node.visible = true;
+                console.log("NODE DATA FOR ENGINE: ", node);
+            }
+
             // Find and store specific, named props
             if (node.name === 'S_Telephone001') {
                 this.props.set('telephone', node);
@@ -259,6 +271,21 @@ class MansionLoader {
                 this.props.set('safe', node);
                 node.userData = { type: 'safe', interactable: true };
                 console.log(`🔒 Found prop: ${node.name} (Safe)`);
+            }
+
+            // Door leading into the garage
+            if (node.name === 'S_Door002') {
+                this.props.set('garage_door', node); 
+                node.userData = {
+                    type: 'garage_door', // Use the type defined in InteractionSystem
+                    interactable: true,
+                    locked: true, // Start locked
+                    isOpen: false,
+                    isAnimating: false,
+                    isBarricading: false, // Add barricade states
+                    barricaded: false
+                  };
+                logger.log(`🚪 Found prop: ${node.name} (Garage Door)`); // Log confirmation
             }
 
             if (node.isMesh) {

@@ -11,12 +11,13 @@ const PAGE_DATA = {
 };
 
 class GameManager {
-    constructor(mansion, camera, scene, uiManager, audioManager, controls, stageManager = null) {
+    constructor(mansion, camera, scene, uiManager, audioManager, controls, stageManager = null, physicsManager = null) {
         this.mansion = mansion;
         this.camera = camera;
         this.scene = scene;
         this.uiManager = uiManager;
         this.audioManager = audioManager;
+        this.physicsManager = physicsManager;
         this.controls = controls;   // NEW: Store the controls object
         this.stageManager = stageManager;   // Stage manager for stage-aware gameplay
         this.inventory = [];

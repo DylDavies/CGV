@@ -30,6 +30,8 @@ import logger from './utils/Logger.js';
 import RAPIER from 'https://cdn.skypack.dev/@dimforge/rapier3d-compat';
 import { QTEManager } from './systems/QTEManager.js';
 import { CarInteraction } from './systems/CarInteraction.js';
+import { GarageSystem } from './systems/GarageSystem.js';
+import { CarRepairSystem } from './systems/CarRepairSystem.js';
 
 async function main() {
     try {
@@ -102,7 +104,7 @@ async function main() {
             const qteManager = new QTEManager(uiManager, controls);
             controls.setQTEManager(qteManager);
 
-            const gameManager = new GameManager(mansionLoader, camera, scene, uiManager, audioManager, controls, stageManager);
+            const gameManager = new GameManager(mansionLoader, camera, scene, uiManager, audioManager, controls, stageManager, physicsManager);
             const puzzleSystem = new PuzzleSystem(scene, gameManager);
             const interactionSystem = new InteractionSystem(camera, scene, gameManager, uiManager, controls);
 
@@ -128,6 +130,29 @@ async function main() {
             // car collection
             carInteraction.initializeCar(loadedMansionModel, 'car');
 
+            const garageSystem = new GarageSystem(
+                scene,
+                interactionSystem,
+                qteManager,
+                audioManager,
+                gameManager,
+                mansionLoader 
+            );
+
+            // --- Initialize CarRepairSystem AFTER CarInteraction and other dependencies ---
+            const carRepairSystem = new CarRepairSystem(
+                scene,
+                interactionSystem,
+                qteManager,
+                audioManager,
+                gameManager,
+                narrativeManager, // Pass NarrativeManager
+                carInteraction    // Pass CarInteraction instance
+            );
+
+            // Call initialize AFTER the scene graph (loadedMansionModel) is fully processed
+            carRepairSystem.initialize();
+
             new Resizer(camera, renderer);
 
             loop.updatables.push(
@@ -141,7 +166,7 @@ async function main() {
                 atmosphere,
                 monsterAI,
                 minimap,
-                stage1Manager
+                stage1Manager,
             );
 
             // --- Setup gameControls for debugging ---
@@ -149,13 +174,15 @@ async function main() {
                 camera, scene, flashlight, physicsManager, mansionLoader, gameManager,
                 interactionSystem, puzzleSystem, atmosphere, colorPuzzle, wirePuzzle, keypadPuzzle,
                 audioManager, monsterAI, narrativeManager, uiManager, minimap, stageManager, stage1Manager,
-                // *** ADD carInteraction to gameControls ***
                 carInteraction,
                 toggleNavMesh: () => mansionLoader.toggleNavMeshVisualizer(),
                 toggleMansion: () => mansionLoader.toggleMansionVisibility(),
                 toggleNavMeshNodes: () => mansionLoader.toggleNavMeshNodesVisualizer(),
                 toggleMinimap: () => minimap.toggle(),
                 qteManager,
+                carInteraction,
+                garageSystem, 
+                carRepairSystem,
                 testQTE: (type) => { /* ... testQTE function ... */ },
                 listPhysics: () => mansionLoader.listPhysicsBodies(),
             };

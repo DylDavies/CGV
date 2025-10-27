@@ -144,11 +144,12 @@ class FirstPersonControls {
                 case 'KeyK': // Temporary key for testing
                     if (window.gameControls && window.gameControls.gameManager) {
                         window.gameControls.gameManager.addToInventory({
-                            name: 'S_KeyBehindFire',
+                            name: 'Old Key',
                             type: 'key',
-                            id: 'S_KeyBehindFire'
+                            id: 'garage_key',
+                            description: 'A key found in the safe. (DEBUG SPAWNED)'
                         });
-                        console.log("Testing: Added S_KeyBehindFire to inventory.");
+                        console.log("Testing: Added Garage Key (S_KeyInSafe) to inventory via K key.");
                     }
                     break;
                 case 'KeyR': // Restart game when dead

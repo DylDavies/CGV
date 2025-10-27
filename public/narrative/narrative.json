@@ -243,6 +243,17 @@
         "title": "You",
         "text": "This key... it doesn't fit the front door. Where else could it go?",
         "duration": 4500
+    },
+    "garage_unlocked": {
+      "type": "speechBubble",
+      "title": "You",
+      "text": "It worked, but.... its still behind me, I need to barricade this door",
+      "duration": 3000
+    },
+    "barricade_door": {
+      "type": "objective",
+      "id": "barricade_door",
+      "description": "Find a way to barricade and secure the door"
     }
   },
 
@@ -250,7 +261,12 @@
     "barricaded_door": {
         "type": "blackScreen",
         "text": "You slammed the door shut and jammed it. Safe, for now... Find a way out of this garage.",
-        "duration": 6000
+        "duration": 3000
+    },
+    "barricaded_door_fail": {
+      "type": "blackScreen",
+      "text": "You failed to secure the door, and died LOL skill issue",
+      "duration": 5000
     },
     "garage_escape_objective": {
         "type": "objective",
@@ -260,8 +276,14 @@
     "car_wont_start": {
         "type": "speechBubble",
         "title": "You",
-        "text": "Damn it, it won't start. What's wrong with it?",
+        "text": "Damn it, the door opens but it won't start. What's wrong with it?",
         "duration": 4000
+    },
+    "fuel_guage": {
+      "type": "speechBubble",
+      "title": "You",
+      "text": "The fuel guage looks empty",
+      "duration": 2000
     },
     "need_gas": {
         "type": "objective",
@@ -278,6 +300,17 @@
         "type": "objective",
         "id": "repair_engine",
         "description": "The engine is making strange noises. Find tools to fix it."
+    },
+    "is_engine_fixed": {
+      "type": "speechBubble",
+      "title": "You",
+      "text": "I think thats that, lets see if it works",
+      "duration": 3000
+    },
+    "test_car": {
+      "type": "objective",
+      "id": "test_car_is_working",
+      "description": "See if the car will start"
     },
     "car_ready": {
         "type": "speechBubble",

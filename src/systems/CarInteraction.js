@@ -1,5 +1,5 @@
 // src/systems/CarInteraction.js
-import * as THREE from 'https://unpkg.com/three@0.127.0/build/three.module.js';
+import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.127.0/build/three.module.js';
 import logger from '../utils/Logger.js';
 
 export class CarInteraction {
@@ -11,15 +11,37 @@ export class CarInteraction {
 
         this.carObject = null;
         this.hoodObject = null; // This will be rotated directly
+        this.hoodInteractionCallback = null; // Callback BEFORE animation
+        this.hoodAnimationCompleteCallback = null; // Callback AFTER animation
         this.isHoodOpen = false;
-        this.isAnimating = false; // Flag to prevent rapid clicking during rotation
+        this.isAnimating = false;
 
-        // Store target rotation values
-        this.closedRotation = new THREE.Euler(0, 0, 0); // Assuming starts closed at 0 rotation
-        this.openRotation = new THREE.Euler(THREE.MathUtils.degToRad(-60), 0, 0); // Example: Rotate -60 degrees on X-axis
+        // Store target rotation values - Initialize them here
+        this.closedRotation = new THREE.Euler();
+        this.openRotation = new THREE.Euler();
 
         logger.log('🚗 CarInteraction system initialized (JS Rotation)');
     }
+
+    /**
+     * Allows other systems (like CarRepairSystem) to hook into the hood interaction.
+     * @param {function | null} callback - The function to call before handling hood interaction.
+     * Should accept (interactObject, userData) and return boolean (true to proceed, false to block).
+     */
+    registerHoodInteractionCallback(callback) {
+        this.hoodInteractionCallback = callback;
+        logger.log(`🚗 Hood interaction callback ${callback ? 'registered' : 'cleared'}.`);
+    }
+
+    /**
+     * Allows other systems to be notified when the hood animation finishes.
+     * @param {function | null} callback - Function accepting boolean (isOpen)
+     */
+    registerHoodAnimationCompleteCallback(callback) {
+        this.hoodAnimationCompleteCallback = callback;
+        logger.log(`🚗 Hood animation complete callback ${callback ? 'registered' : 'cleared'}.`);
+    }
+
 
     /**
      * Initializes the car interaction system after the main scene graph is loaded.
@@ -36,6 +58,7 @@ export class CarInteraction {
         this.carObject = sceneGraphRoot.getObjectByName(carRootName);
         if (!this.carObject) {
             logger.warn(`CarInteraction: Could not find the main car object named "${carRootName}". Searching globally.`);
+            // Optionally search globally if not found directly: this.carObject = this.scene.getObjectByName(carRootName);
         } else {
              logger.log(`🚗 Found car object reference: ${this.carObject.name}`);
         }
@@ -53,10 +76,11 @@ export class CarInteraction {
             return; // Stop initialization
         } else {
              logger.log(`   Found hood object (for rotation AND interaction): ${this.hoodObject.name}`);
-             // Store initial rotation as the 'closed' state
+             // Store initial rotation AS SOON as object is found
              this.closedRotation.copy(this.hoodObject.rotation);
-             // Define open state relative to closed state (adjust axis/angle)
-             this.openRotation.copy(this.closedRotation).y += THREE.MathUtils.degToRad(60); // Rotate upwards at an angle of 60 deg
+             // --- Rotation Axis Fix (Using Y-axis as confirmed) ---
+             this.openRotation.copy(this.closedRotation).y += THREE.MathUtils.degToRad(60); // Apply 60 degrees rotation on Y
+             // --- End Rotation Axis Fix ---
              logger.log(`   Initial Rotation (Closed): ${this.closedRotation.x.toFixed(2)}, ${this.closedRotation.y.toFixed(2)}, ${this.closedRotation.z.toFixed(2)}`);
              logger.log(`   Target Rotation (Open): ${this.openRotation.x.toFixed(2)}, ${this.openRotation.y.toFixed(2)}, ${this.openRotation.z.toFixed(2)}`);
         }
@@ -64,24 +88,25 @@ export class CarInteraction {
         // --- Make Hood Interactable ---
         this.hoodObject.userData.interactable = true;
         this.hoodObject.userData.type = 'car_hood';
+        // Set the initial prompt in userData here
+        this.hoodObject.userData.prompt = "Press E to open hood";
         logger.log(`✅ CarInteraction: Hood "${this.hoodObject.name}" configured for interaction.`);
 
-        // --- Register Handler with InteractionSystem ---
+        // --- Handler Registration ---
+         // Ensure the interaction type exists (InteractionSystem might create it)
+         // The handler itself is now set by InteractionSystem's proxy
          if (!this.interactionSystem.interactionTypes['car_hood']) {
             this.interactionSystem.interactionTypes['car_hood'] = {
-                prompt: "Press E to open hood",
-                handler: this.handleHoodInteraction.bind(this)
+                prompt: this.hoodObject.userData.prompt, // Use initial prompt
+                handler: null // Let InteractionSystem's proxy handle it
             };
-            logger.log('✅ CarInteraction: Interaction handler registered.');
-        } else {
-             this.interactionSystem.interactionTypes['car_hood'].handler = this.handleHoodInteraction.bind(this);
-             logger.log('✅ CarInteraction: Interaction handler updated.');
-        }
+            logger.log('   Created placeholder for car_hood interaction type.');
+         }
     }
 
     /**
      * Handles the interaction event when the car hood is clicked.
-     * Called by InteractionSystem.
+     * Called by InteractionSystem's proxy handler.
      * interactObject is the mesh the player clicked (hoodObject)
      */
     handleHoodInteraction(interactObject, userData) {
@@ -97,17 +122,29 @@ export class CarInteraction {
             return;
         }
 
-        this.isAnimating = true;
-        interactObject.userData.interactable = false; // Disable interaction during animation
+        // ----- Call the PRE-animation Callback -----
+        let proceed = true;
+        if (this.hoodInteractionCallback) {
+            proceed = this.hoodInteractionCallback(interactObject, userData);
+        }
+        if (!proceed) {
+            logger.log("CarInteraction: Hood interaction blocked by callback.");
+            return; // Stop if the callback returns false
+        }
+        // ----- END Callback Check -----
 
+
+        this.isAnimating = true;
+        // InteractionSystem's updateCrosshair will handle disabling prompt during animation
+
+        // Use the PRE-CALCULATED target rotations
         const targetRotation = this.isHoodOpen ? this.closedRotation : this.openRotation;
-        const startRotation = this.hoodObject.rotation.clone(); // Use Euler directly
+        const startRotation = this.hoodObject.rotation.clone(); // Current rotation
         const duration = 1000; // Animation duration in ms (1 second)
         const startTime = performance.now();
 
         logger.log(`🚗 ${this.isHoodOpen ? 'Closing' : 'Opening'} car hood via JS rotation...`);
-        // TODO: Add sound
-        // this.audioManager.playSound(this.isHoodOpen ? 'car_hood_close' : 'car_hood_open', 'path/to/sound.mp3');
+        this.audioManager.playSound(this.isHoodOpen ? 'car_hood_close' : 'car_hood_open', 'public/audio/sfx/monster-huff.mp3'); // Placeholder
 
         const animateRotation = () => {
             const now = performance.now();
@@ -127,29 +164,35 @@ export class CarInteraction {
             } else {
                 // Snap to final rotation to ensure accuracy
                 this.hoodObject.rotation.copy(targetRotation);
-                this.isHoodOpen = !this.isHoodOpen; // Toggle state
+                const wasOpen = this.isHoodOpen; // Store previous state before toggling
+                this.isHoodOpen = !wasOpen;      // Toggle state
                 this.isAnimating = false;
-                interactObject.userData.interactable = true; // Re-enable interaction
-                // Update prompt
-                this.interactionSystem.interactionTypes['car_hood'].prompt = this.isHoodOpen ? "Press E to close hood" : "Press E to open hood";
+                // Update the prompt in userData for InteractionSystem to pick up
+                interactObject.userData.prompt = this.isHoodOpen ? "Press E to close hood" : "Press E to open hood";
                 logger.log(`   Hood animation finished. State: ${this.isHoodOpen ? 'Open' : 'Closed'}`);
-                // TODO: Trigger next objective if opening
+
+                // --- Call POST-animation Callback ---
+                if (this.hoodAnimationCompleteCallback) {
+                    this.hoodAnimationCompleteCallback(this.isHoodOpen); // Pass the NEW state
+                }
+                // --- End Callback ---
+
+                // InteractionSystem's updateCrosshair will handle re-enabling prompt/interaction
             }
         };
 
         requestAnimationFrame(animateRotation);
     }
 
-    // ** REMOVED: tick method no longer needed for mixer **
-    // tick(delta) { }
-
     dispose() {
         logger.log("🧹 Disposing CarInteraction system...");
-        // No mixer or actions to clean up
+        // Clear callback references
+        this.hoodInteractionCallback = null;
+        this.hoodAnimationCompleteCallback = null;
+        // Clear object references
         this.carObject = null;
         this.hoodObject = null;
         this.isHoodOpen = false;
         this.isAnimating = false;
     }
 }
-
