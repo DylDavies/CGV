@@ -4,13 +4,12 @@ import * as THREE from 'https://unpkg.com/three@0.127.0/build/three.module.js';
 import logger from '../utils/Logger.js';
 
 export class GarageSystem {
-    constructor(scene, interactionSystem, qteManager, audioManager, gameManager, mansionLoader) {
-        this.scene = scene;
+    constructor(interactionSystem, qteManager, audioManager, gameManager, stageManager) {
         this.interactionSystem = interactionSystem;
         this.qteManager = qteManager;
         this.audioManager = audioManager;
         this.gameManager = gameManager;
-        this.mansionLoader = mansionLoader; 
+        this.stageManager = stageManager;
 
         // References to the Door to the garage(group of objects), the door pivot, and 2 wooken planks
         this.garageDoor = null; 
@@ -48,7 +47,7 @@ export class GarageSystem {
         this.barricadeSequenceActive = true;
 
         // Find the door and pivot objects (ensure they exist)
-        this.garageDoor = this.scene.getObjectByName('S_Door002');
+        this.garageDoor = this.stageManager.currentScene.getObjectByName('S_Door002');
 
         if (this.garageDoor) {
             this.doorPivot = this.garageDoor.parent; // pivot is parent of door
@@ -68,8 +67,8 @@ export class GarageSystem {
 
 
         // Find the planks
-        this.plank1 = this.scene.getObjectByName('wooden_plank');
-        this.plank2 = this.scene.getObjectByName('wooden_plank2'); 
+        this.plank1 = this.stageManager.currentScene.getObjectByName('wooden_plank');
+        this.plank2 = this.stageManager.currentScene.getObjectByName('wooden_plank2'); 
 
         let planksFound = 0;
         if (this.plank1) {
@@ -232,7 +231,7 @@ export class GarageSystem {
         plankObject.getWorldQuaternion(currentWorldQuat);
         
         // Add to scene and set world transform
-        this.scene.add(plankObject);
+        this.stageManager.currentScene.add(plankObject);
         plankObject.position.copy(currentWorldPos);
         plankObject.quaternion.copy(currentWorldQuat);
 

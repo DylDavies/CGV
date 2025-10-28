@@ -2,12 +2,12 @@
 
 import * as THREE from 'https://unpkg.com/three@0.127.0/build/three.module.js';
 import { createScene } from './components/World/scene.js';
-import { createRenderer } from './systems/Renderer.js';
 import { Resizer } from './systems/Resizer.js';
 import { Loop } from './systems/Loop.js';
 import { createStats } from './systems/Stats.js';
 import { UIManager } from './systems/uiManager.js';
 import { RapierPhysicsManager } from './systems/RapierPhysicsManager.js';
+import { createRenderer } from './systems/Renderer.js';
 import { MansionLoader } from './systems/MansionLoader.js';
 import { StageManager } from './systems/StageManager.js';
 import { GameManager } from './systems/GameManager.js';
@@ -25,8 +25,8 @@ import { PauseMenu } from './systems/PauseMenu.js';
 import { AudioManager } from './systems/AudioManager.js';
 import { Minimap } from './systems/Minimap.js';
 import { NarrativeManager } from './systems/NarrativeManager.js';
-import { Stage1Manager } from './systems/Stage1Manager.js';
 import logger from './utils/Logger.js';
+import { PerformanceAnalyzer } from './utils/PerformanceAnalyzer.js';
 import RAPIER from 'https://cdn.skypack.dev/@dimforge/rapier3d-compat';
 import { QTEManager } from './systems/QTEManager.js';
 import { CarInteraction } from './systems/CarInteraction.js';
@@ -38,15 +38,20 @@ async function main() {
         logger.log('噫 Initializing Project HER...');
         await RAPIER.init();
         logger.log(`📊 Logger initialized - File logging: ${logger.fileLoggingEnabled ? 'ENABLED' : 'DISABLED'}`);
-
+        
         const canvas = document.querySelector('#game-canvas');
 
-        // --- Initialize Core Systems ---
-        const scene = createScene();
+        // --- Initialize Core Systems that EXIST OUTSIDE the loading screen ---
         const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 50);
+
         const renderer = createRenderer(canvas);
+        renderer.setSize(window.innerWidth, window.innerHeight);
+
         const stats = createStats();
-        let loop; // Declare loop here
+        // We will now declare 'loop' here but define it INSIDE the callback.
+        let loop;
+        // We will declare scene inside the callback since each stage has its own scene
+        let scene;
 
         const audioManager = new AudioManager(camera);
         const uiManager = new UIManager(audioManager);
@@ -65,48 +70,61 @@ async function main() {
             const settings = savedSettings ? JSON.parse(savedSettings) : { quality: 'medium' };
 
             uiManager.showLoadingScreen();
-            uiManager.updateLoadingProgress(10, "Preparing atmosphere...");
+            uiManager.updateLoadingProgress(10, "Preparing physics...");
+
+            // Create physics manager (shared across all scenes)
+            const physicsManager = new RapierPhysicsManager(null, camera, null);
+
+            // Initialize StageManager with proper multi-scene architecture
+            const stageManager = new StageManager(physicsManager, camera, settings.quality || 'medium', null, audioManager);
+
+            // Load all stages (mansion and office)
+            const initResult = await stageManager.initializeAllStages((progress, message) => {
+                uiManager.updateLoadingProgress(progress, message);
+            });
+
+            scene = initResult.scene;
+            const spawnPosition = initResult.spawnPosition;
+
+            // Initialize physics with the current scene
+            physicsManager.initializeScene(scene);
+
+            // Create atmosphere for the shared scene
             const atmosphere = new SimpleAtmosphere(scene, camera, settings.quality || 'medium');
 
-            uiManager.updateLoadingProgress(25, "Setting up physics...");
-            const physicsManager = new RapierPhysicsManager(scene, camera, null);
+            // Create the game loop (with multi-scene support via stageManager)
+            loop = new Loop(camera, scene, renderer, stats, physicsManager.labelRenderer, stageManager);
+            stageManager.loop = loop; // Connect loop to stage manager
 
-            loop = new Loop(camera, scene, renderer, stats, physicsManager.labelRenderer);
-
-            const stageManager = new StageManager(scene, physicsManager, camera, settings.quality || 'medium', loop, audioManager);
+            // Create NarrativeManager with StageManager support
             const narrativeManager = new NarrativeManager(stageManager);
             await narrativeManager.loadNarrative('public/narrative/narrative.json');
 
-            stageManager.snapshotPersistentObjects();
+            logger.log('📍 All stages loaded and ready');
 
-            uiManager.updateLoadingProgress(40, "Loading mansion...");
-            // *** Load the mansion stage directly ***
-            const stageData = await stageManager.loadStage('mansion', (progress, message) => {
-                uiManager.updateLoadingProgress(progress, message);
-            });
-            const mansionLoader = stageData.loader;
-            const spawnPosition = stageData.spawnPosition;
-            const loadedMansionModel = mansionLoader.model; // Get reference to the loaded scene graph
-
-            scene.add(camera);
+            // Note: Camera is not added to scenes - it's used for rendering independently
+            // scene.add(camera); // Removed - not needed in Three.js
 
             uiManager.updateLoadingProgress(75, "Preparing the experience...");
             const monster = await createMonster('blender/monster.glb');
-            scene.add(monster);
-            const monsterAI = new MonsterAI(monster, camera, mansionLoader.pathfinding, scene, audioManager);
+            // Add monster to the mansion scene only (not office)
+            stageManager.scenes.mansion.add(monster);
+
+            const monsterAI = new MonsterAI(monster, camera, stageManager.loaders.mansion.pathfinding, stageManager.scenes.mansion, audioManager);
             monster.visible = false;
 
-            uiManager.updateLoadingProgress(85, "Preparing controls...");
-            const controls = new FirstPersonControls(camera, renderer.domElement, physicsManager, { colorPuzzle, wirePuzzle, keypadPuzzle }, monsterAI, mansionLoader);
+            uiManager.updateLoadingProgress(85, "Preparing your escape...");
+            const controls = new FirstPersonControls(camera, renderer, physicsManager, { colorPuzzle, wirePuzzle, keypadPuzzle }, monsterAI, stageManager.currentLoader);
             uiManager.setControls(controls);
             const flashlight = new ImprovedFlashlight(camera, scene, stageManager);
+            // Pass the renderer to PauseMenu
             const pauseMenu = new PauseMenu(renderer, controls, loop);
             const qteManager = new QTEManager(uiManager, controls);
             controls.setQTEManager(qteManager);
 
-            const gameManager = new GameManager(mansionLoader, camera, scene, uiManager, audioManager, controls, stageManager, physicsManager);
+            const gameManager = new GameManager(stageManager.currentLoader, camera, scene, uiManager, audioManager, controls, stageManager, physicsManager);
             const puzzleSystem = new PuzzleSystem(scene, gameManager);
-            const interactionSystem = new InteractionSystem(camera, scene, gameManager, uiManager, controls);
+            const interactionSystem = new InteractionSystem(camera, scene, gameManager, uiManager, controls, stageManager);
 
             controls.puzzles = { colorPuzzle, wirePuzzle, keypadPuzzle };
             colorPuzzle.setControls(controls);
@@ -118,30 +136,26 @@ async function main() {
             puzzleSystem.registerPuzzle('keypadPuzzle', keypadPuzzle);
 
             uiManager.updateLoadingText("Creating minimap...");
-            const minimap = new Minimap(scene, camera, mansionLoader, renderer);
-
-            uiManager.updateLoadingText("Setting up office puzzles..."); // Keep log generic if stage1Manager isn't used much
-            const stage1Manager = new Stage1Manager(scene, gameManager, mansionLoader, uiManager, audioManager, interactionSystem);
+            const minimap = new Minimap(scene, camera, stageManager, renderer);
 
             // --- Initialize CarInteraction AFTER mansion is loaded ---
             uiManager.updateLoadingText("Checking vehicle systems...");
             const carInteraction = new CarInteraction(scene, interactionSystem, audioManager, gameManager);
   
             // car collection
-            carInteraction.initializeCar(loadedMansionModel, 'car');
+            carInteraction.initializeCar(stageManager.scenes.mansion, 'car');
 
             const garageSystem = new GarageSystem(
-                scene,
                 interactionSystem,
                 qteManager,
                 audioManager,
                 gameManager,
-                mansionLoader 
+                stageManager
             );
 
             // --- Initialize CarRepairSystem AFTER CarInteraction and other dependencies ---
             const carRepairSystem = new CarRepairSystem(
-                scene,
+                stageManager,
                 interactionSystem,
                 qteManager,
                 audioManager,
@@ -150,46 +164,183 @@ async function main() {
                 carInteraction    // Pass CarInteraction instance
             );
 
-            // Call initialize AFTER the scene graph (loadedMansionModel) is fully processed
-            carRepairSystem.initialize();
-
             new Resizer(camera, renderer);
 
-            loop.updatables.push(
+            // Initialize Performance Analyzer
+            const performanceAnalyzer = new PerformanceAnalyzer(renderer, scene);
+
+            // Filter out null updatables (for diagnostic single-scene mode)
+            const updatables = [
                 controls,
                 physicsManager,
                 flashlight,
-                mansionLoader,
+                stageManager.loaders.office,
+                stageManager.loaders.mansion,
                 interactionSystem,
                 puzzleSystem,
                 gameManager,
                 atmosphere,
                 monsterAI,
-                minimap,
-                stage1Manager,
-            );
+                minimap
+            ].filter(u => u !== null && u !== undefined);
+
+            loop.updatables.push(...updatables);
 
             // --- Setup gameControls for debugging ---
             window.gameControls = {
-                camera, scene, flashlight, physicsManager, mansionLoader, gameManager,
+                camera, scene, flashlight, physicsManager, gameManager,
                 interactionSystem, puzzleSystem, atmosphere, colorPuzzle, wirePuzzle, keypadPuzzle,
-                audioManager, monsterAI, narrativeManager, uiManager, minimap, stageManager, stage1Manager,
-                carInteraction,
+                audioManager, monsterAI, narrativeManager, uiManager, minimap, stageManager,
+                carInteraction, qteManager, garageSystem, carRepairSystem,
+                // Always get current loader from stageManager, not cached reference
+                get mansionLoader() { return stageManager.currentLoader; },
+                // Stage transition commands
+                toMansion: async () => {
+                    console.log('🚀 Transitioning to mansion...');
+                    await stageManager.switchToStage('mansion');
+                    await uiManager.reloadResultScreen();
+                    console.log('✅ Arrived at mansion');
+                },
+                toOffice: async () => {
+                    console.log('🚀 Transitioning to office...');
+                    await stageManager.switchToStage('office');
+                    await uiManager.reloadResultScreen();
+                    console.log('✅ Arrived at office');
+                },
+                toggleNavMesh: () => stageManager.currentLoader?.toggleNavMeshVisualizer?.(),
+                toggleMansion: () => stageManager.currentLoader?.toggleMansionVisibility?.(),
+                toggleNavMeshNodes: () => stageManager.currentLoader?.toggleNavMeshNodesVisualizer?.(),
                 toggleNavMesh: () => mansionLoader.toggleNavMeshVisualizer(),
                 toggleMansion: () => mansionLoader.toggleMansionVisibility(),
                 toggleNavMeshNodes: () => mansionLoader.toggleNavMeshNodesVisualizer(),
                 toggleMinimap: () => minimap.toggle(),
-                qteManager,
-                carInteraction,
-                garageSystem, 
-                carRepairSystem,
-                testQTE: (type) => { /* ... testQTE function ... */ },
-                listPhysics: () => mansionLoader.listPhysicsBodies(),
+                listPhysics: () => stageManager.currentLoader?.listPhysicsBodies?.(),
+                toggleOcclusionViz: (enabled) => {
+                    // Toggle occlusion culling visualization on ALL stages
+                    const state = enabled !== undefined ? enabled : !window._occlusionVizEnabled;
+                    window._occlusionVizEnabled = state;
+                    console.log(`👁️ Occlusion Culling Visualization: ${state ? 'ON (all stages)' : 'OFF'}`);
+                    if (stageManager.loaders.office) {
+                        stageManager.loaders.office.visualizeOcclusionCulling(state);
+                    }
+                    if (stageManager.loaders.mansion) {
+                        stageManager.loaders.mansion.visualizeOcclusionCulling(state);
+                    }
+                },
+                debugOcclusionStats: () => {
+                    const loader = stageManager.currentLoader;
+                    if (!loader || !loader.model) {
+                        console.log('❌ No active loader');
+                        return;
+                    }
+
+                    let visibleMeshes = 0;
+                    let culledMeshes = 0;
+                    let totalMeshes = 0;
+                    const culledObjects = [];
+
+                    loader.model.traverse((node) => {
+                        if (node.isMesh) {
+                            totalMeshes++;
+                            if (node.visible) {
+                                visibleMeshes++;
+                            } else {
+                                culledMeshes++;
+                                culledObjects.push(node.name || 'unnamed');
+                            }
+                        }
+                    });
+
+                    console.log(`👁️ Occlusion Stats - Visible: ${visibleMeshes}, Culled: ${culledMeshes}, Total: ${totalMeshes}`);
+                    console.log(`👁️ Max distance: ${loader.maxVisibleDistance}`);
+                    if (culledObjects.length > 0 && culledObjects.length < 20) {
+                        console.log(`👁️ Culled objects: ${culledObjects.join(', ')}`);
+                    }
+                },
+                debugOcclusionDetail: (objectName) => {
+                    const loader = stageManager.currentLoader;
+                    if (!loader || !loader.model) {
+                        console.log('❌ No active loader');
+                        return;
+                    }
+
+                    const closestPoint = new THREE.Vector3();
+                    const camPos = camera.position;
+                    let found = false;
+
+                    loader.model.traverse((node) => {
+                        if (objectName && node.name !== objectName) return;
+                        if (!node.isMesh || !node.geometry) return;
+
+                        found = true;
+
+                        // Compute bounding box
+                        if (!node.geometry.boundingBox) {
+                            node.geometry.computeBoundingBox();
+                        }
+
+                        const boundingBox = node.geometry.boundingBox.clone();
+                        boundingBox.applyMatrix4(node.matrixWorld);
+                        boundingBox.clampPoint(camPos, closestPoint);
+
+                        const distance = camPos.distanceTo(closestPoint);
+
+                        // Check parent visibility
+                        let parent = node.parent;
+                        let parentChain = [];
+                        while (parent && parent !== loader.model) {
+                            parentChain.push(`${parent.name || 'unnamed'} (visible=${parent.visible})`);
+                            parent = parent.parent;
+                        }
+
+                        console.log(`👁️ Object: ${node.name}`);
+                        console.log(`  Visible: ${node.visible}`);
+                        console.log(`  Distance: ${distance.toFixed(2)} (max: ${loader.maxVisibleDistance})`);
+                        console.log(`  Should be visible: ${distance <= loader.maxVisibleDistance}`);
+                        console.log(`  Position: x=${node.position.x.toFixed(1)}, y=${node.position.y.toFixed(1)}, z=${node.position.z.toFixed(1)}`);
+                        console.log(`  World pos: x=${node.getWorldPosition(new THREE.Vector3()).x.toFixed(1)}`);
+                        console.log(`  Parent chain: ${parentChain.join(' > ') || 'none'}`);
+                    });
+
+                    if (!found) {
+                        console.log(`❌ Object "${objectName}" not found`);
+                    }
+                },
+                debugValidateStage: () => {
+                    if (!stageManager.currentLoader) {
+                        console.log('❌ No active stage loader');
+                        return;
+                    }
+                    stageManager.currentLoader.validateStageLoaded();
+                },
+                // Performance Analysis Commands
+                getPerformanceReport: () => {
+                    performanceAnalyzer.analyze();
+                    performanceAnalyzer.logReport();
+                    return performanceAnalyzer.getReport();
+                },
+                analyzePerformance: () => {
+                    performanceAnalyzer.analyze();
+                    performanceAnalyzer.logBottlenecks();
+                },
+                getPerformanceMetrics: () => {
+                    performanceAnalyzer.analyze();
+                    return performanceAnalyzer.metrics;
+                },
             };
 
-            window.game = { mansionLoader, logger };
+            window.game = { logger };  // mansionLoader access via window.gameControls.mansionLoader getter
             logger.log('🔧 Debug controls available in `window.gameControls`.');
-            // ... other logger messages ...
+            logger.log("庁 To toggle the navigation mesh visualizer, type `gameControls.toggleNavMesh()` in the console.");
+            logger.log("🎬 Stage transitions: gameControls.toMansion() or gameControls.toOffice()");
+            logger.log('');
+            logger.log('📝 LOGGING COMMANDS:');
+            logger.log('   logger.disable()       - Disable console logging');
+            logger.log('   logger.enable()        - Enable console logging');
+            logger.log('   logger.downloadLogs()  - Download log file');
+            logger.log('   logger.clearBuffer()   - Clear log buffer');
+            logger.log('   logger.getStats()      - View logger stats');
+            logger.log('');
 
             uiManager.updateLoadingProgress(95, "Preparing spawn point...");
 
@@ -202,12 +353,35 @@ async function main() {
                     uiManager.updateLoadingProgress(100, "Ready to play!");
                     setTimeout(async () => {
                         uiManager.hideLoadingScreen();
+                        canvas.style.visibility = 'visible';
                         document.body.classList.add('game-active');
-                        // await gameManager.showStage1Title(); // Comment out if starting directly in mansion
 
-                        // Play intro narrative sequence on mansion stage
-                        await narrativeManager.playIntroSequence();
+                        // Start stage-specific gameplay
+                        if (stageManager.currentStage === 'office') {
+                            // Start Stage 1 (office) narrative sequence
+                            // Phone rings automatically after 5 seconds, then auto-answer
+                            setTimeout(async () => {
+                                if (gameManager.audioManager) {
+                                    gameManager.audioManager.play('phone_ringing');
+                                }
+                            }, 5000);
 
+                            // Auto-answer phone after 8 seconds (phone rings for 3 seconds)
+                            setTimeout(async () => {
+                                if (gameManager.audioManager) {
+                                    gameManager.audioManager.stopSound('phone_ringing');
+                                    // Play voicemail audio after phone is answered
+                                    await gameManager.audioManager.play('voicemail_editor');
+                                }
+                                // Trigger voicemail narrative
+                                await window.gameControls.narrativeManager.triggerEvent('office.phone_answered');
+                                // Show objective to use computer
+                                await window.gameControls.narrativeManager.triggerEvent('office.computer_objective');
+                            }, 8000);
+                        } else if (stageManager.currentStage === 'mansion') {
+                            // Play intro narrative sequence on mansion stage
+                            await narrativeManager.playIntroSequence();
+                        }
                         console.log('✅ Game ready! Click to begin.');
                     }, 500);
                 }, 100);

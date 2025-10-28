@@ -440,6 +440,12 @@ class MonsterAI {
     }
     
     recalculateChasePath() {
+        // Safety check - if no pathfinding data (office stage), skip pathfinding
+        if (!this.pathfinding || !this.pathfinding.zones || !this.pathfinding.zones[this.ZONE]) {
+            this.path = [];
+            return;
+        }
+
         this.lastPathRecalculation = Date.now();
         const playerPos = this.player.position;
         const monsterPos = this.monster.position;
@@ -460,6 +466,12 @@ class MonsterAI {
     }
 
     recalculateFleePath() {
+        // Safety check - if no pathfinding data (office stage), skip pathfinding
+        if (!this.pathfinding || !this.pathfinding.zones || !this.pathfinding.zones[this.ZONE]) {
+            this.path = [];
+            return;
+        }
+
         this.lastPathRecalculation = Date.now();
         const fleeDirection = this.monster.position.clone().sub(this.player.position).normalize();
         const fleeDistance = 15;

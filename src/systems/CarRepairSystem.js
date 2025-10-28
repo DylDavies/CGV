@@ -16,8 +16,8 @@ const zoneGeometry = new THREE.BoxGeometry(1, 1, 1); // 1x1x1 cube, will be scal
 
 
 export class CarRepairSystem {
-    constructor(scene, interactionSystem, qteManager, audioManager, gameManager, narrativeManager, carInteraction) {
-        this.scene = scene;
+    constructor(stageManager, interactionSystem, qteManager, audioManager, gameManager, narrativeManager, carInteraction) {
+        this.stageManager = stageManager;
         this.interactionSystem = interactionSystem; 
         this.qteManager = qteManager;
         this.audioManager = audioManager;
@@ -65,7 +65,7 @@ export class CarRepairSystem {
     initialize() {
         logger.log('🚗 Initializing CarRepairSystem components...');
 
-        this.carObject = this.scene.getObjectByName('car');
+        this.carObject = this.stageManager.currentScene.getObjectByName('car');
         this.hoodObject = this.carInteraction.hoodObject; 
 
         if (!this.hoodObject){
@@ -78,13 +78,12 @@ export class CarRepairSystem {
         }
 
         // Find zones and items
-        this.scene.updateMatrixWorld(true);
-        this.engineZone = this.scene.getObjectByName('engine_interact_zone');
-        this.driverDoorZone = this.scene.getObjectByName('driver_door_interact_zone');
-        this.crowbarObject = this.scene.getObjectByName('crowbar');
-        this.toolboxObject = this.scene.getObjectByName('toolbox');
-        this.gasCanBodyObject = this.scene.getObjectByName('gas_can_body');
-        this.gasCanCapObject = this.scene.getObjectByName('gas_can_cap');
+        this.engineZone = this.stageManager.currentScene.getObjectByName('engine_interact_zone');
+        this.driverDoorZone = this.stageManager.currentScene.getObjectByName('driver_door_interact_zone');
+        this.crowbarObject = this.stageManager.currentScene.getObjectByName('crowbar');
+        this.toolboxObject = this.stageManager.currentScene.getObjectByName('toolbox');
+        this.gasCanBodyObject = this.stageManager.currentScene.getObjectByName('gas_can_body');
+        this.gasCanCapObject = this.stageManager.currentScene.getObjectByName('gas_can_cap');
 
         // Configuring the Engine and Driver interaction zones
         if (this.engineZone){

@@ -1,38 +1,49 @@
 // src/systems/StageManager.js
-// Manages different physical stages/locations in the game
+// Multi-scene architecture
+// Each stage has its own independent scene with own lights/physics
+// Switching between scenes is clean and prevents light bleed
 
+import * as THREE from 'https://unpkg.com/three@0.127.0/build/three.module.js';
 import logger from '../utils/Logger.js';
 import { MansionLoader } from './MansionLoader.js';
 
 export class StageManager {
-    constructor(scene, physicsManager, camera, quality = 'medium', loop = null, audioManager = null) {
-        this.scene = scene;
+    constructor(physicsManager, camera, quality = 'medium', loop = null, audioManager = null) {
         this.physicsManager = physicsManager;
         this.camera = camera;
         this.quality = quality;
         this.loop = loop;
         this.audioManager = audioManager;
 
+        // Track scenes per stage
+        this.scenes = {
+            office: null,
+            mansion: null
+        };
+
         this.currentStage = null;
+        this.currentScene = null;
         this.currentLoader = null;
 
-        // Track objects that should persist across stage changes
-        this.persistentObjects = new Set();
+        // Track all loaders (one per stage)
+        this.loaders = {
+            office: null,
+            mansion: null
+        };
 
         // Stage definitions
         this.stages = {
             office: {
                 name: 'Journalist Office',
                 modelPath: 'blender/stage1/stage1.glb',
-                navMeshPath: null, // No navmesh for office yet
-                spawnPoint: { x: 3, y: 1.8, z: 1.2 }, // Spawn in center of office
-                ambientIntensity: 0.3, // Brighter for office
+                navMeshPath: null,
+                spawnPoint: { x: 3, y: 1.8, z: 1.2 },
+                ambientIntensity: 0.3,
                 lightsConfig: {
-                    fluorescent: true, // Has fluorescent ceiling lights
+                    fluorescent: true,
                     lamps: false,
                     fireplaces: false
                 },
-                // Physics filter for office - add exclusion keywords for furniture that shouldn't collide
                 physicsExclusions: ['furniture', 'chair', 'desk', 'cabinet', 'file', 'shelf', 'frame']
             },
             mansion: {
@@ -40,7 +51,7 @@ export class StageManager {
                 modelPath: 'blender/Mansion.glb', 
                 navMeshPath: 'blender/NavMesh.glb',
                 spawnPoint: null, // Will use entrance door spawn
-                ambientIntensity: 0.005, // Dark for horror
+                ambientIntensity: 0.005,
                 lightsConfig: {
                     fluorescent: false,
                     lamps: true,
@@ -49,61 +60,137 @@ export class StageManager {
             }
         };
 
-        logger.log('🎬 StageManager initialized');
+        logger.log('🎬 StageManager initialized (multi-scene architecture)');
     }
 
     /**
-     * Load a specific stage
-     * @param {string} stageName - Name of the stage (office, mansion, etc.)
-     * @param {Function} onProgress - Progress callback (progress, message)
-     * @returns {Promise<Object>} Loaded stage data
+     * Initialize scenes and load all stages
+     * Each stage gets its own independent scene
      */
-    async loadStage(stageName, onProgress = null) {
+    async initializeAllStages(onProgress = null) {
+        logger.log('🎬 Initializing all stages with separate scenes...');
+
+        // Load mansion stage first
+        if (onProgress) onProgress(20, 'Loading mansion...');
+        await this._loadStageModel('mansion', onProgress);
+
+        // Load office stage
+        if (onProgress) onProgress(50, 'Loading office...');
+        await this._loadStageModel('office', onProgress);
+
+        // Set initial stage to office
+        this.currentStage = 'office';
+        this.currentScene = this.scenes.office;
+        this.currentLoader = this.loaders.office;
+        if (onProgress) onProgress(95, 'Preparing spawn point...');
+
+        logger.log('✅ All stages loaded with independent scenes');
+        return {
+            scene: this.scenes.office,
+            spawnPosition: this._getSpawnPosition('office')
+        };
+    }
+
+    /**
+     * Create a scene with lighting setup for a stage
+     */
+    _createStageScene(stageConfig) {
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color(0x000510);
+        // Use exponential fog for proper atmospheric depth (matches working Project2 version)
+        scene.fog = new THREE.FogExp2(0x000510, 0.05);
+
+        // Add ambient lighting
+        const moonAmbient = new THREE.AmbientLight(0x1a1a2e, stageConfig.ambientIntensity);
+        moonAmbient.name = 'moonlight_ambient';
+        scene.add(moonAmbient);
+
+        // Add directional light
+        const moonLight = new THREE.DirectionalLight(0x5a7fb5, 0.15);
+        moonLight.position.set(-20, 50, 30);
+        moonLight.castShadow = true;
+        moonLight.shadow.mapSize.width = 2048;
+        moonLight.shadow.mapSize.height = 2048;
+        moonLight.shadow.camera.left = -40;
+        moonLight.shadow.camera.right = 40;
+        moonLight.shadow.camera.top = 40;
+        moonLight.shadow.camera.bottom = -40;
+        moonLight.shadow.camera.near = 0.5;
+        moonLight.shadow.camera.far = 100;
+        moonLight.shadow.bias = -0.0001;
+        moonLight.shadow.normalBias = 0;
+        moonLight.shadow.radius = 1;
+        moonLight.name = 'moonlight_directional';
+        scene.add(moonLight);
+
+        return scene;
+    }
+
+    /**
+     * Load a single stage model into its own scene
+     */
+    async _loadStageModel(stageName, onProgress = null) {
         const stageConfig = this.stages[stageName];
         if (!stageConfig) {
             throw new Error(`Stage "${stageName}" not found`);
         }
 
-        logger.log(`🎬 Loading stage: ${stageConfig.name}`);
+        logger.log(`🎬 Loading stage model: ${stageConfig.name}`);
 
-        // Unload current stage if exists
-        if (this.currentLoader) {
-            await this.unloadCurrentStage();
-        }
+        // Create a fresh scene for this stage
+        const stageScene = this._createStageScene(stageConfig);
+        this.scenes[stageName] = stageScene;
 
-        // Create new loader
-        this.currentLoader = new MansionLoader(
-            this.scene,
+        // Create loader for this stage (passes its own scene)
+        const loader = new MansionLoader(
+            stageScene,
             this.physicsManager,
             this.quality
         );
 
-        // Pass stage-specific physics exclusions if defined
+        // Set physics exclusions if defined
         if (stageConfig.physicsExclusions) {
-            this.currentLoader.setPhysicsExclusions(stageConfig.physicsExclusions);
+            loader.setPhysicsExclusions(stageConfig.physicsExclusions);
         }
 
-        // Load the model
-        if (onProgress) onProgress(40, `Loading ${stageConfig.name}...`);
-        await this.currentLoader.loadMansion(stageConfig.modelPath);
+        // Load the model (into its own scene, at origin)
+        await loader.loadMansion(stageConfig.modelPath);
 
         // Load navmesh if available
         if (stageConfig.navMeshPath) {
-            if (onProgress) onProgress(60, 'Analyzing walkable areas...');
-            await this.currentLoader.loadNavMesh(
+            if (onProgress) onProgress(60, `Loading ${stageName} pathfinding...`);
+            await loader.loadNavMesh(
                 `${stageConfig.navMeshPath}?v=${Date.now()}`
             );
         }
 
-        // Determine spawn point
+        // Validate load
+        const isValid = loader.validateStageLoaded();
+        if (!isValid) {
+            logger.error(`❌ Stage validation failed for ${stageName}`);
+        }
+
+        this.loaders[stageName] = loader;
+        logger.log(`✅ ${stageConfig.name} loaded in independent scene`);
+    }
+
+    /**
+     * Get spawn position for a stage
+     * No offset needed - models load at origin in their own scenes
+     */
+    _getSpawnPosition(stageName) {
+        const stageConfig = this.stages[stageName];
+        const loader = this.loaders[stageName];
+
         let spawnPosition;
-        if (stageName === 'mansion') {
+
+        if (stageName === 'mansion' && loader) {
             // Use entrance door spawn for mansion
-            const doorSpawnPoint = this.currentLoader.getEntranceDoorSpawnPoint();
+            const doorSpawnPoint = loader.getEntranceDoorSpawnPoint();
             if (doorSpawnPoint) {
                 spawnPosition = doorSpawnPoint;
             } else {
-                const entranceRoom = this.currentLoader.getEntranceRoom();
+                const entranceRoom = loader.getEntranceRoom();
                 if (entranceRoom) {
                     spawnPosition = {
                         x: entranceRoom.center.x,
@@ -116,229 +203,70 @@ export class StageManager {
             }
         } else {
             // Use configured spawn point for other stages
-            spawnPosition = stageConfig.spawnPoint;
+            spawnPosition = { ...stageConfig.spawnPoint };
         }
 
-        // Set camera position
-        this.camera.position.set(
-            spawnPosition.x,
-            spawnPosition.y,
-            spawnPosition.z
-        );
+        return spawnPosition;
+    }
 
-        // Update ambient lighting for stage
-        this.updateAmbientLighting(stageConfig.ambientIntensity);
+    /**
+     * Switch to a different stage (instant transition via scene swap + physics swap)
+     */
+    async switchToStage(newStageName) {
+        const stageConfig = this.stages[newStageName];
+        if (!stageConfig) {
+            throw new Error(`Stage "${newStageName}" not found`);
+        }
 
-        this.currentStage = stageName;
+        logger.log(`🎬 Switching to stage: ${stageConfig.name}`);
 
-        logger.log(`✅ Stage loaded: ${stageConfig.name}`);
-        logger.log(`📍 Spawn position: ${JSON.stringify(spawnPosition)}`);
+        // Deactivate physics for the current stage (remove from world)
+        if (this.currentLoader && this.currentLoader.deactivatePhysics) {
+            this.currentLoader.deactivatePhysics();
+        }
+
+        // Switch scene and loader
+        this.currentStage = newStageName;
+        this.currentScene = this.scenes[newStageName];
+        this.currentLoader = this.loaders[newStageName];
+
+        // Activate physics for the new stage (add to world)
+        if (this.currentLoader && this.currentLoader.activatePhysics) {
+            this.currentLoader.activatePhysics();
+        }
+
+        logger.log(`🎨 Switched rendering to ${newStageName} scene`);
+
+        // Teleport player to new stage spawn
+        const spawnPosition = this._getSpawnPosition(newStageName);
+        if (this.physicsManager && this.physicsManager.teleportTo) {
+            this.physicsManager.teleportTo(spawnPosition);
+        }
+
+        // Update camera position
+        this.camera.position.set(spawnPosition.x, spawnPosition.y, spawnPosition.z);
+
+        logger.log(`✅ Switched to ${stageConfig.name} at position ${JSON.stringify(spawnPosition)}`);
 
         return {
             loader: this.currentLoader,
             spawnPosition: spawnPosition,
-            config: stageConfig
+            config: stageConfig,
+            scene: this.currentScene
         };
     }
 
     /**
-     * Mark an object as persistent (won't be removed during stage transitions)
+     * Get the current active scene
      */
-    markAsPersistent(object) {
-        this.persistentObjects.add(object);
+    getCurrentScene() {
+        return this.currentScene;
     }
 
     /**
-     * Snapshot current scene objects to identify what's persistent
+     * Note: Lighting and fog setup is now per-scene in _createStageScene()
+     * No dynamic updates needed since each scene is independent
      */
-    snapshotPersistentObjects() {
-        this.persistentObjects.clear();
-
-        // Mark core scene objects as persistent
-        this.scene.children.forEach(child => {
-            // Keep lights (ambient, directional, etc.) and camera
-            if (child.isLight || child.isCamera) {
-                this.persistentObjects.add(child);
-            }
-        });
-
-        logger.log(`📸 Snapshotted ${this.persistentObjects.size} persistent objects`);
-    }
-
-    /**
-     * Remove all non-persistent objects from scene
-     */
-    cleanupNonPersistentObjects() {
-        const objectsToRemove = [];
-
-        this.scene.children.forEach(child => {
-            // Skip persistent objects and the current stage model
-            if (!this.persistentObjects.has(child) && child !== this.currentLoader?.model) {
-                objectsToRemove.push(child);
-            }
-        });
-
-        objectsToRemove.forEach(obj => {
-            this.scene.remove(obj);
-            // Dispose if possible
-            if (obj.geometry) obj.geometry.dispose();
-            if (obj.material) {
-                if (Array.isArray(obj.material)) {
-                    obj.material.forEach(mat => mat.dispose());
-                } else {
-                    obj.material.dispose();
-                }
-            }
-        });
-
-        logger.log(`🧹 Removed ${objectsToRemove.length} non-persistent objects from scene`);
-    }
-
-    /**
-     * Unload the current stage
-     */
-    async unloadCurrentStage() {
-        if (!this.currentLoader) return;
-
-        logger.log(`🗑️ Unloading stage: ${this.currentStage}`);
-
-        // Stop all audio
-        if (this.audioManager) {
-            this.audioManager.stopAll();
-            logger.log('🔇 Stopped all audio');
-        }
-
-        // Clean up non-persistent scene objects (monster, particles, etc.)
-        this.cleanupNonPersistentObjects();
-
-        // Use the MansionLoader's built-in dispose method
-        // This properly cleans up physics bodies, lights, and meshes
-        if (this.currentLoader.dispose) {
-            this.currentLoader.dispose();
-        }
-
-        this.currentLoader = null;
-        this.currentStage = null;
-
-        logger.log('✅ Stage unloaded');
-    }
-
-    /**
-     * Transition to a new stage with fade effect
-     * @param {string} newStageName - Target stage name
-     * @param {Object} options - Transition options
-     * @returns {Promise<Object>} New stage data
-     */
-    async transitionToStage(newStageName, options = {}) {
-        const {
-            fadeOutDuration = 1000,
-            fadeInDuration = 1000,
-            onProgress = null
-        } = options;
-
-        logger.log(`🎬 Transitioning to stage: ${newStageName}`);
-
-        // Stop the game loop to prevent physics updates during transition
-        const wasLoopRunning = this.loop && this.loop.isRunning;
-        if (wasLoopRunning) {
-            this.loop.stop();
-            logger.log('⏸️ Game loop paused for stage transition');
-            // Wait for any pending animation frames to complete
-            await new Promise(resolve => setTimeout(resolve, 100));
-        }
-
-        // Fade out
-        await this.fadeScreen(true, fadeOutDuration);
-
-        // Load new stage
-        const stageData = await this.loadStage(newStageName, onProgress);
-
-        // Reset player if physics manager available
-        if (this.physicsManager && this.physicsManager.teleportTo) {
-            this.physicsManager.teleportTo({
-                x: stageData.spawnPosition.x,
-                y: stageData.spawnPosition.y,
-                z: stageData.spawnPosition.z
-            });
-        }
-
-        // Fade in
-        await this.fadeScreen(false, fadeInDuration);
-
-        // Resume the game loop
-        if (wasLoopRunning && this.loop) {
-            this.loop.start();
-            logger.log('▶️ Game loop resumed after stage transition');
-        }
-
-        return stageData;
-    }
-
-    /**
-     * Fade screen to/from black
-     * @param {boolean} fadeOut - True to fade to black, false to fade from black
-     * @param {number} duration - Duration in milliseconds
-     */
-    async fadeScreen(fadeOut, duration) {
-        return new Promise((resolve) => {
-            const overlay = document.getElementById('fade-overlay') || this.createFadeOverlay();
-            const startOpacity = fadeOut ? 0 : 1;
-            const endOpacity = fadeOut ? 1 : 0;
-            const startTime = Date.now();
-
-            const animate = () => {
-                const elapsed = Date.now() - startTime;
-                const progress = Math.min(elapsed / duration, 1);
-
-                const opacity = startOpacity + (endOpacity - startOpacity) * progress;
-                overlay.style.opacity = opacity;
-
-                if (progress < 1) {
-                    requestAnimationFrame(animate);
-                } else {
-                    resolve();
-                }
-            };
-
-            animate();
-        });
-    }
-
-    /**
-     * Create fade overlay element
-     */
-    createFadeOverlay() {
-        let overlay = document.getElementById('fade-overlay');
-        if (!overlay) {
-            overlay = document.createElement('div');
-            overlay.id = 'fade-overlay';
-            overlay.style.cssText = `
-                position: fixed;
-                top: 0;
-                left: 0;
-                width: 100%;
-                height: 100%;
-                background-color: black;
-                opacity: 0;
-                pointer-events: none;
-                z-index: 9999;
-                transition: opacity 0.1s linear;
-            `;
-            document.body.appendChild(overlay);
-        }
-        return overlay;
-    }
-
-    /**
-     * Update ambient lighting for stage
-     */
-    updateAmbientLighting(intensity) {
-        const ambientLight = this.scene.getObjectByName('moonlight_ambient');
-        if (ambientLight) {
-            ambientLight.intensity = intensity;
-            logger.log(`💡 Ambient light intensity set to: ${intensity}`);
-        }
-    }
 
     /**
      * Get current stage info
@@ -349,7 +277,8 @@ export class StageManager {
         return {
             name: this.currentStage,
             config: this.stages[this.currentStage],
-            loader: this.currentLoader
+            loader: this.currentLoader,
+            offset: this.stages[this.currentStage].worldOffset
         };
     }
 
@@ -358,5 +287,12 @@ export class StageManager {
      */
     getAvailableStages() {
         return Object.keys(this.stages);
+    }
+
+    /**
+     * Get the shared scene
+     */
+    getScene() {
+        return this.scene;
     }
 }

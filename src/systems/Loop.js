@@ -3,10 +3,11 @@ import { Clock } from 'https://unpkg.com/three@0.127.0/build/three.module.js';
 const clock = new Clock();
 
 class Loop {
-  constructor(camera, scene, renderer, stats, labelRenderer = null) {
+  constructor(camera, scene, renderer, stats, labelRenderer = null, stageManager = null) {
     this.camera = camera;
-    this.scene = scene;
-    this.renderer = renderer;
+    this.scene = scene; // Kept for backwards compatibility, but stageManager takes priority
+    this.stageManager = stageManager; // Multi-scene support
+    this.renderer = renderer;  // Single renderer
     this.stats = stats;
     this.labelRenderer = labelRenderer;
     this.updatables = []; // Array of objects with a .tick() method
@@ -16,6 +17,11 @@ class Loop {
 
   start() {
     this.isRunning = true;
+    if (!this.renderer) {
+      console.error('❌ No renderer available');
+      return;
+    }
+
     this.renderer.setAnimationLoop(() => {
         this.stats.begin();
 
@@ -34,20 +40,28 @@ class Loop {
 
         // Call the tick method for each object in the updatables array
         for (const object of this.updatables) {
-          object.tick(delta);
+          // Pass camera position to loaders for occlusion culling
+          if (object.tick.length > 1) {
+            object.tick(delta, this.camera.position);
+          } else {
+            object.tick(delta);
+          }
         }
       }
 
       try {
-        this.renderer.render(this.scene, this.camera);
+        // Render current scene with single renderer
+        // Use stageManager's current scene if available, otherwise fall back to this.scene
+        const sceneToRender = this.stageManager ? this.stageManager.getCurrentScene() : this.scene;
+        this.renderer.render(sceneToRender, this.camera);
 
         if (this.labelRenderer) {
-          this.labelRenderer.render(this.scene, this.camera);
+          this.labelRenderer.render(sceneToRender, this.camera);
         }
       } catch (error) {
         console.error("❌ Rendering error detected. This is often caused by an invalid camera or object position (NaN).", error);
         // We stop the loop here to prevent a flood of errors.
-        this.stop(); 
+        this.stop();
       }
 
       this.stats.end();
@@ -56,7 +70,10 @@ class Loop {
 
   stop() {
     this.isRunning = false;
-    this.renderer.setAnimationLoop(null);
+    // Stop animation loop on the single renderer
+    if (this.renderer) {
+      this.renderer.setAnimationLoop(null);
+    }
   }
 
   pause() {
