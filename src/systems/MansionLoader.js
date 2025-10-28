@@ -6,9 +6,11 @@ import { Pathfinding } from 'https://unpkg.com/three-pathfinding@1.2.0/dist/thre
 import logger from '../utils/Logger.js';
 
 class MansionLoader {
-    constructor(scene, physicsManager = null, qualityPreset = 'medium') {
+    constructor(scene, physicsManager = null, qualityPreset = 'medium', renderer = null, camera = null) {
         this.scene = scene;
         this.physicsManager = physicsManager;
+        this.renderer = renderer; // For shader pre-warming
+        this.camera = camera;     // For shader pre-warming
         this.model = null;
         this.rooms = new Map();
         this.props = new Map();
@@ -239,6 +241,9 @@ class MansionLoader {
                     this.setupLamps();
                     this.setupOcclusionCulling();
 
+                    // Pre-warm car shaders to prevent lag spike on first visibility
+                    this.preWarmCarShaders();
+
                     logger.log(`🏠 Mansion ready with ${this.rooms.size} rooms and ${this.lamps.length} lamps`);
                     resolve(this.model);
                 },
@@ -264,6 +269,8 @@ class MansionLoader {
         const materialMap = new Map(); // Track materials by their properties
 
         this.model.traverse((node) => {
+            const nodeName = node.name.toLowerCase(); // Define nodeName at the start
+
             if(node.name == "S_Wall_hider") node.visible = false;
 
             // finding the empty interactables:
@@ -437,9 +444,10 @@ class MansionLoader {
             if (node.isMesh) {
 
                 totalMeshes++;
-                // Enable shadows for all mansion objects
-                node.castShadow = true;
-                node.receiveShadow = true;
+                // Enable shadows for all mansion objects (but not for car parts)
+                const isMurphy92 = nodeName.includes('murphy92');
+                node.castShadow = !isMurphy92; // Disable shadow casting for car
+                node.receiveShadow = !isMurphy92; // Disable shadow receiving for car (performance)
                 node.frustumCulled = true;
 
                 if (node.material) {
@@ -889,43 +897,189 @@ class MansionLoader {
 
     optimizeMaterial(material) {
         // Optimize the material for performance
+        let materialModified = false;
 
         // Set precision to medium for better performance
-        material.precision = 'mediump';
+        if (material.precision !== 'mediump') {
+            material.precision = 'mediump';
+            materialModified = true;
+        }
 
         // Disable features that hurt performance if not needed
-        material.flatShading = false;
+        if (material.flatShading !== false) {
+            material.flatShading = false;
+            materialModified = true;
+        }
 
         // For MeshStandardMaterial or MeshPhysicalMaterial, enhance depth and contrast
         if (material.isMeshStandardMaterial || material.isMeshPhysicalMaterial) {
             // Enhance shadow reception by adjusting roughness for more pronounced shadows
             if (material.roughness !== undefined && material.roughness > 0.95) {
                 material.roughness = 1;
+                materialModified = true;
             } else if (material.roughness !== undefined) {
                 // Increase roughness slightly for better shadow definition
-                material.roughness = Math.min(1.0, material.roughness * 1.1);
+                const newRoughness = Math.min(1.0, material.roughness * 1.1);
+                if (Math.abs(newRoughness - material.roughness) > 0.001) {
+                    material.roughness = newRoughness;
+                    materialModified = true;
+                }
             }
 
             if (material.metalness !== undefined && material.metalness < 0.05) {
                 material.metalness = 0;
+                materialModified = true;
             }
 
             // Disable expensive features if not being used
-            if (!material.envMap) {
+            if (!material.envMap && material.envMapIntensity !== 0) {
                 material.envMapIntensity = 0;
+                materialModified = true;
             }
 
             // Ensure proper encoding for tone mapping
-            if (material.map) {
+            if (material.map && material.map.encoding !== THREE.sRGBEncoding) {
                 material.map.encoding = THREE.sRGBEncoding;
+                // Note: texture encoding change doesn't require material needsUpdate
             }
 
             // Enhance shadow darkness by reducing ambient occlusion if present
             if (material.aoMapIntensity !== undefined) {
-                material.aoMapIntensity = Math.min(1.0, material.aoMapIntensity * 1.3);
+                const newAoIntensity = Math.min(1.0, material.aoMapIntensity * 1.3);
+                if (Math.abs(newAoIntensity - material.aoMapIntensity) > 0.001) {
+                    material.aoMapIntensity = newAoIntensity;
+                    materialModified = true;
+                }
             }
         }
-        material.needsUpdate = true;
+
+        // Only mark as needing update if we actually modified the material
+        if (materialModified) {
+            material.needsUpdate = true;
+        }
+    }
+
+    preWarmCarShaders() {
+        // Pre-compile car shaders during loading to prevent lag spike on first visibility
+        // Uses renderer.compile() which guarantees shader compilation without full render
+        if (!this.scene) {
+            return; // Scene not ready
+        }
+
+        try {
+            const carMeshes = [];
+
+            // Find all Murphy92 meshes
+            this.model.traverse((node) => {
+                if (node.isMesh && node.name.toLowerCase().includes('murphy92')) {
+                    carMeshes.push(node);
+                }
+            });
+
+            if (carMeshes.length === 0) {
+                logger.warn('⚠️ No car meshes found for pre-warming');
+                return; // No car to warm
+            }
+
+            logger.log(`🔥 Pre-warming ${carMeshes.length} car shader(s)...`);
+
+            // Hide all non-car geometry to reduce first-render GPU load during pre-warming
+            const hiddenObjects = [];
+            this.model.traverse((node) => {
+                if (node.isMesh && !node.name.toLowerCase().includes('murphy92')) {
+                    if (node.visible) {
+                        hiddenObjects.push(node);
+                        node.visible = false;
+                    }
+                }
+            });
+
+            // Attempt to compile shaders using multiple methods for reliability
+            const compiled = this.attemptCarShaderCompilation(carMeshes);
+
+            // Restore visibility of hidden objects
+            hiddenObjects.forEach(obj => {
+                obj.visible = true;
+            });
+
+            if (compiled) {
+                logger.log('✅ Car shaders pre-warmed successfully');
+            } else {
+                logger.warn('⚠️ Car shader pre-warming failed - will compile during first render');
+            }
+
+        } catch (error) {
+            logger.warn('⚠️ Car shader pre-warming error (non-critical):', error);
+        }
+    }
+
+    attemptCarShaderCompilation(carMeshes) {
+        // Try to compile car shaders using renderer.compile() if available
+        // This is more reliable than render() and doesn't require full scene render
+
+        // Try using stored renderer/camera first (passed from StageManager)
+        const renderer = this.renderer || (window.gameControls && window.gameControls.renderer);
+        const camera = this.camera || (window.gameControls && window.gameControls.camera);
+
+        if (!renderer || !camera) {
+            logger.warn('⚠️ No renderer/camera available for shader pre-warming');
+            return false;
+        }
+
+        try {
+            // Method 1: Use Three.js WebGLRenderer.compile() - most direct
+            logger.log('🔥 Attempting renderer.compile() for car shaders...');
+            let compileSuccess = 0;
+            carMeshes.forEach(mesh => {
+                try {
+                    // renderer.compile() forces shader compilation without rendering to screen
+                    renderer.compile(mesh, camera);
+                    compileSuccess++;
+                } catch (e) {
+                    logger.warn(`⚠️ compile() failed for ${mesh.name}: ${e.message}`);
+                }
+            });
+
+            if (compileSuccess > 0) {
+                logger.log(`✅ renderer.compile() succeeded for ${compileSuccess}/${carMeshes.length} meshes`);
+                return true;
+            }
+        } catch (error) {
+            logger.warn('⚠️ renderer.compile() error:', error.message);
+        }
+
+        try {
+            // Method 2: Force full scene render - guarantees shader compilation
+            logger.log('🔥 Attempting full scene render for car shader pre-warming...');
+
+            // Store original state
+            const originalVisibility = new Map();
+            this.scene.traverse(node => {
+                originalVisibility.set(node, node.visible);
+            });
+
+            // Hide everything except car
+            this.scene.traverse(node => {
+                if (node.isMesh) {
+                    const isCarMesh = node.name.toLowerCase().includes('murphy92');
+                    node.visible = isCarMesh;
+                }
+            });
+
+            // Render to GPU (this compiles all car shaders)
+            renderer.render(this.scene, camera);
+
+            // Restore visibility
+            this.scene.traverse(node => {
+                node.visible = originalVisibility.get(node) ?? true;
+            });
+
+            logger.log('✅ Full scene render completed for car shader pre-warming');
+            return true;
+        } catch (error) {
+            logger.warn('⚠️ Full scene render pre-warming failed:', error.message);
+            return false;
+        }
     }
 
     getMaterialKey(material) {
@@ -1048,8 +1202,13 @@ class MansionLoader {
                 }
             }
 
+            // Restrict car physics to only Murphy92_Body objects
+            const isMurphy92 = nodeName.includes('murphy92');
+            const isMurphy92Body = nodeName.includes('murphy92_body');
+            const shouldSkipMurphy92 = isMurphy92 && !isMurphy92Body;
+
             // If the object meets any of the exclusion criteria, skip it.
-            if (isDebugObject || hasDebugMaterial || isPortrait || isDoor || isNoCollision || shouldSkipByHierarchy || isStageExcluded) {
+            if (isDebugObject || hasDebugMaterial || isPortrait || isDoor || isNoCollision || shouldSkipByHierarchy || isStageExcluded || shouldSkipMurphy92) {
                 skippedCount++;
                 return; // Skip to the next node
             }
@@ -1275,8 +1434,11 @@ toggleNavMeshNodesVisualizer() {
         this.model.traverse((node) => {
             const nodeName = node.name.toLowerCase();
 
-             if (nodeName.includes('walllamp') || nodeName.includes('chandelier') ||
-                nodeName.includes('lamp') || nodeName.includes('light') || nodeName.includes('fluorescent')) {
+            // Exclude car parts from lamp detection
+            const isMurphy92 = nodeName.includes('murphy92');
+
+             if (!isMurphy92 && (nodeName.includes('walllamp') || nodeName.includes('chandelier') ||
+                nodeName.includes('lamp') || nodeName.includes('light') || nodeName.includes('fluorescent'))) {
 
                 node.updateMatrixWorld(true);
                 const lampPosition = new THREE.Vector3();
@@ -1554,11 +1716,14 @@ toggleNavMeshNodesVisualizer() {
             // CRITICAL FIX 5: NEVER cull interactive or puzzle objects
             // Interactive objects need to be visible for raycasting to work
             // Also preserve objects that might become interactive later
+            const nodeName = node.name.toLowerCase();
+            const isCar = nodeName.includes('murphy92'); // Car shaders are pre-compiled, keep visible
+
             if (node.userData.interactable || node.userData.type === 'fireplace' ||
                 node.userData.type === 'page' || node.userData.type === 'safe' ||
                 node.userData.type === 'bucket' || node.userData.type === 'diary' ||
                 node.userData.type === 'notepad' || node.userData.type === 'newspaper' ||
-                node.userData.type === 'loose_book' || node.userData.type === 'computer') {
+                node.userData.type === 'loose_book' || node.userData.type === 'computer' || isCar) {
                 node.visible = true;
                 return;
             }

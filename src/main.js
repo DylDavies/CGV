@@ -76,7 +76,7 @@ async function main() {
             const physicsManager = new RapierPhysicsManager(null, camera, null);
 
             // Initialize StageManager with proper multi-scene architecture
-            const stageManager = new StageManager(physicsManager, camera, settings.quality || 'medium', null, audioManager);
+            const stageManager = new StageManager(physicsManager, camera, settings.quality || 'medium', null, audioManager, renderer);
 
             // Load all stages (mansion and office)
             const initResult = await stageManager.initializeAllStages((progress, message) => {
