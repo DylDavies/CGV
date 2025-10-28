@@ -39,6 +39,7 @@ export class CarRepairSystem {
 
         // State Tracking
         this.repairState = {
+            driverDoorInteractedFirstTime: false,
             carWontStartTriggered: false,
             hoodStuckTriggered: false,
             needsCrowbar: false,
@@ -180,6 +181,9 @@ export class CarRepairSystem {
         logger.log(`🚗 Handling Driver Door Interaction via zone: ${interactedObject.name}. State: ${JSON.stringify(this.repairState)}`);
         if (this.qteManager.isActive()) return;
 
+        // Firt Interaction
+        if(!this.repairState.driverDoorInteractedFirstTime) this.repairState.driverDoorInteractedFirstTime = true;
+
         // --- Logic remains the same, using userData from the parent zone ---
         if (!this.repairState.carWontStartTriggered) {
             logger.log("   Step 1: Triggering 'car_wont_start'.");
@@ -280,8 +284,11 @@ export class CarRepairSystem {
         }
 
         logger.log("   Allowing normal hood open/close.");
-        userData.prompt = this.carInteraction.isHoodOpen ? "Press E to open hood" : "Press E to close hood";
-        this.interactionSystem.updateCrosshair(); 
+        if (this.repairState.driverDoorInteractedFirstTime){
+            userData.prompt = this.carInteraction.isHoodOpen ? "Press E to open hood" : "Press E to close hood";
+            this.interactionSystem.updateCrosshair(); 
+        }
+
         return true;
     }
 
@@ -354,17 +361,71 @@ export class CarRepairSystem {
         if (this.qteManager.isActive()) return;
         const itemId = userData.itemId;
         const itemName = userData.itemName || itemId;
-        logger.log(`🛠️ Picking up item: ${itemName} (ID: ${itemId})`);
-        const success = this.gameManager.addToInventory({ name: itemName, type: userData.type, id: itemId, description: `A ${itemName}. Might be useful.` });
+        let success = false; // Flag to check if pickup was successful
+
+        // *** NEW: Special handling for gas can parts ***
+        if (itemId === 'gas_can_body' || itemId === 'gas_can_cap') {
+            logger.log(`🛠️ Picking up gas can parts (triggered by ${itemName})`);
+
+            // Check if inventory has space for *two* items if neither is held, or *one* if one is already held (though ideally they are picked together)
+            const neededSlots = (this.repairState.hasGasCanBody || this.repairState.hasGasCanCap) ? 1 : 2;
+            if (this.gameManager.inventory.length <= (10 - neededSlots)) {
+                // Add both items to inventory if not already present
+                if (!this.repairState.hasGasCanBody) {
+                    this.gameManager.addToInventory({ name: 'Gas Can Body', type: 'gas_can_part', id: 'gas_can_body', description: 'The main body of the gas can.' });
+                    this.repairState.hasGasCanBody = true;
+                }
+                if (!this.repairState.hasGasCanCap) {
+                    this.gameManager.addToInventory({ name: 'Gas Can Cap', type: 'gas_can_part', id: 'gas_can_cap', description: 'The cap for the gas can.' });
+                    this.repairState.hasGasCanCap = true;
+                }
+
+                // Make both 3D objects invisible and non-interactable
+                if (this.gasCanBodyObject) {
+                    this.gasCanBodyObject.visible = false;
+                    this.gasCanBodyObject.userData.interactable = false;
+                }
+                if (this.gasCanCapObject) {
+                    this.gasCanCapObject.visible = false;
+                    this.gasCanCapObject.userData.interactable = false;
+                }
+
+                success = true; // Mark as successful pickup
+                this.audioManager.playSound('pickup_gas', 'public/audio/sfx/wood-block.mp3'); // Use a specific sound if desired, or keep generic 'pickup'
+                this.interactionSystem.showMessage("Picked up Gas Can parts", 2000); // Consolidated message
+            } else {
+                logger.warn(`   Inventory full, could not pick up gas can parts.`);
+                this.interactionSystem.showMessage("Inventory full!", 2000);
+            }
+        }
+        // *** END: Special handling for gas can parts ***
+
+        // --- Original logic for other items ---
+        else {
+            logger.log(`🛠️ Picking up item: ${itemName} (ID: ${itemId})`);
+            success = this.gameManager.addToInventory({ name: itemName, type: userData.type, id: itemId, description: `A ${itemName}. Might be useful.` });
+
+            if (success) {
+                if (itemId === 'crowbar') this.repairState.hasCrowbar = true;
+                if (itemId === 'toolbox') this.repairState.hasToolbox = true;
+                // Note: Gas can flags are handled above now
+
+                interactedObject.visible = false;
+                interactedObject.userData.interactable = false;
+                this.audioManager.playSound('pickup', 'public/audio/sfx/unlock-door.mp3'); // Placeholder
+            } else {
+                logger.warn(`   Inventory full, could not pick up ${itemName}.`);
+                this.interactionSystem.showMessage("Inventory is full!", 2000);
+            }
+        }
+        // --- End Original logic ---
+
+        // Update UI prompts only if a pickup was successful
         if (success) {
-            if (itemId === 'crowbar') this.repairState.hasCrowbar = true;
-            if (itemId === 'toolbox') this.repairState.hasToolbox = true;
-            if (itemId === 'gas_can_body') this.repairState.hasGasCanBody = true;
-            if (itemId === 'gas_can_cap') this.repairState.hasGasCanCap = true;
-            interactedObject.visible = false; interactedObject.userData.interactable = false; this.audioManager.playSound('pickup', 'public/audio/sfx/unlock-door.mp3'); // Placeholder
-            this.updateHoodPrompt(); this.updateEngineZonePrompt(); this.updateDriverDoorPrompt(); this.interactionSystem.updateCrosshair();
-        } else {
-            logger.warn(`   Inventory full, could not pick up ${itemName}.`); this.interactionSystem.showMessage("Inventory is full!", 2000);
+            this.updateHoodPrompt();
+            this.updateEngineZonePrompt();
+            this.updateDriverDoorPrompt();
+            this.interactionSystem.updateCrosshair(); // Ensure crosshair updates after state changes
         }
     }
 
@@ -406,13 +467,32 @@ export class CarRepairSystem {
      }
      updateEngineZonePrompt() {
          if (!this.engineZone?.userData) return;
-         if (!this.repairState.hoodOpenedWithCrowbar || !this.carInteraction.isHoodOpen) { this.engineZone.userData.prompt = ""; return; }
-         if (!this.repairState.engineRepaired) { this.engineZone.userData.prompt = this.repairState.hasToolbox ? "Press E to repair engine" : "Need tools to fix this"; }
-         else if (!this.repairState.carFueled) { this.engineZone.userData.prompt = (this.repairState.hasGasCanBody && this.repairState.hasGasCanCap) ? "Press E to add fuel" : "Need gasoline"; }
-         else { this.engineZone.userData.prompt = "Engine looks ready"; }
+
+         if (!this.repairState.hoodOpenedWithCrowbar || !this.carInteraction.isHoodOpen){
+            this.engineZone.userData.prompt = "";
+            return;
+        }
+
+        if (!this.repairState.engineRepaired){
+            this.engineZone.userData.prompt = this.repairState.hasToolbox ? "Press E to repair engine" : "Need tools to fix this"; 
+        }
+        else if (this.repairState.engineRepaired && !this.repairState.needsGasTriggered) {
+             // Engine fixed, but player needs to test start via door first
+             this.engineZone.userData.prompt = "Engine looks repaired"; // Or "" for no prompt
+        }
+         // *** END NEW CHECK ***
+        else if (!this.repairState.carFueled) {
+             // Engine repaired, gas trigger happened, now check for parts
+             this.engineZone.userData.prompt = (this.repairState.hasGasCanBody && this.repairState.hasGasCanCap) ? "Press E to add fuel" : "Need fuel"; // Updated prompt for missing parts
+         }
+        else { this.engineZone.userData.prompt = "Engine looks ready"; }
      }
+
      updateHoodPrompt() {
           if (!this.hoodObject?.userData) return;
+
+          if(!this.repairState.driverDoorInteractedFirstTime)this.repairState.driverDoorInteractedFirstTime = true;
+
           if (!this.carInteraction.isHoodOpen) {
               if (this.repairState.needsCrowbar && !this.repairState.hasCrowbar) { this.hoodObject.userData.prompt = "Need something to pry this open"; }
               else if (this.repairState.needsCrowbar && this.repairState.hasCrowbar) { this.hoodObject.userData.prompt = "Press E to pry open hood"; }
@@ -432,6 +512,7 @@ export class CarRepairSystem {
           else { this.driverDoorZone.userData.prompt = "Press E to enter car"; }
      }
     consumeCrowbar() { logger.log('   Crowbar used on hood.'); }
+    
     onHoodAnimationComplete(isOpen) {
         logger.log(`🚗 Hood animation complete. New state isOpen: ${isOpen}`);
         if (isOpen && this.repairState.justUsedCrowbar) {

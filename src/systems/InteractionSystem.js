@@ -1801,9 +1801,26 @@ class InteractionSystem {
                                     interactionPrompt = interactableData.prompt || typeInfo.prompt || "Press E to use plank";
                                 }
                             }
-                            else if (type === 'car_hood' || type === 'car_driver_door_zone' || type === 'car_engine_zone') {
-                                interactionPrompt = interactableData.prompt || typeInfo.prompt || "Press E"; // Prioritize userData prompt
+                            else if (type === 'car_hood'){
+                                const carRepairSystem = window.gameControls?.carRepairSystem;
+                                // Check if the door has been interacted with
+                                if (carRepairSystem && !carRepairSystem.repairState.driverDoorInteractedFirstTime) {
+                                    // Door NOT interacted with yet:
+                                    isInteractableNow = false; // Visually disable interaction
+                                    interactionPrompt = '';    // <<< Explicitly clear the prompt text
+                                    // Clear other potential messages too, just in case
+                                    blockedMessage = '';
+                                    disabledPrompt = '';
+                                } else {
+                                    // Door HAS been interacted with:
+                                    // Proceed with normal prompt logic for the hood
+                                    interactionPrompt = interactableData.prompt || typeInfo.prompt || "Press E";
+                                    // isInteractableNow remains true (unless blocked by another condition specific to the hood itself)
+                                }
                             } 
+                            else if(type === 'car_driver_door_zone' || type === 'car_engine_zone'){
+                                interactionPrompt = interactableData.prompt || typeInfo.prompt || "Press E"; // Prioritize userData prompt
+                            }
                             else if (type === 'gas_can_part') {
                                 interactionPrompt = `Press E to pick up ${interactableData.itemName || 'part'}`; // More specific
                             }
