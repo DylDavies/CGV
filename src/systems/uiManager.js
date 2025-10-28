@@ -71,10 +71,11 @@ export class UIManager {
         }
 
         if (this.uiElements.clueScreen) this.uiElements.clueScreen.style.display = 'none';
-        
+
         this._addMenuEventListeners();
         this._setupSettingsTabs();
         this._setupVideoSettings();
+        this._setupAudioSettings();
         console.log('✅ UI Manager Initialized');
         this.isInitialized = true;
 
@@ -181,7 +182,13 @@ export class UIManager {
         // Load settings from localStorage or use defaults
         this.settings = {
             antialiasing: false,
-            quality: 'medium'
+            quality: 'medium',
+            audio: {
+                master: 1.0,
+                music: 0.9,
+                sfx: 0.95,
+                ambience: 0.5
+            }
         };
 
         const saved = localStorage.getItem('gameSettings');
@@ -189,6 +196,14 @@ export class UIManager {
             this.settings = JSON.parse(saved);
             if (!this.settings.quality) {
                 this.settings.quality = 'medium';
+            }
+            if (!this.settings.audio) {
+                this.settings.audio = {
+                    master: 1.0,
+                    music: 0.9,
+                    sfx: 0.95,
+                    ambience: 0.5
+                };
             }
         }
 
@@ -234,6 +249,101 @@ export class UIManager {
             if (qualitySelect) qualitySelect.value = this.settings.quality;
             if (aaToggle) aaToggle.checked = this.settings.antialiasing;
         }
+    }
+
+    _setupAudioSettings() {
+        // Load settings from localStorage or use defaults
+        const saved = localStorage.getItem('gameSettings');
+        if (saved) {
+            try {
+                const parsed = JSON.parse(saved);
+                if (parsed.audio) {
+                    this.settings.audio = parsed.audio;
+                }
+            } catch (e) {
+                console.error('Failed to parse audio settings:', e);
+            }
+        }
+
+        // Set up audio sliders in settings screen
+        const masterVolumeSlider = document.getElementById('master-volume');
+        const musicVolumeSlider = document.getElementById('music-volume');
+        const sfxVolumeSlider = document.getElementById('sfx-volume');
+        const ambienceVolumeSlider = document.getElementById('ambience-volume');
+
+        // Initialize sliders with saved values and update display
+        if (masterVolumeSlider) {
+            const masterValue = this.settings.audio.master !== undefined ? this.settings.audio.master : 1.0;
+            masterVolumeSlider.value = masterValue * 100;
+            // Update the display value
+            const masterDisplay = document.querySelector('label[for="master-volume"] .volume-value');
+            if (masterDisplay) masterDisplay.textContent = Math.round(masterValue * 100) + '%';
+
+            masterVolumeSlider.addEventListener('input', (e) => {
+                const value = e.target.value / 100;
+                this.settings.audio.master = value;
+                const displayEl = document.querySelector('label[for="master-volume"] .volume-value');
+                if (displayEl) displayEl.textContent = e.target.value + '%';
+                this._applyAudioSettings();
+            });
+        }
+
+        if (musicVolumeSlider) {
+            const musicValue = this.settings.audio.music !== undefined ? this.settings.audio.music : 0.9;
+            musicVolumeSlider.value = musicValue * 100;
+            // Update the display value
+            const musicDisplay = document.querySelector('label[for="music-volume"] .volume-value');
+            if (musicDisplay) musicDisplay.textContent = Math.round(musicValue * 100) + '%';
+
+            musicVolumeSlider.addEventListener('input', (e) => {
+                const value = e.target.value / 100;
+                this.settings.audio.music = value;
+                const displayEl = document.querySelector('label[for="music-volume"] .volume-value');
+                if (displayEl) displayEl.textContent = e.target.value + '%';
+                this._applyAudioSettings();
+            });
+        }
+
+        if (sfxVolumeSlider) {
+            const sfxValue = this.settings.audio.sfx !== undefined ? this.settings.audio.sfx : 0.95;
+            sfxVolumeSlider.value = sfxValue * 100;
+            // Update the display value
+            const sfxDisplay = document.querySelector('label[for="sfx-volume"] .volume-value');
+            if (sfxDisplay) sfxDisplay.textContent = Math.round(sfxValue * 100) + '%';
+
+            sfxVolumeSlider.addEventListener('input', (e) => {
+                const value = e.target.value / 100;
+                this.settings.audio.sfx = value;
+                const displayEl = document.querySelector('label[for="sfx-volume"] .volume-value');
+                if (displayEl) displayEl.textContent = e.target.value + '%';
+                this._applyAudioSettings();
+            });
+        }
+
+        if (ambienceVolumeSlider) {
+            const ambienceValue = this.settings.audio.ambience !== undefined ? this.settings.audio.ambience : 0.5;
+            ambienceVolumeSlider.value = ambienceValue * 100;
+            // Update the display value
+            const ambienceDisplay = document.querySelector('label[for="ambience-volume"] .volume-value');
+            if (ambienceDisplay) ambienceDisplay.textContent = Math.round(ambienceValue * 100) + '%';
+
+            ambienceVolumeSlider.addEventListener('input', (e) => {
+                const value = e.target.value / 100;
+                this.settings.audio.ambience = value;
+                const displayEl = document.querySelector('label[for="ambience-volume"] .volume-value');
+                if (displayEl) displayEl.textContent = e.target.value + '%';
+                this._applyAudioSettings();
+            });
+        }
+    }
+
+    _applyAudioSettings() {
+        this._saveSettings();
+        // Dispatch event that AudioManager can listen to
+        window.dispatchEvent(new CustomEvent('audiochange', {
+            detail: { audio: this.settings.audio }
+        }));
+        console.log('🔊 Audio settings updated:', this.settings.audio);
     }
 
     _saveSettings() {

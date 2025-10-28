@@ -66,6 +66,7 @@ class PauseMenu {
 
             <div class="settings-tabs" style="margin-bottom: 20px;">
                 <button class="tab-btn active" data-tab="controls" style="background: #555; border: 1px solid #555; color: #fff; padding: 10px 20px; cursor: pointer;">Controls</button>
+                <button class="tab-btn" data-tab="audio" style="background: #333; border: 1px solid #555; color: #aaa; padding: 10px 20px; cursor: pointer;">Audio</button>
                 <button class="tab-btn" data-tab="video" style="background: #333; border: 1px solid #555; color: #aaa; padding: 10px 20px; cursor: pointer;">Video</button>
             </div>
 
@@ -82,6 +83,58 @@ class PauseMenu {
                         <li style="display: flex; justify-content: space-between; padding: 10px; border-bottom: 1px solid #333;"><span style="color: #ff6666; font-weight: bold;">F10</span><span>Fly Mode (Dev)</span></li>
                         <li style="display: flex; justify-content: space-between; padding: 10px; border-bottom: 1px solid #333;"><span style="color: #ff6666; font-weight: bold;">F11</span><span>Stats (Dev)</span></li>
                     </ul>
+                </div>
+
+                <div id="audio-tab" class="tab-content" style="display: none;">
+                    <h2 style="margin-bottom: 15px;">Audio Settings</h2>
+
+                    <!-- Master Volume -->
+                    <div style="background: rgba(0,0,0,0.3); padding: 15px; margin-bottom: 15px; text-align: left; max-width: 400px; margin: 0 auto 15px auto;">
+                        <div style="display: flex; flex-direction: column; gap: 10px;">
+                            <label style="display: flex; justify-content: space-between; align-items: center; font-size: 16px; font-weight: bold;">
+                                <span>Master Volume</span>
+                                <span class="master-volume-value" style="color: #ff6666; font-weight: bold; min-width: 45px; text-align: right;">100%</span>
+                            </label>
+                            <input type="range" id="master-volume" min="0" max="100" value="100" style="width: 100%; height: 6px; border-radius: 3px; background: #333; outline: none; -webkit-appearance: none; appearance: none; cursor: pointer;">
+                        </div>
+                        <p style="margin: 8px 0 0 0; font-size: 12px; color: #aaa;">Overall game volume level</p>
+                    </div>
+
+                    <!-- Music Volume -->
+                    <div style="background: rgba(0,0,0,0.3); padding: 15px; margin-bottom: 15px; text-align: left; max-width: 400px; margin: 0 auto 15px auto;">
+                        <div style="display: flex; flex-direction: column; gap: 10px;">
+                            <label style="display: flex; justify-content: space-between; align-items: center; font-size: 16px; font-weight: bold;">
+                                <span>Music Volume</span>
+                                <span class="music-volume-value" style="color: #ff6666; font-weight: bold; min-width: 45px; text-align: right;">90%</span>
+                            </label>
+                            <input type="range" id="music-volume" min="0" max="100" value="90" style="width: 100%; height: 6px; border-radius: 3px; background: #333; outline: none; -webkit-appearance: none; appearance: none; cursor: pointer;">
+                        </div>
+                        <p style="margin: 8px 0 0 0; font-size: 12px; color: #aaa;">Background music</p>
+                    </div>
+
+                    <!-- SFX Volume -->
+                    <div style="background: rgba(0,0,0,0.3); padding: 15px; margin-bottom: 15px; text-align: left; max-width: 400px; margin: 0 auto 15px auto;">
+                        <div style="display: flex; flex-direction: column; gap: 10px;">
+                            <label style="display: flex; justify-content: space-between; align-items: center; font-size: 16px; font-weight: bold;">
+                                <span>Effects Volume</span>
+                                <span class="sfx-volume-value" style="color: #ff6666; font-weight: bold; min-width: 45px; text-align: right;">95%</span>
+                            </label>
+                            <input type="range" id="sfx-volume" min="0" max="100" value="95" style="width: 100%; height: 6px; border-radius: 3px; background: #333; outline: none; -webkit-appearance: none; appearance: none; cursor: pointer;">
+                        </div>
+                        <p style="margin: 8px 0 0 0; font-size: 12px; color: #aaa;">Sound effects and interactions</p>
+                    </div>
+
+                    <!-- Ambience Volume -->
+                    <div style="background: rgba(0,0,0,0.3); padding: 15px; margin-bottom: 15px; text-align: left; max-width: 400px; margin: 0 auto 15px auto;">
+                        <div style="display: flex; flex-direction: column; gap: 10px;">
+                            <label style="display: flex; justify-content: space-between; align-items: center; font-size: 16px; font-weight: bold;">
+                                <span>Ambience Volume</span>
+                                <span class="ambience-volume-value" style="color: #ff6666; font-weight: bold; min-width: 45px; text-align: right;">50%</span>
+                            </label>
+                            <input type="range" id="ambience-volume" min="0" max="100" value="50" style="width: 100%; height: 6px; border-radius: 3px; background: #333; outline: none; -webkit-appearance: none; appearance: none; cursor: pointer;">
+                        </div>
+                        <p style="margin: 8px 0 0 0; font-size: 12px; color: #aaa;">Environmental and atmospheric sounds</p>
+                    </div>
                 </div>
 
                 <div id="video-tab" class="tab-content" style="display: none;">
@@ -206,6 +259,95 @@ class PauseMenu {
                 this.applySettings();
             }
         });
+
+        // Add audio slider event listeners
+        this.addAudioListeners(menuContent);
+    }
+
+    addAudioListeners(menuContent) {
+        const masterVolumeSlider = menuContent.querySelector('#master-volume');
+        const musicVolumeSlider = menuContent.querySelector('#music-volume');
+        const sfxVolumeSlider = menuContent.querySelector('#sfx-volume');
+        const ambienceVolumeSlider = menuContent.querySelector('#ambience-volume');
+
+        // Initialize sliders with saved values and update display
+        if (masterVolumeSlider) {
+            const masterValue = this.settings.audio.master !== undefined ? this.settings.audio.master : 1.0;
+            masterVolumeSlider.value = masterValue * 100;
+            const masterDisplay = menuContent.querySelector('.master-volume-value');
+            if (masterDisplay) masterDisplay.textContent = Math.round(masterValue * 100) + '%';
+        }
+        if (musicVolumeSlider) {
+            const musicValue = this.settings.audio.music !== undefined ? this.settings.audio.music : 0.9;
+            musicVolumeSlider.value = musicValue * 100;
+            const musicDisplay = menuContent.querySelector('.music-volume-value');
+            if (musicDisplay) musicDisplay.textContent = Math.round(musicValue * 100) + '%';
+        }
+        if (sfxVolumeSlider) {
+            const sfxValue = this.settings.audio.sfx !== undefined ? this.settings.audio.sfx : 0.95;
+            sfxVolumeSlider.value = sfxValue * 100;
+            const sfxDisplay = menuContent.querySelector('.sfx-volume-value');
+            if (sfxDisplay) sfxDisplay.textContent = Math.round(sfxValue * 100) + '%';
+        }
+        if (ambienceVolumeSlider) {
+            const ambienceValue = this.settings.audio.ambience !== undefined ? this.settings.audio.ambience : 0.5;
+            ambienceVolumeSlider.value = ambienceValue * 100;
+            const ambienceDisplay = menuContent.querySelector('.ambience-volume-value');
+            if (ambienceDisplay) ambienceDisplay.textContent = Math.round(ambienceValue * 100) + '%';
+        }
+
+        // Master volume
+        if (masterVolumeSlider) {
+            masterVolumeSlider.addEventListener('input', (e) => {
+                const value = e.target.value / 100;
+                this.settings.audio.master = value;
+                const displayEl = menuContent.querySelector('.master-volume-value');
+                if (displayEl) displayEl.textContent = e.target.value + '%';
+                this.applyAudioSettings();
+            });
+        }
+
+        // Music volume
+        if (musicVolumeSlider) {
+            musicVolumeSlider.addEventListener('input', (e) => {
+                const value = e.target.value / 100;
+                this.settings.audio.music = value;
+                const displayEl = menuContent.querySelector('.music-volume-value');
+                if (displayEl) displayEl.textContent = e.target.value + '%';
+                this.applyAudioSettings();
+            });
+        }
+
+        // SFX volume
+        if (sfxVolumeSlider) {
+            sfxVolumeSlider.addEventListener('input', (e) => {
+                const value = e.target.value / 100;
+                this.settings.audio.sfx = value;
+                const displayEl = menuContent.querySelector('.sfx-volume-value');
+                if (displayEl) displayEl.textContent = e.target.value + '%';
+                this.applyAudioSettings();
+            });
+        }
+
+        // Ambience volume
+        if (ambienceVolumeSlider) {
+            ambienceVolumeSlider.addEventListener('input', (e) => {
+                const value = e.target.value / 100;
+                this.settings.audio.ambience = value;
+                const displayEl = menuContent.querySelector('.ambience-volume-value');
+                if (displayEl) displayEl.textContent = e.target.value + '%';
+                this.applyAudioSettings();
+            });
+        }
+    }
+
+    applyAudioSettings() {
+        this.saveSettings();
+        // Dispatch event that AudioManager can listen to
+        window.dispatchEvent(new CustomEvent('audiochange', {
+            detail: { audio: this.settings.audio }
+        }));
+        console.log('🔊 Audio settings updated:', this.settings.audio);
     }
 
     setupControls() {
@@ -315,19 +457,40 @@ class PauseMenu {
                 if (this.settings.antialiasing === undefined) {
                     this.settings.antialiasing = false;
                 }
+                // Audio settings with defaults
+                if (this.settings.audio === undefined) {
+                    this.settings.audio = {
+                        master: 1.0,
+                        music: 0.9,
+                        sfx: 0.95,
+                        ambience: 0.5
+                    };
+                }
                 console.log('📂 Settings loaded from localStorage:', this.settings);
             } catch (e) {
                 console.error('❌ Failed to load settings, using defaults:', e);
                 this.settings = {
                     antialiasing: false,
-                    quality: 'medium'
+                    quality: 'medium',
+                    audio: {
+                        master: 1.0,
+                        music: 0.9,
+                        sfx: 0.95,
+                        ambience: 0.5
+                    }
                 };
             }
         } else {
             // No saved settings, use defaults
             this.settings = {
                 antialiasing: false,
-                quality: 'medium'
+                quality: 'medium',
+                audio: {
+                    master: 1.0,
+                    music: 0.9,
+                    sfx: 0.95,
+                    ambience: 0.5
+                }
             };
             console.log('📂 No saved settings, using defaults');
         }

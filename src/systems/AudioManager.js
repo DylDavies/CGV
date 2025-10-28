@@ -45,7 +45,60 @@ class AudioManager {
             ambience: 0.5,
         };
 
+        // Apply saved audio settings if available
+        this._loadAudioSettings();
+
+        // Listen for audio setting changes from UI
+        window.addEventListener('audiochange', (event) => {
+            const audioSettings = event.detail.audio;
+            if (audioSettings !== undefined) {
+                const masterVolume = audioSettings.master !== undefined ? audioSettings.master : 1.0;
+                this.globalVolume.music = (audioSettings.music !== undefined ? audioSettings.music : 0.9) * masterVolume;
+                this.globalVolume.sfx = (audioSettings.sfx !== undefined ? audioSettings.sfx : 0.95) * masterVolume;
+                this.globalVolume.ambience = (audioSettings.ambience !== undefined ? audioSettings.ambience : 0.5) * masterVolume;
+
+                // Update currently playing sounds
+                this._updateActiveSoundsVolume();
+
+                console.log('🔊 Audio settings applied from UI:', this.globalVolume);
+            }
+        });
+
         console.log('🔊 AudioManager initialized');
+    }
+
+    _loadAudioSettings() {
+        const saved = localStorage.getItem('gameSettings');
+        if (saved) {
+            try {
+                const settings = JSON.parse(saved);
+                if (settings.audio) {
+                    const master = settings.audio.master !== undefined ? settings.audio.master : 1.0;
+                    this.globalVolume.music = (settings.audio.music !== undefined ? settings.audio.music : 0.9) * master;
+                    this.globalVolume.sfx = (settings.audio.sfx !== undefined ? settings.audio.sfx : 0.95) * master;
+                    this.globalVolume.ambience = (settings.audio.ambience !== undefined ? settings.audio.ambience : 0.5) * master;
+                    console.log('🔊 Audio settings loaded from storage:', this.globalVolume);
+                }
+            } catch (e) {
+                console.error('Failed to load audio settings:', e);
+            }
+        }
+    }
+
+    _updateActiveSoundsVolume() {
+        // Update volume for all currently playing sounds
+        for (const [id, sound] of this.activeSounds.entries()) {
+            if (sound && sound.isPlaying) {
+                // Estimate the type based on sound ID
+                let type = 'sfx'; // default
+                if (id.toLowerCase().includes('music')) {
+                    type = 'music';
+                } else if (id.toLowerCase().includes('ambient') || id.includes('ambient')) {
+                    type = 'ambience';
+                }
+                sound.setVolume(this.globalVolume[type] || this.globalVolume.sfx);
+            }
+        }
     }
 
     async _loadSound(path, type = 'sfx', loop = false, initialVolume = 1.0) {
