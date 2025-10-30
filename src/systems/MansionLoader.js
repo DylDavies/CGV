@@ -405,7 +405,7 @@ class MansionLoader {
         this.model.traverse((node) => {
             // Check if it's a page by custom property OR by name pattern
             const isPageByType = node.isMesh && node.userData.type === 'page';
-            const isPageByName = node.name.startsWith('S_Page') && node.name.match(/S_Page\d+/);
+            const isPageByName = node.name.startsWith('S_Page') && node.name.match(/^S_Page\d+$/);
 
             if (isPageByType || (isPageByName && node.isMesh)) {
                 console.log(`✨ Found page: ${node.name}. Applying glow effect.`);

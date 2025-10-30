@@ -1054,18 +1054,31 @@ class GameManager {
         }
     }
 
-    consumePotion(potion, itemIndex) {
+    async consumePotion(potion, itemIndex) {
+        console.log(`🧪 Consuming potion: ${potion.name}, effect: ${potion.effect}`);
+
         // Remove potion from inventory
         this.inventory.splice(itemIndex, 1);
         this.updateUI();
 
-        // Update popup if it's visible
+        // Close inventory popup if visible
         if (this.ui.inventoryPopup && this.ui.inventoryPopup.style.display === 'block') {
-            this.updateInventoryPopup();
+            this.toggleInventoryPopup();
         }
 
-        // Apply potion effects (silently)
+        // Apply potion effects
         switch (potion.effect) {
+            case 'annie_death':
+                // Annie's "freedom" potion kills the player
+                console.log('💀 Annie death potion consumed - triggering death sequence');
+                this.showHint("The potion tastes sweet... then bitter... then...", 3000);
+
+                // Wait a moment before triggering death
+                setTimeout(async () => {
+                    console.log('💀 Calling onPlayerDeath("annie_potion")');
+                    await this.onPlayerDeath('annie_potion');
+                }, 3000);
+                break;
             case 'vision':
                 // Could temporarily increase interaction range or reveal hidden objects
                 break;
@@ -1490,7 +1503,13 @@ class GameManager {
 
         // Show appropriate death screen based on death type
         const deathEvent = `endings.death_${deathType}`;
-        await window.gameControls.narrativeManager.triggerEvent(deathEvent);
+        console.log(`💀 Triggering death event: ${deathEvent}`);
+
+        if (window.gameControls && window.gameControls.narrativeManager) {
+            await window.gameControls.narrativeManager.triggerEvent(deathEvent);
+        } else {
+            console.error('💀 NarrativeManager not found!');
+        }
 
         // R key restart is handled by PlayerControls.js onKeyDown handler
         console.log('💀 Press R to restart the game');

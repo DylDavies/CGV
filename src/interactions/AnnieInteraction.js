@@ -159,12 +159,20 @@ class AnnieInteraction {
         this.interactionSystem = interactionSystem;
 
         // --- Get direct references to core systems ---
+        console.log("interactionSystem", interactionSystem);
         this.gameManager = interactionSystem.gameManager;
         this.camera = interactionSystem.camera;
         this.controls = interactionSystem.controls;
+        this.audioManager = interactionSystem.audioManager;
 
         // Dialogue tree for Annie
         this.dialogueTree = null;
+
+        // Track which endings have been reached (allows re-exploring different branches)
+        this.completedEndings = new Set();
+
+        // Current playing audio ID for dialogue
+        this.currentDialogueAudio = null;
     }
 
     // --- Public Methods (called by InteractionSystem) ---
@@ -177,6 +185,63 @@ class AnnieInteraction {
      */
     isAnnieBlock(interactableData) {
         return interactableData && interactableData.data.type === 'annie';
+    }
+
+    /**
+     * Maps node IDs to their audio file paths
+     * Adjust these paths based on where your m4a files are located
+     */
+    getAudioPathForNode(nodeId) {
+        const audioBasePath = '/public/audio/annie/';
+        const audioMap = {
+            'START': `${audioBasePath}START.m4a`,
+            '1.0_FREE': `${audioBasePath}1.0_FREE.m4a`,
+            '1.1_POTION_WIN': `${audioBasePath}1.1_POTION_WIN.m4a`,
+            '1.2_POTION_LOSE': `${audioBasePath}1.2_POTION_LOSE.m4a`,
+            '2.0_PAGE': `${audioBasePath}2.0_PAGE.m4a`,
+            '2.1_PAGE_WIN': `${audioBasePath}2.1_PAGE_WIN.m4a`,
+            '2.1.1_SHADOW_RIDDLE': `${audioBasePath}2.1.1_SHADOW_RIDDLE.m4a`,
+            '2.1.1.1_CHEAT': `${audioBasePath}2.1.1.1_CHEAT.m4a`,
+            '2.1.1.2_CALL_OUT': `${audioBasePath}2.1.1.2_CALL_OUT.m4a`,
+            '2.1.1.3_SUPER_ENDING': `${audioBasePath}2.1.1.3_SUPER_ENDING.m4a`,
+            '2.1.2_PAGE_ONLY': `${audioBasePath}2.1.2_PAGE_ONLY.m4a`,
+            '2.2_PAGE_RETRY': `${audioBasePath}2.2_PAGE_RETRY.m4a`,
+            '2.2.1_REFUSAL': `${audioBasePath}2.2.1_REFUSAL.m4a`,
+            '3.0_WHO': `${audioBasePath}3.0_WHO.m4a`,
+            '3.1_REFUSAL': `${audioBasePath}3.1_REFUSAL.m4a`,
+            '3.2_NICE': `${audioBasePath}3.2_NICE.m4a`,
+            '3.2.1_FRIEND_ENDING': `${audioBasePath}3.2.1_FRIEND_ENDING.m4a`,
+            '3.3_DIRECT': `${audioBasePath}3.3_DIRECT.m4a`
+        };
+        return audioMap[nodeId] || null;
+    }
+
+    /**
+     * Plays audio for a dialogue node
+     */
+    playDialogueAudio(nodeId) {
+        // Stop current audio if playing
+        this.stopDialogueAudio();
+
+        const audioPath = this.getAudioPathForNode(nodeId);
+        console.log("Audio Path: ", audioPath);
+        if (audioPath && this.audioManager) {
+            const audioId = `annie_dialogue_${nodeId}`;
+            console.log(`🔊 Playing Annie dialogue audio: ${audioId} from ${audioPath}`);
+            this.audioManager.playSound(audioId, audioPath, false, 0.7);
+            this.currentDialogueAudio = audioId;
+        }
+    }
+
+    /**
+     * Stops currently playing dialogue audio
+     */
+    stopDialogueAudio() {
+        if (this.currentDialogueAudio && this.audioManager) {
+            console.log(`🔇 Stopping Annie dialogue audio: ${this.currentDialogueAudio}`);
+            this.audioManager.stopSound(this.currentDialogueAudio, 200); // 200ms fade out
+            this.currentDialogueAudio = null;
+        }
     }
 
     /**
@@ -216,12 +281,12 @@ class AnnieInteraction {
             },
             "1.2_POTION_LOSE": {
                 "speaker": "Annie",
-                "text": "Wrong! But you *tried*... Here, this will make you 'free' anyway. Hehe.",
+                "text": "Wrong! Are you trying? Here, this will make you 'free' anyway. Hehe.",
                 "ending": "ENDING_1_POTION"
             },
             "2.0_PAGE": {
                 "speaker": "Annie",
-                "text": "The page? But it's *my* paper. Hmm... I'll play you for it! Answer my riddle. Win, and it's yours. Lose, and... well, you just lose! Hehe.\n\n*'What is always in front of you but can't be seen?'*",
+                "text": "The page? But it's *my* page. Hmm... I'll play you for it! Answer my riddle. Win, and it's yours. Lose, and... well, you just lose! Hehe.\n\n*'What is always in front of you but can't be seen?'*",
                 "options": [
                     { "text": "The future.", "next": "2.1_PAGE_WIN" },
                     { "text": "The air.", "next": "2.2_PAGE_RETRY" },
@@ -272,7 +337,7 @@ class AnnieInteraction {
             },
             "2.2_PAGE_RETRY": {
                 "speaker": "Annie",
-                "text": "Wrong! Wrong! *So* wrong! Hehe. Do you want to try again? Or are you too silly?",
+                "text": "Wrong! Wrong! *So* wrong! Hehe. Do you want to try again?",
                 "options": [
                     { "text": "I'll try again.", "next": "2.0_PAGE" },
                     { "text": "No, this is pointless.", "next": "2.2.1_REFUSAL" }
@@ -324,10 +389,24 @@ class AnnieInteraction {
         for (const [nodeId, nodeData] of Object.entries(dialogueData)) {
             const options = {};
 
-            // Handle endings
+            // Add audio playback on node enter
+            options.onEnter = () => {
+                this.playDialogueAudio(nodeId);
+            };
+
+            // Handle endings and audio stop
             if (nodeData.ending) {
-                options.onExit = () => {
+                const originalOnExit = () => {
                     this.handleEnding(nodeData.ending, pageObject, userData);
+                };
+                options.onExit = () => {
+                    this.stopDialogueAudio();
+                    originalOnExit();
+                };
+            } else {
+                // Stop audio when leaving non-ending nodes
+                options.onExit = () => {
+                    this.stopDialogueAudio();
                 };
             }
 
@@ -355,6 +434,17 @@ class AnnieInteraction {
         console.log(`🎎 Annie ending: ${endingType}`);
         this.stopLookingAtAnnie();
 
+        // Check if this ending has already been reached
+        if (this.completedEndings.has(endingType)) {
+            console.log(`🎎 Ending ${endingType} already seen - showing message`);
+            this.interactionSystem.showMessage("Annie giggles... 'We already played that game. Try something different!'");
+            return;
+        }
+
+        // Mark this ending as completed
+        this.completedEndings.add(endingType);
+        console.log(`🎎 Completed endings: ${Array.from(this.completedEndings).join(', ')}`);
+
         switch (endingType) {
             case "ENDING_1_POTION":
                 // Give player a potion (freedom potion)
@@ -362,7 +452,8 @@ class AnnieInteraction {
                     name: 'Freedom Potion',
                     type: 'potion',
                     description: 'A mysterious potion given by Annie. What does freedom taste like?',
-                    effect: 'vision'
+                    effect: 'annie_death', // Special effect to trigger death
+                    pageId: userData.pageId // Store page ID for death handling
                 });
                 this.interactionSystem.showMessage("Annie gives you a strange potion...");
                 break;
@@ -400,8 +491,15 @@ class AnnieInteraction {
                 break;
 
             case "ENDING_4_REFUSAL":
-                // Player gets nothing
-                this.interactionSystem.showMessage("You leave empty-handed.");
+                // Player refuses - Annie kills them
+                console.log('💀 Annie refusal - player will die');
+                this.interactionSystem.showMessage("Annie's face twists into a horrible grimace...");
+
+                // Trigger death after a short delay
+                setTimeout(async () => {
+                    console.log('💀 Calling onPlayerDeath("annie_refusal")');
+                    await this.gameManager.onPlayerDeath('annie_refusal');
+                }, 2000);
                 break;
 
             default:
@@ -536,6 +634,13 @@ class AnnieInteraction {
      * @param {object} userData - The S_Page4 userData.
      */
     handleAnniePageInteraction(pageObject, userData) {
+        // Check if all endings have been explored (4 total endings)
+        if (this.completedEndings.size >= 4) {
+            console.log('🎎 All Annie endings explored - blocking re-entry');
+            this.interactionSystem.showMessage("You've already explored everything Annie has to offer.");
+            return;
+        }
+
         // Clear all prompts immediately
         this.clearPrompts();
 
@@ -559,15 +664,15 @@ class AnnieInteraction {
             return;
         }
 
-        // Make camera look at Annie
-        this.lookAtAnnie(annie);
+        // Make camera look at Annie and wait for animation to complete before showing dialogue
+        this.lookAtAnnie(annie, () => {
+            // Build and start the dialogue tree after camera focuses
+            this.dialogueTree = this.buildAnnieDialogueTree(pageObject, userData);
+            this.dialogueTree.start();
 
-        // Build and start the dialogue tree
-        this.dialogueTree = this.buildAnnieDialogueTree(pageObject, userData);
-        this.dialogueTree.start();
-
-        // Show the first dialogue node
-        this.showDialogue();
+            // Show the first dialogue node
+            this.showDialogue();
+        });
     }
 
 
@@ -687,8 +792,125 @@ class AnnieInteraction {
         dialogueBox.appendChild(dialogueText);
         dialogueBox.appendChild(optionsContainer);
 
-        // If there are edges (choices), show them
-        if (node.edges && node.edges.length > 0) {
+        // Check if this node requires text input instead of buttons
+        const isTextInputNode = (node.id === '1.0_FREE' || node.id === '2.0_PAGE');
+
+        // If this is a text input node, show text input instead of buttons
+        if (isTextInputNode) {
+            // Create text input field
+            const inputField = document.createElement('input');
+            inputField.type = 'text';
+            inputField.placeholder = 'Type your answer here...';
+            inputField.style.cssText = `
+                width: 100%;
+                padding: 12px;
+                font-size: 16px;
+                background: rgba(20, 20, 20, 0.8);
+                color: #e0e0e0;
+                border: 2px solid #8b4513;
+                border-radius: 5px;
+                margin-bottom: 10px;
+                font-family: 'Courier New', monospace;
+            `;
+
+            // Create submit button
+            const submitButton = document.createElement('button');
+            submitButton.textContent = 'Submit Answer';
+            submitButton.style.cssText = `
+                width: 100%;
+                padding: 12px 20px;
+                font-size: 14px;
+                background: rgba(139, 69, 19, 0.5);
+                color: #e0e0e0;
+                border: 1px solid #8b4513;
+                border-radius: 5px;
+                cursor: pointer;
+                transition: all 0.2s;
+            `;
+            submitButton.onmouseover = () => {
+                submitButton.style.background = 'rgba(139, 69, 19, 0.7)';
+                submitButton.style.borderColor = '#d4af37';
+            };
+            submitButton.onmouseout = () => {
+                submitButton.style.background = 'rgba(139, 69, 19, 0.5)';
+                submitButton.style.borderColor = '#8b4513';
+            };
+
+            // Handle text input submission
+            const handleSubmit = () => {
+                const userInput = inputField.value.trim().toLowerCase();
+                let targetNodeId = null;
+
+                // Determine which node to go to based on input
+                if (node.id === '1.0_FREE') {
+                    // Check if input contains "coffin"
+                    if (userInput.includes('coffin')) {
+                        targetNodeId = '1.1_POTION_WIN';
+                    } else {
+                        targetNodeId = '1.2_POTION_LOSE';
+                    }
+                } else if (node.id === '2.0_PAGE') {
+                    // Check if input contains "future"
+                    if (userInput.includes('future')) {
+                        targetNodeId = '2.1_PAGE_WIN';
+                    } else {
+                        targetNodeId = '2.2_PAGE_RETRY';
+                    }
+                }
+
+                if (targetNodeId) {
+                    // Remove dialogue UI
+                    this.removeDialogueUI();
+
+                    // Navigate to the next node
+                    const targetNode = this.dialogueTree.getNode(targetNodeId);
+                    if (targetNode) {
+                        this.dialogueTree.navigateToNode(targetNodeId);
+
+                        // Show the next dialogue node
+                        setTimeout(() => {
+                            this.showDialogue();
+                        }, 100);
+                    } else {
+                        // No target node, end dialogue
+                        this.endDialogue();
+                    }
+                }
+            };
+
+            // Submit on button click
+            submitButton.onclick = handleSubmit;
+
+            // Submit on Enter key
+            inputField.addEventListener('keypress', (e) => {
+                if (e.key === 'Enter') {
+                    e.preventDefault();
+                    handleSubmit();
+                }
+            });
+
+            // Stop propagation of keyboard events from input field (bubble phase)
+            // This prevents game controls from receiving the events after the input handles them
+            inputField.addEventListener('keydown', (e) => {
+                e.stopPropagation();
+            }, false);
+            inputField.addEventListener('keyup', (e) => {
+                e.stopPropagation();
+            }, false);
+            inputField.addEventListener('keypress', (e) => {
+                e.stopPropagation();
+            }, false);
+
+            optionsContainer.appendChild(inputField);
+            optionsContainer.appendChild(submitButton);
+
+            // Focus the input field immediately
+            setTimeout(() => {
+                inputField.focus();
+            }, 100);
+        }
+        // If there are edges (choices), show them as buttons
+        else if (node.edges && node.edges.length > 0) {
             const availableEdges = node.edges.filter(edge => edge.isAvailable());
 
             availableEdges.forEach((edge, index) => {
@@ -772,11 +994,16 @@ class AnnieInteraction {
         // CRITICAL: Add document-level capture listener to intercept ALL keyboard events
         // This MUST run BEFORE PlayerControls to prevent game input during dialogue
         const dialogueKeyHandler = (e) => {
-            // Completely stop event propagation - no other handlers should see this
+            // ALLOW keyboard input if focused on a text input field
+            if (e.target && (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA')) {
+                // Let the event reach the input field - the input's own handlers will stop propagation
+                return;
+            }
+
+            // For all other events, completely block them
             e.stopPropagation();
             e.stopImmediatePropagation();
             e.preventDefault();
-            // Don't log every key to avoid console spam
             return false;
         };
 
@@ -827,6 +1054,9 @@ class AnnieInteraction {
      * Ends the dialogue and cleans up
      */
     endDialogue() {
+        // Stop any playing audio
+        this.stopDialogueAudio();
+
         this.interactionSystem.currentInteraction = null;
         if (this.controls) this.controls.unfreeze();
 
@@ -840,8 +1070,9 @@ class AnnieInteraction {
     /**
      * Freezes controls and animates the camera to look at the Annie doll.
      * @param {THREE.Object3D} annie - The Annie doll object.
+     * @param {Function} onComplete - Callback to run when camera animation completes
      */
-    lookAtAnnie(annie) {
+    lookAtAnnie(annie, onComplete = null) {
         // Store original camera state on the main interaction system
         this.interactionSystem.originalCameraLookAt = {
             enabled: true,
@@ -874,6 +1105,11 @@ class AnnieInteraction {
 
             if (progress < 1) {
                 requestAnimationFrame(animate);
+            } else {
+                // Animation complete, call callback
+                if (onComplete) {
+                    onComplete();
+                }
             }
         };
 
@@ -889,6 +1125,9 @@ class AnnieInteraction {
      * Unfreezes the player controls and clears the camera lookAt state.
      */
     stopLookingAtAnnie() {
+        // Stop any playing dialogue audio
+        this.stopDialogueAudio();
+
         // Unfreeze controls
         if (this.controls) {
             this.controls.unfreeze();

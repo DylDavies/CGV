@@ -4,12 +4,13 @@ import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.127.0/build/three.m
 import { AnnieInteraction } from '../interactions/AnnieInteraction.js';
 
 class InteractionSystem {
-   constructor(camera, scene, gameManager, uiManager, controls) {
+   constructor(camera, scene, gameManager, uiManager, controls, audioManager) {
         this.camera = camera;
         this.scene = scene;
         this.gameManager = gameManager;
         this.uiManager = uiManager; // uiManager was missing from the original constructor but is used, so I've added it.
         this.controls = controls; // NEW: Store the controls object
+        this.audioManager = audioManager; // NEW: Store the audio manager
         this.raycaster = new THREE.Raycaster();
         this.mouse = new THREE.Vector2();
         this.interactableObjects = new Map();
@@ -543,24 +544,15 @@ class InteractionSystem {
                         pageObject.parent.remove(pageObject);
                     }
                 });
-
-                // Mark that we've shown the explanation (even if we skipped it this time)
-                this.hasSeenPageExplanation = true;
             };
 
-            // Only show page content popup on the first page ever
-            if (!this.hasSeenPageExplanation) {
-                // First page - show popup explaining the page content
-                this.showPageContent(pageId, () => {
-                    // After viewing, collect the page (with slight delay to prevent double-click)
-                    setTimeout(() => {
-                        collectPageNow();
-                    }, 100);
-                });
-            } else {
-                // Subsequent pages - directly collect without showing popup
-                collectPageNow();
-            }
+            // Always show page content popup for every page
+            this.showPageContent(pageId, () => {
+                // After viewing, collect the page (with slight delay to prevent double-click)
+                setTimeout(() => {
+                    collectPageNow();
+                }, 100);
+            });
         } else {
             console.warn("Tried to pick up a page with no pageId property:", pageObject.name);
         }

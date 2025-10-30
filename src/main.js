@@ -127,7 +127,7 @@ async function main() {
 
             const gameManager = new GameManager(mansionLoader, camera, scene, uiManager, audioManager, controls);
             const puzzleSystem = new PuzzleSystem(scene, gameManager);
-            const interactionSystem = new InteractionSystem(camera, scene, gameManager, uiManager, controls);
+            const interactionSystem = new InteractionSystem(camera, scene, gameManager, uiManager, controls, audioManager);
 
             controls.puzzles = { colorPuzzle, wirePuzzle, keypadPuzzle, ticTacToePuzzle };
             colorPuzzle.setControls(controls);
