@@ -1,4 +1,5 @@
 import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.127.0/build/three.module.js';
+import logger from '../utils/Logger.js';
 
 // Define the data for each page
 const PAGE_DATA = {
@@ -11,13 +12,14 @@ const PAGE_DATA = {
 };
 
 class GameManager {
-    constructor(mansion, camera, scene, uiManager, audioManager, controls) {
+    constructor(mansion, camera, scene, uiManager, audioManager, controls, stageManager = null) {
         this.mansion = mansion;
         this.camera = camera;
         this.scene = scene;
         this.uiManager = uiManager;
         this.audioManager = audioManager;
         this.controls = controls;   // NEW: Store the controls object
+        this.stageManager = stageManager;   // Stage manager for stage-aware gameplay
         this.inventory = [];
         this.collectedPages = [];
         this.placedPages = new Array(6).fill(null); // Tracks pages placed on the wall
@@ -65,10 +67,14 @@ class GameManager {
     initializeGame() {
         console.log("🎮 Initializing game...");
 
-        // Make phone start ringing 30 seconds into the game
-        setTimeout(() => {
-            this.startPhoneRingEvent();
-        }, 30000); // 30 seconds
+        // Only initialize mansion-specific gameplay on mansion stage
+        const currentStage = this.stageManager ? this.stageManager.currentStage : 'mansion';
+        if (currentStage === 'mansion') {
+            // Make phone start ringing 30 seconds into the game
+            setTimeout(() => {
+                this.startPhoneRingEvent();
+            }, 30000); // 30 seconds
+        }
 
         this.updateUI();
         this.showWelcomeMessage();
@@ -95,15 +101,25 @@ class GameManager {
     startPhoneRingEvent() {
         console.log("☎️ Starting phone ring event...");
 
-        // Trigger narrative events (check if narrativeManager exists first)
-        if (window.gameControls && window.gameControls.narrativeManager) {
-            window.gameControls.narrativeManager.triggerEvent('intro.speech_bubble_2');
-            window.gameControls.narrativeManager.triggerEvent('intro.objective_1');
+        // CRITICAL FIX: Only trigger mansion phone events on mansion stage, NOT office stage
+        const currentStage = this.stageManager ? this.stageManager.currentStage : 'mansion';
+        if (currentStage !== 'mansion') {
+            logger.log('⚠️ Phone ring event called on non-mansion stage, ignoring');
+            return;
         }
 
-        const soundSourceMesh = this.mansion.getProp('telephone');
+        // Trigger narrative events
+        window.gameControls.narrativeManager.triggerEvent('intro.speech_bubble_2');
+        window.gameControls.narrativeManager.triggerEvent('intro.objective_1');
+
+        // Get the current loader (mansion loader when on mansion stage)
+        const currentLoader = this.stageManager ? this.stageManager.currentLoader : this.mansion;
+        const soundSourceMesh = currentLoader ? currentLoader.getProp('telephone') : null;
+
         if (soundSourceMesh) {
             this.audioManager.playLoopingPositionalSound('phone_ringing', this.audioManager.soundPaths.rotaryPhone, soundSourceMesh, 10);
+        } else {
+            console.warn('⚠️ Telephone prop not found in current loader');
         }
     }
     
@@ -121,8 +137,10 @@ class GameManager {
         await window.gameControls.narrativeManager.triggerEvent('stage1.objective_find_pages');
 
         // Enable page glow now that phone is answered
-        if (this.mansion) {
-            this.mansion.enablePageGlow();
+        const currentLoader = this.stageManager ? this.stageManager.currentLoader : this.mansion;
+
+        if (currentLoader) {
+            currentLoader.enablePageGlow();
         }
     }
     
@@ -189,8 +207,9 @@ class GameManager {
         this.placedPages[slotIndex] = pageItem.pageId;
 
         // Tell MansionLoader to create the visual
-        if (this.mansion) {
-            this.mansion.displayPageOnSlot(slotIndex, pageItem.pageId);
+        const currentLoader = this.stageManager ? this.stageManager.currentLoader : this.mansion;
+        if (currentLoader) {
+            currentLoader.displayPageOnSlot(slotIndex, pageItem.pageId);
         }
 
         this.checkPageOrder();
@@ -211,9 +230,11 @@ class GameManager {
             this.completeObjective('place_pages');
 
             // Make all placed pages glow
+            // Use correct loader for multi-scene support
+            const currentLoader = this.stageManager ? this.stageManager.currentLoader : this.mansion;
             this.pageSolution.forEach((pageId) => {
-                if (this.mansion) {
-                    this.mansion.activatePageSymbolGlow(pageId);
+                if (currentLoader) {
+                    currentLoader.activatePageSymbolGlow(pageId);
                 }
             });
 
@@ -486,6 +507,11 @@ class GameManager {
         // Set up key listener for 'I' key
         document.addEventListener('keydown', (e) => {
             if (e.code === 'KeyI' && this.gameState === 'playing') {
+                // Check if an input or textarea is focused - if so, don't intercept the key
+                const activeElement = document.activeElement;
+                if (activeElement && (activeElement.tagName === 'INPUT' || activeElement.tagName === 'TEXTAREA')) {
+                    return; // Allow normal input behavior
+                }
                 e.preventDefault();
                 this.toggleInventoryPopup();
             }
@@ -607,8 +633,10 @@ class GameManager {
         this.placedPages[slotIndex] = null;
 
         // Tell the MansionLoader to visually hide the page from the slot.
-        if (this.mansion) {
-            this.mansion.hidePageOnSlot(slotIndex);
+        // Use currentLoader pattern to support multi-stage gameplay
+        const currentLoader = this.stageManager ? this.stageManager.currentLoader : this.mansion;
+        if (currentLoader) {
+            currentLoader.hidePageOnSlot(slotIndex);
         }
 
         this.checkPageOrder(); // Re-check the solution.
@@ -1236,7 +1264,8 @@ class GameManager {
         if (this.gameState !== 'playing') return;
 
         // Get the room the player is currently in
-        const detectedRoom = this.mansion.getCurrentRoom(this.camera.position);
+        const currentLoader = this.stageManager ? this.stageManager.currentLoader : this.mansion;
+        const detectedRoom = currentLoader ? currentLoader.getCurrentRoom(this.camera.position) : null;
 
         // Check if the room has changed since the last frame
         if (detectedRoom !== this.currentRoom) {
@@ -1266,13 +1295,17 @@ class GameManager {
         // Check for monster collision (player death)
         this.checkMonsterCollision();
 
-        this.nextAmbientSoundTime -= delta;
-        if (this.nextAmbientSoundTime <= 0) {
-            if (this.audioManager) {
-                this.audioManager.playRandomAmbientSound();
+        // CRITICAL FIX: Only play ambient sounds on mansion stage, NOT office stage (Stage 1)
+        const currentStage = this.stageManager ? this.stageManager.currentStage : 'mansion';
+        if (currentStage === 'mansion') {
+            this.nextAmbientSoundTime -= delta;
+            if (this.nextAmbientSoundTime <= 0) {
+                if (this.audioManager) {
+                    this.audioManager.playRandomAmbientSound();
+                }
+                // Reset the timer for the next sound
+                this.nextAmbientSoundTime = this.getRandomAmbientTime();
             }
-            // Reset the timer for the next sound
-            this.nextAmbientSoundTime = this.getRandomAmbientTime();
         }
     }
 
@@ -1353,7 +1386,7 @@ class GameManager {
             objectives: this.objectives,
             gameStats: this.gameStats,
             currentRoom: this.currentRoom?.id,
-            mansionSeed: this.mansion.seed, // If mansion uses seed for generation
+            mansionSeed: (this.stageManager ? this.stageManager.currentLoader : this.mansion)?.seed, // If mansion uses seed for generation
             version: '1.0'
         };
         
@@ -1454,9 +1487,11 @@ class GameManager {
         this.fuseBoxFixed = true;
         this.lightsOn = true;
 
-        if (this.mansion) {
+        const currentLoader = this.stageManager ? this.stageManager.currentLoader : this.mansion;
+
+        if (currentLoader) {
             // Only restore lamps - fuse box doesn't control fireplace
-            this.mansion.setLampsEnabled(true);
+            currentLoader.setLampsEnabled(true);
         }
 
         this.completeObjective('fix_fuse_box');
@@ -1471,15 +1506,15 @@ class GameManager {
         }
 
         // Make the diary glow immediately after fuse box is complete
-        if (this.mansion) {
-            this.mansion.enableDiaryGlow();
+        if (currentLoader) {
+            currentLoader.enableDiaryGlow();
             console.log('✨ Diary glow enabled immediately after fuse box');
         }
         await window.gameControls.narrativeManager.triggerEvent('stage1.notice_diary');
 
         // Now make diary interactable and show objective
-        if (this.mansion) {
-            const diary = this.mansion.props.get('diary');
+        if (currentLoader) {
+            const diary = currentLoader.props.get('diary');
             if (diary) {
                 diary.userData.interactable = true;
             }

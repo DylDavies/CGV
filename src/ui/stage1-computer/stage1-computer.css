@@ -1,0 +1,319 @@
+/* Stage 1 Computer Interface Styles */
+
+.computer-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0, 0, 0, 0.8);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 1000;
+    font-family: 'Courier New', monospace;
+}
+
+.computer-screen {
+    width: 90%;
+    max-width: 1000px;
+    height: 80vh;
+    background-color: #0a0a0a;
+    border: 3px solid #00ff00;
+    color: #00ff00;
+    display: flex;
+    flex-direction: column;
+    box-shadow: 0 0 20px rgba(0, 255, 0, 0.5);
+    overflow: hidden;
+}
+
+/* LOGIN SCREEN */
+.login-container {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    height: 100%;
+    padding: 40px;
+    text-align: center;
+}
+
+.login-container h1 {
+    font-size: 3em;
+    margin-bottom: 40px;
+    text-shadow: 0 0 10px rgba(0, 255, 0, 0.8);
+}
+
+.login-form {
+    display: flex;
+    flex-direction: column;
+    width: 100%;
+    max-width: 400px;
+}
+
+.login-form label {
+    text-align: left;
+    margin-top: 15px;
+    margin-bottom: 5px;
+    font-size: 1.1em;
+}
+
+.login-form input {
+    padding: 10px;
+    background-color: #1a1a1a;
+    border: 2px solid #00ff00;
+    color: #00ff00;
+    font-family: 'Courier New', monospace;
+    font-size: 1em;
+    margin-bottom: 10px;
+}
+
+.login-form input:disabled {
+    opacity: 0.7;
+}
+
+.login-form input:focus {
+    outline: none;
+    box-shadow: 0 0 10px rgba(0, 255, 0, 0.8);
+}
+
+.login-form button {
+    padding: 12px;
+    margin-top: 20px;
+    background-color: #00ff00;
+    color: #000;
+    border: none;
+    font-size: 1.2em;
+    font-weight: bold;
+    cursor: pointer;
+    transition: all 0.3s ease;
+}
+
+.login-form button:hover {
+    background-color: #00dd00;
+    box-shadow: 0 0 10px rgba(0, 255, 0, 0.8);
+}
+
+.login-form button:active {
+    transform: scale(0.98);
+}
+
+.error-message {
+    color: #ff0000;
+    margin-top: 15px;
+    font-weight: bold;
+    text-shadow: 0 0 5px rgba(255, 0, 0, 0.5);
+}
+
+/* DESKTOP SCREEN */
+.desktop {
+    flex-direction: column;
+    padding: 0;
+}
+
+.taskbar {
+    background-color: #1a1a1a;
+    border-bottom: 2px solid #00ff00;
+    padding: 10px 20px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-shrink: 0;
+}
+
+.taskbar span {
+    font-size: 0.9em;
+    font-weight: bold;
+}
+
+.close-btn {
+    background: none;
+    border: none;
+    color: #00ff00;
+    font-size: 1.2em;
+    cursor: pointer;
+    padding: 5px 10px;
+    transition: all 0.2s ease;
+}
+
+.close-btn:hover {
+    color: #ff0000;
+    transform: scale(1.2);
+}
+
+.desktop-icons {
+    flex: 1;
+    padding: 20px;
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 30px;
+    align-content: start;
+    overflow-y: auto;
+}
+
+.file-icon {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 10px;
+    padding: 15px;
+    border-radius: 5px;
+    transition: all 0.2s ease;
+}
+
+.file-icon.clickable {
+    cursor: pointer;
+}
+
+.file-icon.clickable:hover {
+    background-color: rgba(0, 255, 0, 0.1);
+    transform: scale(1.1);
+}
+
+.file-icon .icon {
+    font-size: 3em;
+}
+
+.file-icon .label {
+    text-align: center;
+    font-size: 0.9em;
+    word-wrap: break-word;
+}
+
+/* SYMBOL DISPLAY */
+.symbol-container {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    height: 100%;
+    padding: 40px;
+}
+
+.symbol-container.flicker {
+    animation: flicker 0.15s infinite;
+}
+
+@keyframes flicker {
+    0%, 100% {
+        opacity: 1;
+    }
+    50% {
+        opacity: 0.3;
+    }
+}
+
+.symbol-image {
+    max-width: 100%;
+    max-height: 100%;
+    object-fit: contain;
+    filter: brightness(0.8) contrast(1.2);
+}
+
+/* README DISPLAY */
+.readme {
+    justify-content: center;
+    align-items: center;
+}
+
+.readme-container {
+    text-align: center;
+    padding: 40px;
+}
+
+.readme-container h2 {
+    font-size: 1.5em;
+    margin-bottom: 30px;
+    text-shadow: 0 0 10px rgba(0, 255, 0, 0.8);
+}
+
+.readme-container p {
+    font-size: 1.3em;
+    margin: 15px 0;
+    line-height: 1.6;
+    text-shadow: 0 0 5px rgba(0, 255, 0, 0.5);
+}
+
+/* IMAGE OVERLAY */
+.image-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0, 0, 0, 0.9);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 1000;
+}
+
+.image-container {
+    display: flex;
+    flex-direction: column;
+    width: 95%;
+    max-width: 1600px;
+    max-height: 95vh;
+    background-color: #0a0a0a;
+    border: 2px solid #00ff00;
+}
+
+.image-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 15px 20px;
+    border-bottom: 2px solid #00ff00;
+    background-color: #1a1a1a;
+    color: #00ff00;
+    font-family: 'Courier New', monospace;
+}
+
+.image-header h2 {
+    margin: 0;
+    font-size: 1.2em;
+}
+
+.image-container img {
+    flex: 1;
+    object-fit: contain;
+    padding: 20px;
+}
+
+/* Scrollbar styling */
+.desktop-icons::-webkit-scrollbar {
+    width: 12px;
+}
+
+.desktop-icons::-webkit-scrollbar-track {
+    background: #0a0a0a;
+}
+
+.desktop-icons::-webkit-scrollbar-thumb {
+    background: #00ff00;
+    border-radius: 5px;
+}
+
+.desktop-icons::-webkit-scrollbar-thumb:hover {
+    background: #00dd00;
+}
+
+/* Responsive design */
+@media (max-width: 768px) {
+    .computer-screen {
+        width: 95%;
+        height: 90vh;
+    }
+
+    .desktop-icons {
+        grid-template-columns: 1fr;
+        gap: 20px;
+    }
+
+    .login-container h1 {
+        font-size: 2em;
+    }
+
+    .login-form {
+        max-width: 100%;
+    }
+}

@@ -19,6 +19,14 @@ class AudioManager {
             whispering: 'public/audio/ambience/creepy-whispering.mp3', 
             violentDoorSlam: 'public/audio/ambience/violent-door-slam.mp3',
             hitSound: 'public/audio/sfx/hit_sound.mp3',
+            phone_ringing: 'public/audio/sfx/phone_ringing.mp3',
+            voicemail_editor: 'public/audio/sfx/voicemail_editor.m4a',
+            door_unlock_click: 'public/audio/sfx/door_unlock_click.mp3',
+            door_bang_1: 'public/audio/sfx/door_bang_1.mp3',
+            door_bang_2_loud: 'public/audio/sfx/door_bang_2_loud.mp3',
+            door_thud: 'public/audio/sfx/door_bang_1.mp3', // Fallback to door_bang_1 until proper file added
+            phone_linging: 'public/audio/sfx/yo_phone_linging.mp3',
+            interview_audio: 'public/audio/sfx/interview.wav', // Placeholder for interview audio
 
             //ambient sound effects - to be used for random sound generation
             ambientSounds: [
@@ -182,6 +190,20 @@ class AudioManager {
 
     // --- Generic Playback ---
 
+    /**
+     * Quick play method that uses soundPaths configuration
+     * @param {string} soundKey - Key from soundPaths (e.g., 'phone_ringing')
+     * @param {number} volume - Optional volume (0-1)
+     */
+    async play(soundKey, volume = 1.0) {
+        const path = this.soundPaths[soundKey];
+        if (!path) {
+            console.error(`Sound key '${soundKey}' not found in soundPaths`);
+            return;
+        }
+        return this.playSound(soundKey, path, false, volume);
+    }
+
     async playSound(soundId, path, loop = false, volume = 1.0) {
         if (this.activeSounds.has(soundId)) {
             this.activeSounds.get(soundId).stop();
@@ -214,6 +236,18 @@ class AudioManager {
                 this.activeSounds.delete(soundId);
             }
         }
+    }
+
+    stopAll(fadeDuration = 0) {
+        console.log(`🔇 Stopping all active sounds (${this.activeSounds.size} sounds)`);
+
+        const soundIds = Array.from(this.activeSounds.keys());
+        soundIds.forEach(soundId => {
+            this.stopSound(soundId, fadeDuration);
+        });
+
+        // Clear the active sounds map
+        this.activeSounds.clear();
     }
 
 

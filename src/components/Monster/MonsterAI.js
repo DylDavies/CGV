@@ -120,6 +120,12 @@ class MonsterAI {
 
     spawn() {
         try {
+            // Skip spawning if pathfinding is not available (e.g., on office stage without navmesh)
+            if (!this.pathfinding || !this.pathfinding.zones[this.ZONE]) {
+                console.warn("⚠️ Monster cannot spawn - NavMesh pathfinding not available for current stage");
+                return;
+            }
+
             const zone = this.pathfinding.zones[this.ZONE];
             const nodes = zone.groups[this.groupID];
 
@@ -220,10 +226,15 @@ class MonsterAI {
     }
 
     wander(delta) {
+        // Skip wandering if pathfinding is not available (e.g., on office stage without navmesh)
+        if (!this.pathfinding || !this.pathfinding.zones[this.ZONE]) {
+            return;
+        }
+
         const now = Date.now();
-        if (!this.wanderTarget && now - this.lastWander > 5000) { 
+        if (!this.wanderTarget && now - this.lastWander > 5000) {
             this.lastWander = now;
-            
+
             const zone = this.pathfinding.zones[this.ZONE];
             const nodes = zone.groups[this.groupID];
             const randomIndex = Math.floor(Math.random() * nodes.length);
@@ -516,6 +527,12 @@ class MonsterAI {
     }
     
     recalculateChasePath() {
+        // Safety check - if no pathfinding data (office stage), skip pathfinding
+        if (!this.pathfinding || !this.pathfinding.zones || !this.pathfinding.zones[this.ZONE]) {
+            this.path = [];
+            return;
+        }
+
         this.lastPathRecalculation = Date.now();
         const playerPos = this.player.position;
         const monsterPos = this.monster.position;
@@ -536,6 +553,12 @@ class MonsterAI {
     }
 
     recalculateFleePath() {
+        // Safety check - if no pathfinding data (office stage), skip pathfinding
+        if (!this.pathfinding || !this.pathfinding.zones || !this.pathfinding.zones[this.ZONE]) {
+            this.path = [];
+            return;
+        }
+
         this.lastPathRecalculation = Date.now();
         const fleeDirection = this.monster.position.clone().sub(this.player.position).normalize();
         const fleeDistance = 15;
@@ -557,6 +580,11 @@ class MonsterAI {
     }
 
     findHidingSpot() {
+        // Skip if pathfinding is not available
+        if (!this.pathfinding || !this.pathfinding.zones[this.ZONE]) {
+            return;
+        }
+
         this.lastPathRecalculation = Date.now();
         const now = Date.now();
         const groupID = this.pathfinding.getGroup(this.ZONE, this.monster.position, true);

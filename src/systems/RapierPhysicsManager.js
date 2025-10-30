@@ -30,7 +30,11 @@ class RapierPhysicsManager {
         this.playerCollider = this.world.createCollider(colliderDesc, this.playerBody);
 
         // Create visual player mesh for shadow casting (invisible but casts shadows)
-        this.createPlayerShadowMesh();
+        // Only if scene is provided (defer if null)
+        this.playerShadowMesh = null;
+        if (this.scene) {
+            this.createPlayerShadowMesh();
+        }
 
         // Character controller - less smooth for more realistic feel
         this.characterController = this.world.createCharacterController(0.02);
@@ -99,6 +103,16 @@ class RapierPhysicsManager {
 
         this.setupDevControls();
         console.log('🔧 RapierPhysicsManager initialized with full feature parity');
+    }
+
+    /**
+     * Initialize scene-dependent features (called after scene is available)
+     */
+    initializeScene(scene) {
+        this.scene = scene;
+        if (this.scene && !this.playerShadowMesh) {
+            this.createPlayerShadowMesh();
+        }
     }
 
     createPlayerShadowMesh() {
@@ -206,36 +220,11 @@ class RapierPhysicsManager {
                 }
             }
 
-            // Toggle dev mode with F9
-            if (e.code === 'F9') {
-                this.devMode = !this.devMode;
-                this.updateDevMode();
-                console.log(`🔧 Developer mode: ${this.devMode ? 'ON' : 'OFF'}`);
+            // F9 and F10 toggles are now handled by PlayerControls - RapierPhysicsManager receives state via inputs
+            // F8 (spawn freeze) is still handled here as it's physics-specific
 
-                // Show dev mode help
-                if (this.devMode) {
-                    console.log('🔧 Dev Mode Controls:');
-                    console.log('  F8 - Toggle Spawn Freeze (lock position for debugging)');
-                    console.log('  F10 - Toggle Fixed Y Mode (constant height flying)');
-                    console.log('  F11 - Toggle Physics Debug Renderer');
-                }
-            }
-
-            // Toggle fixed Y mode with F10 (only in dev mode)
-            if (e.code === 'F10' && this.devMode) {
-                this.fixedYMode = !this.fixedYMode;
-
-                if (this.fixedYMode) {
-                    // Set to safe height (at least Y=0 or current position, whichever is higher)
-                    this.fixedYHeight = Math.max(0, this.camera.position.y);
-                    this.verticalVelocity = 0;
-
-                    console.log(`✈️ Fixed Y Mode: ON (height locked at Y=${this.fixedYHeight.toFixed(2)})`);
-                    console.log(`💡 Use SPACE to go up, SHIFT to go down`);
-                } else {
-                    console.log('✈️ Fixed Y Mode: OFF');
-                }
-            }
+            // F9 and F10 are now synced from PlayerControls inputs above
+            // Do not duplicate listeners here - it causes conflicts with PlayerControls
 
             // Toggle physics debug with F11 (only in dev mode)
             if (e.code === 'F11' && this.devMode) {
@@ -268,6 +257,28 @@ class RapierPhysicsManager {
         // Step the physics world
         this.world.step();
 
+        // Sync devMode from inputs (F9 toggle in PlayerControls)
+        if (safeInputs.devMode !== undefined) {
+            this.devMode = safeInputs.devMode;
+        }
+
+        // Sync fixedYMode from inputs (F10 toggle in PlayerControls)
+        if (safeInputs.fixedYMode !== undefined) {
+            const wasInFixedY = this.fixedYMode;
+            this.fixedYMode = safeInputs.fixedYMode;
+
+            // Initialize fixedYHeight when entering fixed Y mode
+            if (this.fixedYMode && !wasInFixedY) {
+                this.fixedYHeight = Math.max(0, this.camera.position.y);
+                this.verticalVelocity = 0;
+                console.log(`✈️ Fixed Y Mode: ON (height locked at Y=${this.fixedYHeight.toFixed(2)})`);
+                console.log(`💡 Use SPACE or Q to go up, E to go down`);
+                console.log(`🔍 DevMode=${this.devMode}, FixedYMode=${this.fixedYMode}`);
+            } else if (!this.fixedYMode && wasInFixedY) {
+                console.log('✈️ Fixed Y Mode: OFF');
+            }
+        }
+
         // Handle different movement modes
         if (this.noclipMode) {
             this.handleNoclipMode(safeInputs, delta);
@@ -276,6 +287,10 @@ class RapierPhysicsManager {
         } else if (this.flyMode && this.devMode) {
             this.handleFlyMode(safeInputs, delta);
         } else {
+            // Debug: log why fly mode isn't activating
+            if (this.fixedYMode && !this.devMode) {
+                console.warn(`⚠️ fixedYMode is ON but devMode is OFF - cannot enter fly mode`);
+            }
             this.handleNormalMovement(safeInputs, delta);
         }
 
@@ -358,7 +373,7 @@ class RapierPhysicsManager {
     }
 
     handleFixedYMode(inputs, delta) {
-        // Movement at constant Y height - perfect for exploring/flying around
+        // Movement at constant Y height - perfect for exploring/flying around (noclip mode)
         const speed = this.maxSpeed.fly;
 
         // Get camera's forward and right vectors (flatten to horizontal plane)
@@ -379,26 +394,39 @@ class RapierPhysicsManager {
         if (inputs.moveRight) movement.add(right);
         if (inputs.moveLeft) movement.sub(right);
 
+        // Get current position
+        const currentPosition = this.playerBody.translation();
+        let newX = currentPosition.x;
+        let newZ = currentPosition.z;
+
         // Apply horizontal movement
         if (movement.length() > 0) {
             movement.normalize();
             movement.multiplyScalar(speed * delta);
-
-            const currentPosition = this.playerBody.translation();
-            this.playerBody.setNextKinematicTranslation({
-                x: currentPosition.x + movement.x,
-                y: this.fixedYHeight - this.playerHeight / 2,
-                z: currentPosition.z + movement.z
-            });
+            newX += movement.x;
+            newZ += movement.z;
         }
 
-        // Allow adjusting the fixed height with space/shift
-        if (inputs.jump) {
+        // Allow adjusting the fixed height with space (up) and Q/E keys for vertical movement
+        if (inputs.jump || inputs.flyUp) {
             this.fixedYHeight += speed * delta;
         }
-        if (inputs.isCrouching) {
+
+        // Use flyDown for descending (mapped to E key)
+        if (inputs.flyDown) {
             this.fixedYHeight -= speed * delta;
         }
+
+        // Directly update physics body position WITHOUT collision checks
+        // This enables true noclip mode
+        this.playerBody.setNextKinematicTranslation({
+            x: newX,
+            y: this.fixedYHeight - this.playerHeight / 2,
+            z: newZ
+        });
+
+        // Also update camera directly to ensure synchronization
+        this.camera.position.set(newX, this.fixedYHeight, newZ);
     }
 
     handleFlyMode(inputs, delta) {

@@ -3,12 +3,11 @@
 import * as THREE from 'https://unpkg.com/three@0.127.0/build/three.module.js';
 
 class Minimap {
-    constructor(scene, camera, mansionLoader, renderer) {
+    constructor(scene, camera, stageManager, renderer) {
         this.mainScene = scene;
         this.mainCamera = camera;
-        this.mansionLoader = mansionLoader;
+        this.stageManager = stageManager;
         this.renderer = renderer;
-        this.rooms = this.mansionLoader.getAllRooms();
 
         this.minimapScene = new THREE.Scene();
         this.minimapScene.background = new THREE.Color(0x000000);
@@ -84,9 +83,14 @@ class Minimap {
         this.minimapScene.add(this.playerIndicator);
     }
 
-   createMinimapGeometry() {
-        // Get the mansion model from the loader
-        const mansionModel = this.mansionLoader.model;
+    createMinimapGeometry() {
+        // Get the active loader from StageManager (dynamically, not cached)
+        if (!this.stageManager.currentLoader) {
+            console.warn('⚠️ No active loader found for minimap');
+            return;
+        }
+
+        const mansionModel = this.stageManager.currentLoader.model;
 
         if (!mansionModel) {
             console.warn('⚠️ No mansion model found for minimap');
@@ -281,7 +285,9 @@ class Minimap {
     }
 
     render() {
-        if (!this.enabled) return;
+        if (!this.enabled || !this.renderer) return;
+
+        // Use the single renderer to render minimap
         this.renderer.setRenderTarget(this.renderTarget);
         this.renderer.render(this.minimapScene, this.minimapCamera);
         this.renderer.setRenderTarget(null);
@@ -320,6 +326,25 @@ class Minimap {
         this.enabled = !this.enabled;
         this.minimapCanvas.style.display = this.enabled ? 'block' : 'none';
         console.log(`🗺️ Minimap: ${this.enabled ? 'ON' : 'OFF'}`);
+    }
+
+    /**
+     * Reinitialize minimap when stage changes
+     * Called when transitioning between office and mansion
+     */
+    reinitialize() {
+        console.log('🗺️ Reinitializing minimap for new stage');
+
+        // Clear previous room meshes
+        this.roomMeshes.forEach((mesh) => {
+            this.minimapScene.remove(mesh);
+        });
+        this.roomMeshes.clear();
+
+        // Recreate geometry for the new stage
+        this.createMinimapGeometry();
+
+        console.log('🗺️ Minimap reinitialized');
     }
 
     dispose() {

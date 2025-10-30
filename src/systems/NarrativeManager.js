@@ -1,7 +1,7 @@
 // src/systems/NarrativeManager.js
 
 export class NarrativeManager {
-    constructor() {
+    constructor(stageManager = null) {
         this.elements = {
             speechBubble: document.getElementById('speech-bubble'),
             speechTitle: document.getElementById('speech-title'),
@@ -11,7 +11,8 @@ export class NarrativeManager {
             narrativeText: document.getElementById('narrative-text'),
             blackoutScreen: document.getElementById('blackout-screen'),
         };
-        this.narrativeData = null; 
+        this.narrativeData = null;
+        this.stageManager = stageManager;
         console.log('📖 NarrativeManager Initialized');
     }
 
@@ -47,6 +48,8 @@ export class NarrativeManager {
                 return this.showSpeechBubble(eventData.title, eventData.text, eventData.duration);
             case 'wakeUp':
                 return this.playWakeUpEffect(eventData.duration);
+            case 'stageTransition':
+                return this.transitionToStage(eventData.stage, eventData.fadeOutDuration, eventData.fadeInDuration);
             case 'objective':
                 // Directly call the UIManager to display the objective
                 if (window.gameControls && window.gameControls.uiManager) {
@@ -59,6 +62,73 @@ export class NarrativeManager {
             case 'warning':
                  console.log('Triggering warning:', eventData.text);
                 break;
+        }
+    }
+
+    /**
+     * Transition to a new stage
+     * @param {string} stageName - Name of the stage to transition to
+     * @param {number} fadeOutDuration - Duration of fade out in ms
+     * @param {number} fadeInDuration - Duration of fade in in ms
+     */
+    async transitionToStage(stageName, fadeOutDuration = 1000, fadeInDuration = 1000) {
+        console.log("transitioning to stage")
+        if (!this.stageManager) {
+            console.error('❌ StageManager not available for narrative stage transition');
+            return;
+        }
+
+        console.log(`🎬 Narrative triggering stage transition to: ${stageName}`);
+
+        try {
+            await this.stageManager.switchToStage(stageName, {
+                fadeOutDuration,
+                fadeInDuration,
+                onProgress: (progress, message) => {
+                    if (window.gameControls && window.gameControls.uiManager) {
+                        window.gameControls.uiManager.updateLoadingProgress(progress, message);
+                    }
+                }
+            });
+
+            // Reload result screen after stage transition to ensure it persists
+            if (window.gameControls && window.gameControls.uiManager) {
+                await window.gameControls.uiManager.reloadResultScreen();
+            }
+
+            console.log(`✅ Stage transition to "${stageName}" complete`);
+
+            // Initialize stage-specific gameplay when entering mansion
+            if (stageName === 'mansion') {
+                console.log('🏚️ Initializing mansion stage...');
+
+                // Reinitialize minimap for the new stage
+                if (window.gameControls && window.gameControls.minimap) {
+                    window.gameControls.minimap.reinitialize();
+                }
+
+                // Brief pause for player to get oriented
+                await new Promise(resolve => setTimeout(resolve, 1000));
+
+
+                // Schedule phone ring after 30 seconds (like initial game start)
+                if (window.gameControls && window.gameControls.gameManager) {
+                    setTimeout(async () => {
+                        // Show stage 1 title
+                        console.log("showing")
+                        await this.triggerEvent('intro.stage_1_title');
+
+                        await this.playIntroSequence();
+
+                        setTimeout(() => {
+                            window.gameControls.gameManager.startPhoneRingEvent();
+                        }, 1000);
+                    }, 1000);
+                }
+            }
+
+        } catch (error) {
+            console.error(`❌ Failed to transition to stage "${stageName}":`, error);
         }
     }
     
