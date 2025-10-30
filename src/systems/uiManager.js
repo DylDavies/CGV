@@ -103,6 +103,7 @@ export class UIManager {
     async reloadResultScreen() {
         // Reload the result screen HTML to ensure it persists across stage transitions
         await this._loadHTML('src/ui/resultScreen/result-screen.html', 'result-screen-container');
+        await this._loadHTML('src/ui/ticTacToe/tictactoe-puzzle.html', 'tictactoe-puzzle-container');
         // Recache the result overlay element
         this.uiElements.resultOverlay = document.getElementById('result-screen-overlay');
     }

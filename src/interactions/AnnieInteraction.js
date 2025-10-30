@@ -1,6 +1,7 @@
 // src/interactions/AnnieInteraction.js
 
 import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.127.0/build/three.module.js';
+import { StageManager } from '../systems/StageManager';
 
 /**
  * Represents a single node in a dialogue tree.
@@ -154,8 +155,9 @@ class DialogueTree {
 class AnnieInteraction {
     /**
      * @param {InteractionSystem} interactionSystem - A reference to the main interaction system.
+     * @param {StageManager} stageManager
      */
-    constructor(interactionSystem) {
+    constructor(interactionSystem, stageManager) {
         this.interactionSystem = interactionSystem;
 
         // --- Get direct references to core systems ---
@@ -164,6 +166,7 @@ class AnnieInteraction {
         this.camera = interactionSystem.camera;
         this.controls = interactionSystem.controls;
         this.audioManager = interactionSystem.audioManager;
+        this.stageManager = stageManager;
 
         // Dialogue tree for Annie
         this.dialogueTree = null;
@@ -649,7 +652,7 @@ class AnnieInteraction {
         console.log('🎎 Starting Annie interaction - prompts cleared');
 
         // Get Annie doll from mansion
-        const annie = this.gameManager.mansion.props.get('annie');
+        const annie = this.stageManager.currentLoader.props.get('annie');
 
         if (!annie) {
             console.warn('Annie doll not found! Allowing normal page pickup.');

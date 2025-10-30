@@ -56,7 +56,7 @@ class InteractionSystem {
         this.puzzleUI = null;
 
         // Initialize Annie interaction handler
-        this.annieInteraction = new AnnieInteraction(this);
+        this.annieInteraction = new AnnieInteraction(this, this.stageManager);
 
         this.setupEventListeners();
         this.createUI();
@@ -520,7 +520,7 @@ class InteractionSystem {
             if (pageId === 'S_Page6') {
                 console.log('🎮 Page 6 interaction - checking mirror status');
                 // Check if the player has won the tic-tac-toe puzzle
-                const mirror = this.gameManager.mansion.props.get('tic_tac_toe_mirror');
+                const mirror = this.stageManager.currentLoader.props.get('tic_tac_toe_mirror');
                 console.log('Mirror object:', mirror);
                 console.log('Mirror found:', !!mirror);
                 console.log('Mirror userData:', mirror?.userData);
@@ -1357,7 +1357,7 @@ Run.`
             await window.gameControls.narrativeManager.triggerEvent('stage2.need_power');
 
             // Make fuse box interactable
-            const fuseBox = this.gameManager.mansion.props.get('fuse_box');
+            const fuseBox = currentLoader.props.get('fuse_box');
             if (fuseBox) {
                 fuseBox.userData.interactable = true;
             }
@@ -4233,21 +4233,21 @@ Run.`
             console.log('Mirror userData after win:', userData);
 
             // Also mark it on the mirror object itself to be safe
-            const mirrorObj = this.gameManager.mansion.props.get('tic_tac_toe_mirror');
+            const mirrorObj = this.stageManager.currentLoader.props.get('tic_tac_toe_mirror');
             if (mirrorObj && mirrorObj.userData) {
                 mirrorObj.userData.won = true;
                 console.log('✅ Also set mirror object userData.won = true');
             }
 
             // Make page 6 interactable
-            const page6 = this.gameManager.mansion.pages.find(p => p.name === 'S_Page6');
+            const page6 = this.stageManager.currentLoader.pages.find(p => p.name === 'S_Page6');
             if (page6) {
                 page6.userData.interactable = true;
                 console.log('✨ Page 6 is now unlocked!');
                 console.log('Page 6 userData:', page6.userData);
             } else {
                 console.warn('⚠️ Could not find Page 6 in mansion.pages');
-                console.log('Available pages:', this.gameManager.mansion.pages.map(p => p.name));
+                console.log('Available pages:', this.stageManager.currentLoader.pages.map(p => p.name));
             }
 
             // Unfreeze controls

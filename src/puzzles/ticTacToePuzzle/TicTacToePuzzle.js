@@ -9,6 +9,7 @@ export class TicTacToePuzzle {
         this.controls = null;
         this.onSolveCallback = null;
         this.onCloseCallback = null;
+        this.isInitialized = false;
         this.ghostDialogues = {
             win: [
                 "Your luck ends here...",
@@ -33,9 +34,32 @@ export class TicTacToePuzzle {
             ]
         };
 
-        this.container = document.getElementById('tictactoe-puzzle-container');
+        // Don't initialize DOM elements in constructor - they may not be loaded yet
+        this.container = null;
+        this.result = null;
 
-        this.ui = new TicTacToeUI(document.getElementById('tictactoe-puzzle-canvas'), {
+        console.log('🎮 TicTacToe Puzzle constructed');
+    }
+
+    /**
+     * Initialize DOM elements and event listeners (called lazily on first use)
+     */
+    _ensureInitialized() {
+        if (this.isInitialized) return;
+
+        this.container = document.getElementById('tictactoe-puzzle-container');
+        if (!this.container) {
+            console.error('❌ TicTacToe container not found');
+            return;
+        }
+
+        const canvas = document.getElementById('tictactoe-puzzle-canvas');
+        if (!canvas) {
+            console.error('❌ TicTacToe canvas not found');
+            return;
+        }
+
+        this.ui = new TicTacToeUI(canvas, {
             onCellClick: (row, col) => this.handlePlayerMove(row, col),
             onHover: (cell) => this.handleHover(cell)
         });
@@ -47,15 +71,23 @@ export class TicTacToePuzzle {
         );
 
         // Set up button handlers
-        document.getElementById('tictactoe-reset-puzzle-btn').addEventListener('click', () => this.startNewGame());
-        document.getElementById('tictactoe-close-puzzle-btn').addEventListener('click', () => this.handleFlee());
+        const resetBtn = document.getElementById('tictactoe-reset-puzzle-btn');
+        const closeBtn = document.getElementById('tictactoe-close-puzzle-btn');
+
+        if (resetBtn) {
+            resetBtn.addEventListener('click', () => this.startNewGame());
+        }
+        if (closeBtn) {
+            closeBtn.addEventListener('click', () => this.handleFlee());
+        }
 
         // Prevent clicks from passing through to the game
         this.container.addEventListener('click', (event) => {
             event.stopPropagation();
         });
 
-        console.log('🎮 TicTacToe Puzzle initialized');
+        this.isInitialized = true;
+        console.log('🎮 TicTacToe Puzzle DOM initialized');
     }
 
     /**
@@ -70,6 +102,15 @@ export class TicTacToePuzzle {
      */
     show() {
         console.log('🎮 TicTacToePuzzle.show() called');
+
+        // Ensure DOM elements are initialized first
+        this._ensureInitialized();
+
+        if (!this.container) {
+            console.error('❌ Container not found! Looking for tictactoe-puzzle-container');
+            return;
+        }
+
         console.log('  Container:', this.container?.id, 'Display:', this.container?.style.display);
 
         if (this.controls) {
@@ -77,11 +118,6 @@ export class TicTacToePuzzle {
             this.controls.freeze();
         } else {
             console.warn('  ⚠️ Controls not set!');
-        }
-
-        if (!this.container) {
-            console.error('❌ Container not found! Looking for tictactoe-puzzle-box');
-            return;
         }
 
         this.container.style.display = 'flex';
@@ -109,6 +145,14 @@ export class TicTacToePuzzle {
      */
     async handleFlee() {
         const fleeMessage = this.getRandomDialogue(this.ghostDialogues.flee);
+        const resultOverlay = document.getElementById('tictactoe-puzzle-result-overlay');
+        const resultTitle = document.getElementById('tictactoe-result-title');
+        const resultSubtitle = document.getElementById('tictactoe-result-subtitle');
+
+        if (!resultOverlay || !resultTitle || !resultSubtitle) {
+            console.error('❌ Result elements not found');
+            return;
+        }
 
         // Play scary mirror scream sound
         if (window.gameControls && window.gameControls.audioManager) {
@@ -120,15 +164,15 @@ export class TicTacToePuzzle {
         }
 
         // Show ghost's dialogue about fleeing
-        this.result.resultOverlay.className = 'failure';
-        this.result.resultTitle.textContent = 'No Escape!';
-        this.result.resultSubtitle.textContent = 'The ghost claims your soul...';
+        resultOverlay.className = 'failure';
+        resultTitle.textContent = 'No Escape!';
+        resultSubtitle.textContent = 'The ghost claims your soul...';
         document.getElementById('tictactoe-ghost-dialogue').textContent = `"${fleeMessage}"`;
-        this.result.resultOverlay.classList.remove('hidden');
+        resultOverlay.classList.remove('hidden');
 
         // After showing message, kill the player
         setTimeout(async () => {
-            this.result.resultOverlay.className = 'hidden';
+            resultOverlay.className = 'hidden';
             this.hide();
 
             // Kill the player
@@ -231,15 +275,24 @@ export class TicTacToePuzzle {
      */
     showVictory() {
         const successMessage = this.getRandomDialogue(this.ghostDialogues.win);
+        const resultOverlay = document.getElementById('tictactoe-puzzle-result-overlay');
+        const resultTitle = document.getElementById('tictactoe-result-title');
+        const resultSubtitle = document.getElementById('tictactoe-result-subtitle');
+        const ghostDialogue = document.getElementById('tictactoe-ghost-dialogue');
 
-        this.result.resultOverlay.className = 'success';
-        this.result.resultTitle.textContent = 'Victory!';
-        this.result.resultSubtitle.textContent = 'You have outsmarted the ghost!';
-        document.getElementById('tictactoe-ghost-dialogue').textContent = `"${successMessage}"`;
-        this.result.resultOverlay.classList.remove('hidden');
+        if (!resultOverlay || !resultTitle || !resultSubtitle || !ghostDialogue) {
+            console.error('❌ Result elements not found');
+            return;
+        }
+
+        resultOverlay.className = 'success';
+        resultTitle.textContent = 'Victory!';
+        resultSubtitle.textContent = 'You have outsmarted the ghost!';
+        ghostDialogue.textContent = `"${successMessage}"`;
+        resultOverlay.classList.remove('hidden');
 
         setTimeout(() => {
-            this.result.resultOverlay.className = 'hidden';
+            resultOverlay.className = 'hidden';
             if (this.onSolveCallback) this.onSolveCallback();
             this.hide();
         }, 3500);
@@ -250,6 +303,14 @@ export class TicTacToePuzzle {
      */
     async showDefeat() {
         const failureMessage = this.getRandomDialogue(this.ghostDialogues.loss);
+        const resultOverlay = document.getElementById('tictactoe-puzzle-result-overlay');
+        const resultTitle = document.getElementById('tictactoe-result-title');
+        const resultSubtitle = document.getElementById('tictactoe-result-subtitle');
+
+        if (!resultOverlay || !resultTitle || !resultSubtitle) {
+            console.error('❌ Result elements not found');
+            return;
+        }
 
         // Play scary mirror scream sound
         if (window.gameControls && window.gameControls.audioManager) {
@@ -260,15 +321,15 @@ export class TicTacToePuzzle {
             }
         }
 
-        this.result.resultOverlay.className = 'failure';
-        this.result.resultTitle.textContent = 'Defeated!';
-        this.result.resultSubtitle.textContent = 'The ghost has claimed your soul...';
+        resultOverlay.className = 'failure';
+        resultTitle.textContent = 'Defeated!';
+        resultSubtitle.textContent = 'The ghost has claimed your soul...';
         document.getElementById('tictactoe-ghost-dialogue').textContent = `"${failureMessage}"`;
-        this.result.resultOverlay.classList.remove('hidden');
+        resultOverlay.classList.remove('hidden');
 
         // After showing message, kill the player
         setTimeout(async () => {
-            this.result.resultOverlay.className = 'hidden';
+            resultOverlay.className = 'hidden';
             this.hide();
 
             // Kill the player - same as when monster catches them
@@ -282,14 +343,23 @@ export class TicTacToePuzzle {
      * Show draw screen
      */
     showDraw() {
-        this.result.resultOverlay.className = 'success';
-        this.result.resultTitle.textContent = 'A Draw!';
-        this.result.resultSubtitle.textContent = 'The spirit respects your cunning.';
+        const resultOverlay = document.getElementById('tictactoe-puzzle-result-overlay');
+        const resultTitle = document.getElementById('tictactoe-result-title');
+        const resultSubtitle = document.getElementById('tictactoe-result-subtitle');
+
+        if (!resultOverlay || !resultTitle || !resultSubtitle) {
+            console.error('❌ Result elements not found');
+            return;
+        }
+
+        resultOverlay.className = 'success';
+        resultTitle.textContent = 'A Draw!';
+        resultSubtitle.textContent = 'The spirit respects your cunning.';
         document.getElementById('tictactoe-ghost-dialogue').textContent = '"Perhaps you are worthy after all..."';
-        this.result.resultOverlay.classList.remove('hidden');
+        resultOverlay.classList.remove('hidden');
 
         setTimeout(() => {
-            this.result.resultOverlay.className = 'hidden';
+            resultOverlay.className = 'hidden';
             this.startNewGame(); // Allow replay
         }, 3500);
     }
