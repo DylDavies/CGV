@@ -1508,7 +1508,8 @@ class GameManager {
             return;
         }
 
-        const monster = window.gameControls.monsterAI.monster;
+        const monsterAI = window.gameControls.monsterAI;
+        const monster = monsterAI.monster;
         if (!monster) return;
 
         const playerPos = this.camera.position;
@@ -1516,10 +1517,10 @@ class GameManager {
 
         const distance = playerPos.distanceTo(monsterPos);
 
-        // If player touches monster (within 1.5 units), they die
-        if (distance < 1.5) {
+        // If player is close (within 1.5 units) and attack is complete, kill player
+        if (distance < 1.5 && monsterAI.isAttackComplete()) {
             // Determine death message based on monster aggression level
-            const aggressionLevel = window.gameControls.monsterAI.aggressionLevel;
+            const aggressionLevel = monsterAI.aggressionLevel;
             let deathType;
             if (aggressionLevel >= 5) {
                 deathType = 'monster_hostile';
@@ -1528,7 +1529,17 @@ class GameManager {
             } else {
                 deathType = 'monster_curious';
             }
+
+            // Reset attack state
+            monsterAI.resetAttack();
+
+            // Kill player
             this.onPlayerDeath(deathType);
+        }
+
+        // If attack is complete but player escaped (distance > 1.5), reset attack so monster can move again
+        if (monsterAI.isAttackComplete() && distance > 1.5) {
+            monsterAI.resetAttack();
         }
     }
 

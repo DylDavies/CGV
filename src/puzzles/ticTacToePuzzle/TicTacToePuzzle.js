@@ -23,6 +23,13 @@ export class TicTacToePuzzle {
                 "This dwelling is mine. Always.",
                 "The darkness consumes the weak.",
                 "Try again, if you dare..."
+            ],
+            flee: [
+                "You thought you could escape?",
+                "Cowards deserve only death...",
+                "There is no escape from the mirror.",
+                "Running won't save you now.",
+                "Your fear makes you weak... and mine."
             ]
         };
 
@@ -41,7 +48,7 @@ export class TicTacToePuzzle {
 
         // Set up button handlers
         document.getElementById('tictactoe-reset-puzzle-btn').addEventListener('click', () => this.startNewGame());
-        document.getElementById('tictactoe-close-puzzle-btn').addEventListener('click', () => this.hide());
+        document.getElementById('tictactoe-close-puzzle-btn').addEventListener('click', () => this.handleFlee());
 
         // Prevent clicks from passing through to the game
         this.container.addEventListener('click', (event) => {
@@ -95,6 +102,40 @@ export class TicTacToePuzzle {
         setTimeout(() => {
             if (this.onCloseCallback) this.onCloseCallback();
         }, 0);
+    }
+
+    /**
+     * Handle player attempting to flee
+     */
+    async handleFlee() {
+        const fleeMessage = this.getRandomDialogue(this.ghostDialogues.flee);
+
+        // Play scary mirror scream sound
+        if (window.gameControls && window.gameControls.audioManager) {
+            try {
+                window.gameControls.audioManager.playSound('mirror_scream', 'public/audio/sfx/mirror-scream.mp3');
+            } catch (error) {
+                console.warn('⚠️ Could not play mirror scream sound:', error.message);
+            }
+        }
+
+        // Show ghost's dialogue about fleeing
+        this.result.resultOverlay.className = 'failure';
+        this.result.resultTitle.textContent = 'No Escape!';
+        this.result.resultSubtitle.textContent = 'The ghost claims your soul...';
+        document.getElementById('tictactoe-ghost-dialogue').textContent = `"${fleeMessage}"`;
+        this.result.resultOverlay.classList.remove('hidden');
+
+        // After showing message, kill the player
+        setTimeout(async () => {
+            this.result.resultOverlay.className = 'hidden';
+            this.hide();
+
+            // Kill the player
+            if (window.gameControls && window.gameControls.gameManager) {
+                await window.gameControls.gameManager.onPlayerDeath('mirror_flee');
+            }
+        }, 3500);
     }
 
     /**
@@ -205,20 +246,35 @@ export class TicTacToePuzzle {
     }
 
     /**
-     * Show defeat screen
+     * Show defeat screen and kill the player
      */
-    showDefeat() {
+    async showDefeat() {
         const failureMessage = this.getRandomDialogue(this.ghostDialogues.loss);
+
+        // Play scary mirror scream sound
+        if (window.gameControls && window.gameControls.audioManager) {
+            try {
+                window.gameControls.audioManager.playSound('mirror_scream', 'public/audio/sfx/mirror-scream.mp3');
+            } catch (error) {
+                console.warn('⚠️ Could not play mirror scream sound:', error.message);
+            }
+        }
 
         this.result.resultOverlay.className = 'failure';
         this.result.resultTitle.textContent = 'Defeated!';
-        this.result.resultSubtitle.textContent = 'The ghost has won this round.';
+        this.result.resultSubtitle.textContent = 'The ghost has claimed your soul...';
         document.getElementById('tictactoe-ghost-dialogue').textContent = `"${failureMessage}"`;
         this.result.resultOverlay.classList.remove('hidden');
 
-        setTimeout(() => {
+        // After showing message, kill the player
+        setTimeout(async () => {
             this.result.resultOverlay.className = 'hidden';
-            this.startNewGame(); // Allow replay
+            this.hide();
+
+            // Kill the player - same as when monster catches them
+            if (window.gameControls && window.gameControls.gameManager) {
+                await window.gameControls.gameManager.onPlayerDeath('mirror_loss');
+            }
         }, 3500);
     }
 

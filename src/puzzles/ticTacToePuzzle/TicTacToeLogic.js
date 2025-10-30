@@ -35,7 +35,7 @@ export class TicTacToeLogic {
 
     /**
      * Ghost (easy AI) makes a move
-     * Easy difficulty: 60% random, 30% blocking, 10% winning move
+     * Easy difficulty: Always tries to win first, then blocks player, then plays randomly
      */
     ghostMove() {
         if (this.gameOver || this.currentPlayer !== this.ghostSymbol) {
@@ -48,19 +48,16 @@ export class TicTacToeLogic {
         }
 
         let chosenMove = null;
-        const rand = Math.random();
 
-        // 10% chance to win if possible
-        if (rand < 0.1) {
-            chosenMove = this.findWinningMove(this.ghostSymbol);
-        }
+        // ALWAYS try to win if possible (priority 1)
+        chosenMove = this.findWinningMove(this.ghostSymbol);
 
-        // 30% chance to block player
-        if (!chosenMove && rand < 0.4) {
+        // If can't win, try to block player from winning (priority 2)
+        if (!chosenMove) {
             chosenMove = this.findBlockingMove();
         }
 
-        // 60% chance to play randomly (easy difficulty)
+        // If no winning or blocking move, play randomly (priority 3)
         if (!chosenMove) {
             chosenMove = emptyMoves[Math.floor(Math.random() * emptyMoves.length)];
         }

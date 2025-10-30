@@ -23,6 +23,8 @@ class InteractionSystem {
 
         this.messageQueue = []; // NEW: A queue for interaction messages.
         this.isMessageVisible = false; // NEW: A flag to check visibility.
+        this.blockInteractionPrompt = false; // Flag to block interaction prompts during important messages
+        this.hasSeenPageExplanation = false; // Track if player has seen the first page explanation popup
         this.isColorPuzzleSolved = false;
         this.justClosedUI = false; // Prevent immediate re-interaction after closing UI
 
@@ -448,6 +450,12 @@ class InteractionSystem {
             return;
         }
 
+        // Check if this page has already been collected
+        if (this.gameManager.collectedPages.includes(pageId)) {
+            console.log(`Page ${pageId} already collected, ignoring interaction`);
+            return;
+        }
+
         // If pageId is a child like "S_Page6_Symbol", extract the parent page ID
         const pageMatch = pageId.match(/^(S_Page\d+)/);
         if (pageMatch) {
@@ -462,10 +470,41 @@ class InteractionSystem {
                 console.log('🎮 Page 6 interaction - checking mirror status');
                 // Check if the player has won the tic-tac-toe puzzle
                 const mirror = this.gameManager.mansion.props.get('tic_tac_toe_mirror');
-                console.log('Mirror found:', !!mirror, 'Won:', mirror?.userData?.won);
+                console.log('Mirror object:', mirror);
+                console.log('Mirror found:', !!mirror);
+                console.log('Mirror userData:', mirror?.userData);
+                console.log('Mirror won status:', mirror?.userData?.won);
+
                 if (!mirror || !mirror.userData || !mirror.userData.won) {
                     console.log('❌ Mirror not won - blocking page 6');
-                    this.showMessage("The page is sealed by ghostly hands... A game must be played at the nearby mirror first.");
+
+                    // Block interaction prompts during ghost warning
+                    this.blockInteractionPrompt = true;
+
+                    // Array of spooky ghost dialogues
+                    const ghostWarnings = [
+                        "A chilling whisper echoes... 'Not yours... Play the mirror game first, mortal...'",
+                        "Cold phantom hands push you away... 'The mirror demands a challenge... Face me there...'",
+                        "The page burns with spectral fire... 'Win the game at the mirror, if you dare...'",
+                        "A ghostly voice hisses... 'This page is MINE... Defeat me at the mirror to claim it...'",
+                        "The air grows icy cold... 'Play... Lose... Die... Or win and take your prize...'",
+                        "Ethereal chains bind the page... 'The mirror awaits... A game for your soul...'"
+                    ];
+
+                    // Pick a random spooky warning
+                    const randomWarning = ghostWarnings[Math.floor(Math.random() * ghostWarnings.length)];
+                    this.showMessage(randomWarning, 6000); // Show for 6 seconds so player can read it
+
+                    // Unblock prompts after message is done (with small buffer)
+                    setTimeout(() => {
+                        this.blockInteractionPrompt = false;
+                    }, 6200);
+
+                    // Play a spooky sound effect
+                    if (this.audioManager) {
+                        this.audioManager.playRandomAmbientSound();
+                    }
+
                     // Force unfreeze immediately AND after a delay
                     if (this.controls) {
                         this.controls.isFrozen = false;
@@ -482,18 +521,46 @@ class InteractionSystem {
                 return;
             }
 
-            // Show page content first, then collect it
-            this.showPageContent(pageId, () => {
-                // After viewing, collect the page (with slight delay to prevent double-click)
-                setTimeout(() => {
-                    this.gameManager.collectPage(pageId);
-                    this.animateItemPickup(pageObject, () => {
-                        if (pageObject.parent) {
-                            pageObject.parent.remove(pageObject);
-                        }
-                    });
-                }, 100);
-            });
+            // Function to collect the page (used both with and without popup)
+            const collectPageNow = () => {
+                // Mark page as non-interactable immediately to prevent double-interaction
+                if (pageObject.userData) {
+                    pageObject.userData.interactable = false;
+                }
+
+                // Collect the page in the game manager
+                this.gameManager.collectPage(pageId);
+
+                // Animate and remove the page (and all its children including symbol)
+                this.animateItemPickup(pageObject, () => {
+                    // Make sure to remove all children first
+                    while(pageObject.children.length > 0) {
+                        pageObject.remove(pageObject.children[0]);
+                    }
+
+                    // Then remove the page itself from its parent
+                    if (pageObject.parent) {
+                        pageObject.parent.remove(pageObject);
+                    }
+                });
+
+                // Mark that we've shown the explanation (even if we skipped it this time)
+                this.hasSeenPageExplanation = true;
+            };
+
+            // Only show page content popup on the first page ever
+            if (!this.hasSeenPageExplanation) {
+                // First page - show popup explaining the page content
+                this.showPageContent(pageId, () => {
+                    // After viewing, collect the page (with slight delay to prevent double-click)
+                    setTimeout(() => {
+                        collectPageNow();
+                    }, 100);
+                });
+            } else {
+                // Subsequent pages - directly collect without showing popup
+                collectPageNow();
+            }
         } else {
             console.warn("Tried to pick up a page with no pageId property:", pageObject.name);
         }
@@ -2270,6 +2337,16 @@ Run.`
                                 interactionPrompt = this.isHiding ?
                                     interactionType.hidingPrompt :
                                     interactionType.prompt;
+                            }
+                            // Special handling for tic-tac-toe mirror to show different prompt if telephone not answered
+                            else if (interactableData.data.type === 'tic_tac_toe_mirror') {
+                                if (interactableData.data.won) {
+                                    interactionPrompt = interactionType.unlockedPrompt;
+                                } else if (!this.gameManager.telephoneAnswered) {
+                                    interactionPrompt = "The mirror is silent...";
+                                } else {
+                                    interactionPrompt = interactionType.prompt;
+                                }
                             } else {
                                 interactionPrompt = interactableData.data.locked ?
                                     (interactionType.lockedPrompt || interactionType.prompt) :
@@ -2285,7 +2362,7 @@ Run.`
         const currentPromptText = this.interactionPrompt.textContent;
         const currentPromptVisible = this.interactionPrompt.style.display === 'block';
 
-        if (isInteractable) {
+        if (isInteractable && !this.blockInteractionPrompt) {
             // Only update if prompt text changed or visibility changed
             if (currentPromptText !== interactionPrompt || !currentPromptVisible) {
                 // Get debug info from the last found interactable
@@ -2302,7 +2379,7 @@ Run.`
                 this.interactionPrompt.textContent = interactionPrompt;
                 this.interactionPrompt.style.display = 'block';
             }
-        } else if (blockedMessage) {
+        } else if (blockedMessage && !this.blockInteractionPrompt) {
             // Only update if message changed or visibility changed
             if (currentPromptText !== blockedMessage || !currentPromptVisible) {
                 console.log(`[Prompt] Showing blocked: "${blockedMessage}" (from updateCrosshair - blocked)`);
@@ -3035,6 +3112,13 @@ Run.`
         console.log('🪞 Mirror interaction handler called');
         console.log('  userData.won:', userData.won);
 
+        // Check if telephone has been answered first
+        if (!this.gameManager.telephoneAnswered) {
+            console.log('❌ Telephone not answered - blocking mirror puzzle');
+            this.showMessage("The mirror whispers... 'Answer the call first, then we shall play...'");
+            return;
+        }
+
         // Check if player has already won the tic-tac-toe puzzle
         if (userData.won) {
             console.log('  Already won - showing unlocked message');
@@ -3064,12 +3148,25 @@ Run.`
 
             // Mark the mirror as won so player can collect page 6
             userData.won = true;
+            console.log('✅ Set mirror userData.won = true');
+            console.log('Mirror userData after win:', userData);
+
+            // Also mark it on the mirror object itself to be safe
+            const mirrorObj = this.gameManager.mansion.props.get('tic_tac_toe_mirror');
+            if (mirrorObj && mirrorObj.userData) {
+                mirrorObj.userData.won = true;
+                console.log('✅ Also set mirror object userData.won = true');
+            }
 
             // Make page 6 interactable
             const page6 = this.gameManager.mansion.pages.find(p => p.name === 'S_Page6');
             if (page6) {
                 page6.userData.interactable = true;
                 console.log('✨ Page 6 is now unlocked!');
+                console.log('Page 6 userData:', page6.userData);
+            } else {
+                console.warn('⚠️ Could not find Page 6 in mansion.pages');
+                console.log('Available pages:', this.gameManager.mansion.pages.map(p => p.name));
             }
 
             // Unfreeze controls

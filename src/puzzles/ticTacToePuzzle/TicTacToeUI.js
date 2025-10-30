@@ -15,11 +15,14 @@ export class TicTacToeUI {
             background: '#1a1a1a',
             grid: '#8b0000',
             gridDark: '#440000',
-            playerX: '#d4af37',
-            ghostO: '#ff6b6b',
+            playerX: '#8b0000',      // Dark blood red for player
+            playerXGlow: '#ff0000',   // Bright blood red glow
+            ghostO: '#660000',        // Darker blood for ghost
+            ghostOGlow: '#cc0000',    // Blood red glow
             empty: '#000',
             hover: '#333',
-            highlight: '#8b0000'
+            highlight: '#8b0000',
+            bloodDrip: '#4a0000'      // Dripping blood color
         };
 
         this._addEventListeners();
@@ -169,46 +172,147 @@ export class TicTacToeUI {
     }
 
     /**
-     * Draw an X (player)
+     * Draw an X (player) - BLOODY VERSION
      */
     drawX(centerX, centerY) {
         const offset = this.cellSize * 0.3;
-        this.ctx.strokeStyle = this.colors.playerX;
-        this.ctx.lineWidth = 6;
-        this.ctx.lineCap = 'round';
 
-        // First diagonal
+        // Draw blood glow first (background layer)
+        this.ctx.strokeStyle = this.colors.playerXGlow;
+        this.ctx.lineWidth = 12;
+        this.ctx.lineCap = 'round';
+        this.ctx.globalAlpha = 0.3;
+        this.ctx.shadowBlur = 15;
+        this.ctx.shadowColor = this.colors.playerXGlow;
+
+        // First diagonal glow
         this.ctx.beginPath();
         this.ctx.moveTo(centerX - offset, centerY - offset);
         this.ctx.lineTo(centerX + offset, centerY + offset);
         this.ctx.stroke();
 
-        // Second diagonal
+        // Second diagonal glow
         this.ctx.beginPath();
         this.ctx.moveTo(centerX + offset, centerY - offset);
         this.ctx.lineTo(centerX - offset, centerY + offset);
         this.ctx.stroke();
+
+        // Reset for main X
+        this.ctx.globalAlpha = 1.0;
+        this.ctx.shadowBlur = 0;
+        this.ctx.strokeStyle = this.colors.playerX;
+        this.ctx.lineWidth = 8;
+        this.ctx.lineCap = 'round';
+
+        // First diagonal - with rough edges
+        this.ctx.beginPath();
+        this.ctx.moveTo(centerX - offset, centerY - offset);
+        // Add irregular path for blood effect
+        this.ctx.quadraticCurveTo(
+            centerX - offset * 0.3 + Math.random() * 3 - 1.5,
+            centerY - offset * 0.3 + Math.random() * 3 - 1.5,
+            centerX,
+            centerY
+        );
+        this.ctx.quadraticCurveTo(
+            centerX + offset * 0.3 + Math.random() * 3 - 1.5,
+            centerY + offset * 0.3 + Math.random() * 3 - 1.5,
+            centerX + offset,
+            centerY + offset
+        );
+        this.ctx.stroke();
+
+        // Second diagonal - with rough edges
+        this.ctx.beginPath();
+        this.ctx.moveTo(centerX + offset, centerY - offset);
+        this.ctx.quadraticCurveTo(
+            centerX + offset * 0.3 + Math.random() * 3 - 1.5,
+            centerY - offset * 0.3 + Math.random() * 3 - 1.5,
+            centerX,
+            centerY
+        );
+        this.ctx.quadraticCurveTo(
+            centerX - offset * 0.3 + Math.random() * 3 - 1.5,
+            centerY + offset * 0.3 + Math.random() * 3 - 1.5,
+            centerX - offset,
+            centerY + offset
+        );
+        this.ctx.stroke();
+
+        // Draw blood drips
+        this.drawBloodDrips(centerX, centerY + offset, 3);
     }
 
     /**
-     * Draw an O (ghost)
+     * Draw an O (ghost) - BLOODY VERSION
      */
     drawO(centerX, centerY) {
         const radius = this.cellSize * 0.25;
-        this.ctx.strokeStyle = this.colors.ghostO;
-        this.ctx.lineWidth = 6;
+
+        // Draw blood glow first
+        this.ctx.strokeStyle = this.colors.ghostOGlow;
+        this.ctx.lineWidth = 12;
         this.ctx.lineCap = 'round';
+        this.ctx.globalAlpha = 0.4;
+        this.ctx.shadowBlur = 20;
+        this.ctx.shadowColor = this.colors.ghostOGlow;
 
         this.ctx.beginPath();
         this.ctx.arc(centerX, centerY, radius, 0, Math.PI * 2);
         this.ctx.stroke();
 
-        // Add a subtle glow for the ghost
-        this.ctx.strokeStyle = this.colors.ghostO + '40';
-        this.ctx.lineWidth = 2;
+        // Reset for main O
+        this.ctx.globalAlpha = 1.0;
+        this.ctx.shadowBlur = 0;
+        this.ctx.strokeStyle = this.colors.ghostO;
+        this.ctx.lineWidth = 8;
+
+        // Draw irregular bloody circle
         this.ctx.beginPath();
-        this.ctx.arc(centerX, centerY, radius + 5, 0, Math.PI * 2);
+        const segments = 32;
+        for (let i = 0; i <= segments; i++) {
+            const angle = (i / segments) * Math.PI * 2;
+            // Add slight randomness for blood texture
+            const r = radius + (Math.random() * 2 - 1);
+            const x = centerX + Math.cos(angle) * r;
+            const y = centerY + Math.sin(angle) * r;
+
+            if (i === 0) {
+                this.ctx.moveTo(x, y);
+            } else {
+                this.ctx.lineTo(x, y);
+            }
+        }
+        this.ctx.closePath();
         this.ctx.stroke();
+
+        // Draw blood drips from bottom of O
+        this.drawBloodDrips(centerX, centerY + radius, 2);
+    }
+
+    /**
+     * Draw blood drips
+     */
+    drawBloodDrips(x, y, numDrips) {
+        this.ctx.fillStyle = this.colors.bloodDrip;
+        this.ctx.globalAlpha = 0.8;
+
+        for (let i = 0; i < numDrips; i++) {
+            const offsetX = (Math.random() - 0.5) * 10;
+            const dripLength = 5 + Math.random() * 8;
+            const dripWidth = 1 + Math.random() * 2;
+
+            // Draw drip as a gradient from top to bottom
+            this.ctx.beginPath();
+            this.ctx.moveTo(x + offsetX, y);
+            this.ctx.lineTo(x + offsetX - dripWidth / 2, y + dripLength);
+            this.ctx.lineTo(x + offsetX, y + dripLength + 2);
+            this.ctx.lineTo(x + offsetX + dripWidth / 2, y + dripLength);
+            this.ctx.closePath();
+            this.ctx.fill();
+        }
+
+        this.ctx.globalAlpha = 1.0;
     }
 
     /**

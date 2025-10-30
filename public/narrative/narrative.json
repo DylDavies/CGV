@@ -258,6 +258,16 @@
       "type": "deathScreen",
       "text": "YOU DIED\n\nNo one likes to be chased, least of all monsters.\n\nPress R to restart",
       "duration": -1
+    },
+    "death_mirror_loss": {
+      "type": "deathScreen",
+      "text": "YOU DIED\n\nThe mirror claimed your soul. You cannot defeat the entity without strategy.\n\nPress R to restart",
+      "duration": -1
+    },
+    "death_mirror_flee": {
+      "type": "deathScreen",
+      "text": "YOU DIED\n\nThere is no escape from the mirror. Face your fears or perish.\n\nPress R to restart",
+      "duration": -1
     }
   }
 }

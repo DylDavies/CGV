@@ -186,6 +186,7 @@ class MansionLoader {
         const materialMap = new Map(); // Track materials by their properties
 
         this.model.traverse((node) => {
+
             // Find and store specific, named props
             if (node.name === 'S_Telephone001') {
                 this.props.set('telephone', node);
