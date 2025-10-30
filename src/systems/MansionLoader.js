@@ -329,7 +329,6 @@ class MansionLoader {
             }
             
             if (node.name === 'S_Safe') {
-            if (node.name === 'S_Safe') {
                 this.props.set('safe', node);
                 node.userData = { type: 'safe', interactable: true };
                 console.log(`🔒 Found prop: ${node.name} (Safe)`);
