@@ -57,7 +57,8 @@ export class StageManager {
                     fluorescent: false,
                     lamps: true,
                     fireplaces: true
-                }
+                },
+                physicsExclusions: ['icosphere', 's_skybox']
             }
         };
 
