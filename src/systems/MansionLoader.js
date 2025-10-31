@@ -386,7 +386,14 @@ class MansionLoader {
 
                     // Add spawn point to the array for this page
                     this.pageSpawnPoints.get(pageNum).push(node);
-                    console.log(`📍 Found page spawn point: ${node.name} for S_Page${pageNum}`);
+                    console.log(`📍 Found page spawn point: ${node.name} for S_Page${pageNum} (has ${node.children.length} children)`);
+
+                    // DIAGNOSTIC: List children of spawn points
+                    if (node.children.length > 0) {
+                        node.children.forEach(child => {
+                            console.log(`   ⚠️ SPAWN POINT HAS CHILD: ${child.name} - This could cause hierarchy issues!`);
+                        });
+                    }
                 }
             }
 
@@ -586,6 +593,9 @@ class MansionLoader {
                 node.material.emissive = new THREE.Color(0xff0000);
                 node.material.emissiveIntensity = 0;
 
+                // DIAGNOSTIC: Count children before processing
+                console.log(`🔍 ${node.name} has ${node.children.length} children before traverse`);
+
                 // Enable shadows for all page meshes (including children)
                 node.traverse((child) => {
                     if (child.isMesh && child.material) {
@@ -626,6 +636,13 @@ class MansionLoader {
 
                         // PHYSICAL SEPARATION for symbols
                         if (isSymbol && child.parent) {
+                            // Store reference to symbol on parent page for easy access later
+                            if (!node.userData.symbolMeshes) {
+                                node.userData.symbolMeshes = [];
+                            }
+                            node.userData.symbolMeshes.push(child);
+                            console.log(`🔗 Stored symbol reference: ${child.name} on page ${node.name}`);
+
                             const symbolForward = new THREE.Vector3(0, 0, 1);
                             // Increase separation for symbols that need more space
                             let separationDistance = 0.04; // Increased from 0.025
@@ -636,6 +653,10 @@ class MansionLoader {
                         }
                     }
                 });
+
+                // DIAGNOSTIC: Count children after processing
+                console.log(`🔍 ${node.name} has ${node.children.length} children after traverse`);
+                console.log(`🔍 ${node.name} stored ${node.userData.symbolMeshes?.length || 0} symbol references`);
 
                 this.pages.push(node);
             }
@@ -683,6 +704,12 @@ class MansionLoader {
     randomizePageSpawns() {
         logger.log('🎲 Randomizing page spawn locations...');
 
+        // DIAGNOSTIC: Show spawn points map status
+        console.log(`🗺️ Spawn points map has ${this.pageSpawnPoints.size} entries:`);
+        this.pageSpawnPoints.forEach((spawnPoints, pageNum) => {
+            console.log(`   Page ${pageNum}: ${spawnPoints.length} spawn point(s)`);
+        });
+
         // Pages to randomize: 1, 2, 3, 5 (skip 4 and 6)
         const pagesToRandomize = [1, 2, 3, 5];
 
@@ -704,9 +731,18 @@ class MansionLoader {
                 continue;
             }
 
+            // DIAGNOSTIC: Check children before randomization
+            console.log(`🎲 BEFORE randomization: ${pageName} has ${pageObject.children.length} children`);
+
             // Randomly choose one spawn point
             const randomIndex = Math.floor(Math.random() * spawnPoints.length);
             const chosenSpawnPoint = spawnPoints[randomIndex];
+
+            // DIAGNOSTIC: Check what children the spawn point has
+            console.log(`🎯 Spawn point ${chosenSpawnPoint.name} has ${chosenSpawnPoint.children.length} children:`);
+            chosenSpawnPoint.children.forEach(child => {
+                console.log(`   - ${child.name} (type: ${child.type})`);
+            });
 
             // Get world position and rotation of the spawn point
             const worldPosition = new THREE.Vector3();
@@ -719,6 +755,9 @@ class MansionLoader {
             // Move the entire page object to the spawn point
             pageObject.position.copy(worldPosition);
             pageObject.quaternion.copy(worldQuaternion);
+
+            // DIAGNOSTIC: Check children after randomization
+            console.log(`🎲 AFTER randomization: ${pageName} has ${pageObject.children.length} children`);
 
             logger.log(`✅ ${pageName} spawned at ${chosenSpawnPoint.name} - Position: (${worldPosition.x.toFixed(2)}, ${worldPosition.y.toFixed(2)}, ${worldPosition.z.toFixed(2)})`);
         }
@@ -855,6 +894,21 @@ class MansionLoader {
         }
     });
 
+        // CRITICAL: Verify symbols are still children of the page before placing
+        console.log(`📄 Placing ${pageId} on slot ${slotIndex}`);
+        console.log(`  ↳ Page has ${pageObject.children.length} children`);
+
+        // List all children to verify symbols are present
+        const symbolChildren = [];
+        pageObject.traverse((child) => {
+            const childName = child.name.toLowerCase();
+            if (childName.includes('_symbol') || childName.includes('symbol')) {
+                symbolChildren.push(child.name);
+            }
+        });
+        console.log(`  ↳ Found ${symbolChildren.length} symbol(s): ${symbolChildren.join(', ')}`);
+        console.log(`  ↳ Stored symbolMeshes: ${pageObject.userData.symbolMeshes?.length || 0}`);
+
         this.scene.add(pageObject);
 
         // Get the world position and rotation of the slot
@@ -870,6 +924,9 @@ class MansionLoader {
         // Add a small offset along the object's normal to prevent z-fighting with the wall
         const normal = new THREE.Vector3(0, 0, 1).applyQuaternion(pageObject.quaternion);
         pageObject.position.add(normal.multiplyScalar(0.015));
+
+        console.log(`  ✅ Page positioned at (${worldPosition.x.toFixed(2)}, ${worldPosition.y.toFixed(2)}, ${worldPosition.z.toFixed(2)})`);
+        console.log(`  ✅ Children should have moved with parent`);
 
         // Make the page visible and turn off the red pulsing glow
         pageObject.visible = true;
@@ -907,23 +964,39 @@ class MansionLoader {
             return;
         }
 
-        // Find the symbol mesh using the naming convention (e.g., "S_Page1_Symbol").
-        const symbolName = `${pageId}_Symbol`;
-        const symbolMesh = pageObject.getObjectByName(symbolName);
+        // Debug: Check page object structure
+        console.log(`🔍 Attempting to activate glow for ${pageId}`);
+        console.log(`  ↳ Page found: ${pageObject ? 'Yes' : 'No'}`);
+        console.log(`  ↳ Page has ${pageObject.children.length} children in scene graph`);
 
-        if (symbolMesh) {
-            console.log(`✨ Activating glow for symbol: ${symbolName}`);
-            // Clone the material to ensure we're not affecting other objects.
-            symbolMesh.material = symbolMesh.material.clone();
+        // Use the stored symbol references from setupPageEffects()
+        const symbolMeshes = pageObject.userData.symbolMeshes;
 
-            // Set the emissive (glow) color to RED and make it glow immediately
-            symbolMesh.material.emissive.setHex(0xff0000);
-            symbolMesh.material.emissiveIntensity = 1.0; // Start glowing immediately
+        if (symbolMeshes && symbolMeshes.length > 0) {
+            console.log(`✨ Activating glow for ${symbolMeshes.length} symbol(s) on ${pageId}`);
 
-            // Add it to our array for animation in the tick method.
-            this.glowingSymbols.push(symbolMesh);
+            symbolMeshes.forEach((symbolMesh, index) => {
+                // Verify the symbol mesh is still valid
+                if (!symbolMesh || !symbolMesh.material) {
+                    console.error(`  ❌ Symbol ${index} is invalid or has no material!`);
+                    return;
+                }
+
+                console.log(`  ↳ ${symbolMesh.name} - Valid: ${symbolMesh.parent ? 'Yes' : 'No (detached!)'}`);
+
+                // Clone the material to ensure we're not affecting other objects.
+                symbolMesh.material = symbolMesh.material.clone();
+
+                // Set the emissive (glow) color to RED and make it glow immediately
+                symbolMesh.material.emissive.setHex(0xff0000);
+                symbolMesh.material.emissiveIntensity = 1.0; // Start glowing immediately
+
+                // Add it to our array for animation in the tick method.
+                this.glowingSymbols.push(symbolMesh);
+            });
         } else {
-            console.warn(`Could not find a symbol mesh named "${symbolName}" inside ${pageId}.`);
+            console.warn(`Could not find stored symbol references for ${pageId}. Was the page setup correctly?`);
+            console.warn(`  ↳ userData.symbolMeshes = ${pageObject.userData.symbolMeshes}`);
         }
     }
 

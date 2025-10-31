@@ -424,15 +424,13 @@ class InteractionSystem {
                 distance = mirrorHit.distance;
             }
 
-            if (distance <= this.interactionRange) {
-                const interactableData = this.findInteractableData(intersectedObject);
-                if (interactableData) {
-                    console.log('💬 Performing interaction for:', interactableData.data.type);
-                    this.performInteraction(interactableData.object, interactableData.data);
-                }
-            } else {
-                this.showMessage("Too far away to interact");
+            // Check if the hit object is actually interactable
+            const interactableData = this.findInteractableData(intersectedObject);
+            if (interactableData && distance <= this.interactionRange) {
+                console.log('💬 Performing interaction for:', interactableData.data.type);
+                this.performInteraction(interactableData.object, interactableData.data);
             }
+            // If not interactable or too far, do nothing (no message)
         }
     }
 
@@ -584,10 +582,6 @@ class InteractionSystem {
 
                 // Animate and remove the page (and all its children including symbol)
                 this.animateItemPickup(pageObject, () => {
-                    // Make sure to remove all children first
-                    while(pageObject.children.length > 0) {
-                        pageObject.remove(pageObject.children[0]);
-                    }
 
                     // Then remove the page itself from its parent
                     if (pageObject.parent) {
@@ -2602,18 +2596,14 @@ Run.`
                 sofaName.includes('Sofa005') || sofaName.includes('Sofa006')) {
 
                 console.log(`🔧 Recalculating physics for BOTH sofas...`);
-                console.log(`🔧 Available props:`, Array.from(this.gameManager.mansion.props.keys()));
+                console.log(`🔧 Available props:`, Array.from(this.stageManager.currentLoader.props.keys()));
 
                 // Find both sofas in the scene - try multiple naming variations
-                let sofa5 = this.gameManager.mansion.props.get('sofa_S_Sofa.005');
-                if (!sofa5) sofa5 = this.gameManager.mansion.props.get('sofa_S_Sofa005');
-                if (!sofa5) sofa5 = this.gameManager.mansion.props.get('S_Sofa.005');
-                if (!sofa5) sofa5 = this.gameManager.mansion.props.get('S_Sofa005');
+                let sofa5 = this.stageManager.currentLoader.props.get('sofa_S_Sofa005');
+                if (!sofa5) sofa5 = this.stageManager.currentLoader.props.get('S_Sofa005');
 
-                let sofa6 = this.gameManager.mansion.props.get('sofa_S_Sofa.006');
-                if (!sofa6) sofa6 = this.gameManager.mansion.props.get('sofa_S_Sofa006');
-                if (!sofa6) sofa6 = this.gameManager.mansion.props.get('S_Sofa.006');
-                if (!sofa6) sofa6 = this.gameManager.mansion.props.get('S_Sofa006');
+                let sofa6 = this.stageManager.currentLoader.props.get('sofa_S_Sofa006');
+                if (!sofa6) sofa6 = this.stageManager.currentLoader.props.get('S_Sofa006');
 
                 console.log(`🔧 Found sofa 5: ${!!sofa5} (name: ${sofa5?.name})`);
                 console.log(`🔧 Found sofa 6: ${!!sofa6} (name: ${sofa6?.name})`);
@@ -2646,7 +2636,7 @@ Run.`
                         if (child.isMesh && child.name) {
                             try {
                                 // Pass the mesh object itself, not the name
-                                const success = this.gameManager.mansion.recalculatePhysicsForObject(child);
+                                const success = this.stageManager.currentLoader.recalculatePhysicsForObject(child);
                                 if (success) {
                                     successCount++;
                                     console.log(`  ✓ S_Sofa005 child: ${child.name}`);
@@ -2674,7 +2664,7 @@ Run.`
                         if (child.isMesh && child.name) {
                             try {
                                 // Pass the mesh object itself, not the name
-                                const success = this.gameManager.mansion.recalculatePhysicsForObject(child);
+                                const success = this.stageManager.currentLoader.recalculatePhysicsForObject(child);
                                 if (success) {
                                     successCount++;
                                     console.log(`  ✓ S_Sofa006 child: ${child.name}`);
