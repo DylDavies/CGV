@@ -348,6 +348,26 @@
       "type": "deathScreen",
       "text": "YOU DIED\n\nNo one likes to be chased, least of all monsters.\n\nPress R to restart",
       "duration": -1
+    },
+    "death_mirror_loss": {
+      "type": "deathScreen",
+      "text": "YOU DIED\n\nThe mirror claimed your soul. You cannot defeat the entity without strategy.\n\nPress R to restart",
+      "duration": -1
+    },
+    "death_mirror_flee": {
+      "type": "deathScreen",
+      "text": "YOU DIED\n\nThere is no escape from the mirror. Face your fears or perish.\n\nPress R to restart",
+      "duration": -1
+    },
+    "death_annie_potion": {
+      "type": "deathScreen",
+      "text": "YOU DIED\n\nAnnie's 'freedom' was not the kind you sought. Never trust a doll's promise.\n\nPress R to restart",
+      "duration": -1
+    },
+    "death_annie_refusal": {
+      "type": "deathScreen",
+      "text": "YOU DIED\n\nAnnie doesn't like being told no. Some games you must play to survive.\n\nPress R to restart",
+      "duration": -1
     }
   }
 }

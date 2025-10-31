@@ -181,7 +181,7 @@ class GameManager {
 
         this.addToInventory({
             name: `Page (${pageData.symbol})`,
-            type: 'scroll',
+            type: 'page',
             description: 'A strange page with a unique symbol.',
             stackable: false,
             pageId: pageId, // Store the ID for placing it later
@@ -526,10 +526,27 @@ class GameManager {
         if (isVisible) {
             this.ui.inventoryPopup.style.display = 'none';
             if (this.controls) this.controls.unfreeze(); // NEW: Unfreeze controls when closing
+            // Remove outside click listener
+            if (this.inventoryClickOutsideHandler) {
+                document.removeEventListener('click', this.inventoryClickOutsideHandler);
+                this.inventoryClickOutsideHandler = null;
+            }
         } else {
             this.updateInventoryPopup();
             this.ui.inventoryPopup.style.display = 'block';
             if (this.controls) this.controls.freeze(); // NEW: Freeze controls when opening
+
+            // Add outside click listener after a short delay (to prevent immediate close)
+            setTimeout(() => {
+                this.inventoryClickOutsideHandler = (e) => {
+                    // Check if click is outside the popup
+                    if (!this.ui.inventoryPopup.contains(e.target)) {
+                        console.log('🎒 Closing inventory - clicked outside');
+                        this.toggleInventoryPopup();
+                    }
+                };
+                document.addEventListener('click', this.inventoryClickOutsideHandler);
+            }, 100);
         }
     }
 
@@ -585,6 +602,7 @@ class GameManager {
     getItemIcon(itemType) {
         const icons = {
             'key': '🔑',
+            'page': '📜',
             'scroll': '📜',
             'tool': '🔧',
             'weight_object': '⚖️',
@@ -604,7 +622,7 @@ class GameManager {
         const pageData = PAGE_DATA[pageId];
         this.addToInventory({
             name: `Page (${pageData.symbol})`,
-            type: 'scroll',
+            type: 'page',
             description: 'A strange page with a unique symbol.',
             stackable: false,
             pageId: pageId,
@@ -638,18 +656,38 @@ class GameManager {
     updateInventoryUI() {
         const inventoryHTML = `
             <h3 style="margin: 0 0 10px 0; color: #ffaa00;">🎒 Inventory (${this.inventory.length}/10)</h3>
-            ${this.inventory.length === 0 ? 
-                '<p style="color: #888; font-style: italic;">Empty</p>' : 
-                this.inventory.map((item, index) => 
-                    `<div class="inventory-item" onclick="window.gameManager?.useItem?.(${index})" style="margin: 3px 0;">
+            ${this.inventory.length === 0 ?
+                '<p style="color: #888; font-style: italic;">Empty</p>' :
+                this.inventory.map((item, index) =>
+                    `<div class="inventory-item" onclick="window.gameManager?.useItem?.(${index})"
+                         style="margin: 3px 0; cursor: pointer; padding: 5px; border-radius: 3px; transition: background 0.2s;"
+                         onmouseover="this.style.background='rgba(255,170,0,0.1)'"
+                         onmouseout="this.style.background='transparent'">
                         • <span style="color: #${this.getItemColor(item.type)}">${item.name}</span>
                         ${item.description ? `<br><small style="color: #aaa; margin-left: 10px;">${item.description}</small>` : ''}
+                        ${item.type === 'page' ? `<br><small style="color: #88aaff; margin-left: 10px;">Click to read</small>` : ''}
                     </div>`
                 ).join('')
             }
         `;
-        
+
         this.ui.inventory.innerHTML = inventoryHTML;
+    }
+
+    useItem(index) {
+        const item = this.inventory[index];
+        if (!item) return;
+
+        console.log(`Using item: ${item.name} (${item.type})`);
+
+        // Handle page viewing
+        if (item.type === 'page' && item.pageId) {
+            // Show page content through InteractionSystem
+            if (window.gameControls && window.gameControls.interactionSystem) {
+                window.gameControls.interactionSystem.showPageContent(item.pageId);
+            }
+        }
+        // Add other item use cases here in the future
     }
 
     updateObjectivesUI() {
@@ -1012,6 +1050,13 @@ class GameManager {
             const item = this.inventory[itemIndex];
             
             switch (item.type) {
+                case 'page':
+                    // Show page content through InteractionSystem
+                    if (window.gameControls && window.gameControls.interactionSystem) {
+                        window.gameControls.interactionSystem.showPageContent(item.pageId);
+                    }
+                    break;
+
                 case 'scroll':
                     this.showInteraction(
                         item.name,
@@ -1037,18 +1082,31 @@ class GameManager {
         }
     }
 
-    consumePotion(potion, itemIndex) {
+    async consumePotion(potion, itemIndex) {
+        console.log(`🧪 Consuming potion: ${potion.name}, effect: ${potion.effect}`);
+
         // Remove potion from inventory
         this.inventory.splice(itemIndex, 1);
         this.updateUI();
 
-        // Update popup if it's visible
+        // Close inventory popup if visible
         if (this.ui.inventoryPopup && this.ui.inventoryPopup.style.display === 'block') {
-            this.updateInventoryPopup();
+            this.toggleInventoryPopup();
         }
 
-        // Apply potion effects (silently)
+        // Apply potion effects
         switch (potion.effect) {
+            case 'annie_death':
+                // Annie's "freedom" potion kills the player
+                console.log('💀 Annie death potion consumed - triggering death sequence');
+                this.showHint("The potion tastes sweet... then bitter... then...", 3000);
+
+                // Wait a moment before triggering death
+                setTimeout(async () => {
+                    console.log('💀 Calling onPlayerDeath("annie_potion")');
+                    await this.onPlayerDeath('annie_potion');
+                }, 3000);
+                break;
             case 'vision':
                 // Could temporarily increase interaction range or reveal hidden objects
                 break;
@@ -1480,7 +1538,13 @@ class GameManager {
 
         // Show appropriate death screen based on death type
         const deathEvent = `endings.death_${deathType}`;
-        await window.gameControls.narrativeManager.triggerEvent(deathEvent);
+        console.log(`💀 Triggering death event: ${deathEvent}`);
+
+        if (window.gameControls && window.gameControls.narrativeManager) {
+            await window.gameControls.narrativeManager.triggerEvent(deathEvent);
+        } else {
+            console.error('💀 NarrativeManager not found!');
+        }
 
         // R key restart is handled by PlayerControls.js onKeyDown handler
         console.log('💀 Press R to restart the game');
@@ -1493,7 +1557,13 @@ class GameManager {
         // Only check collision if we're in Stage 2 (monster is spawned)
         if (this.gameStage !== 2) return;
 
-        const monster = window.gameControls.monsterAI.monster;
+        // Don't check collision if player is hiding
+        if (window.gameControls.interactionSystem && window.gameControls.interactionSystem.isHiding) {
+            return;
+        }
+
+        const monsterAI = window.gameControls.monsterAI;
+        const monster = monsterAI.monster;
         if (!monster) return;
 
         const playerPos = this.camera.position;
@@ -1501,10 +1571,10 @@ class GameManager {
 
         const distance = playerPos.distanceTo(monsterPos);
 
-        // If player touches monster (within 1.5 units), they die
-        if (distance < 1.5) {
+        // If player is close (within 1.5 units) and attack is complete, kill player
+        if (distance < 1.5 && monsterAI.isAttackComplete()) {
             // Determine death message based on monster aggression level
-            const aggressionLevel = window.gameControls.monsterAI.aggressionLevel;
+            const aggressionLevel = monsterAI.aggressionLevel;
             let deathType;
             if (aggressionLevel >= 5) {
                 deathType = 'monster_hostile';
@@ -1513,7 +1583,17 @@ class GameManager {
             } else {
                 deathType = 'monster_curious';
             }
+
+            // Reset attack state
+            monsterAI.resetAttack();
+
+            // Kill player
             this.onPlayerDeath(deathType);
+        }
+
+        // If attack is complete but player escaped (distance > 1.5), reset attack so monster can move again
+        if (monsterAI.isAttackComplete() && distance > 1.5) {
+            monsterAI.resetAttack();
         }
     }
 
