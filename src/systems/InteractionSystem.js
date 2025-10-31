@@ -1,15 +1,17 @@
 // src/systems/InteractionSystem.js
 
 import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.127.0/build/three.module.js';
+import { AnnieInteraction } from '../interactions/AnnieInteraction.js';
 
 class InteractionSystem {
-   constructor(camera, scene, gameManager, uiManager, controls, stageManager = null) {
+   constructor(camera, scene, gameManager, uiManager, controls, audioManager, stageManager = null) {
         this.camera = camera;
         this.scene = scene; // Fallback scene for single-scene mode
         this.stageManager = stageManager; // For multi-scene support
         this.gameManager = gameManager;
         this.uiManager = uiManager; // uiManager was missing from the original constructor but is used, so I've added it.
         this.controls = controls; // NEW: Store the controls object
+        this.audioManager = audioManager; // NEW: Store the audio manager
         this.raycaster = new THREE.Raycaster();
         this.mouse = new THREE.Vector2();
         this.interactableObjects = new Map();
@@ -23,14 +25,39 @@ class InteractionSystem {
 
         this.messageQueue = []; // NEW: A queue for interaction messages.
         this.isMessageVisible = false; // NEW: A flag to check visibility.
+        this.blockInteractionPrompt = false; // Flag to block interaction prompts during important messages
+        this.hasSeenPageExplanation = false; // Track if player has seen the first page explanation popup
         this.isColorPuzzleSolved = false;
         this.justClosedUI = false; // Prevent immediate re-interaction after closing UI
+
+        // Sofa movement system
+        this.movingSofa = null; // Currently moving sofa
+        this.sofaMovementSpeed = 0.01; // Units per frame (slow movement)
+        this.sofaMaxMovement = 1; // Maximum distance to move (0.5 units)
+        this.isEKeyHeld = false; // Track if E key is held
+
+        // Hiding system
+        this.isHiding = false; // Is player currently hiding
+        this.currentHidingSpot = null; // Current wardrobe object player is in
+        this.hideStartTime = 0; // When player started hiding
+        this.hideTimer = null; // Timer for aggression decrease
+        this.monsterInvestigationTriggered = false; // Track if monster has investigated this hiding session
+        this.monsterAggroReductionTriggered = false; // Track if aggro reduction has occurred
+        this.hideOverlay = null; // Visual overlay for hiding
+        this.originalCameraPosition = null; // Store player's position before hiding
+        this.originalCameraQuaternion = null; // Store player's rotation before hiding
+        this.lockedCameraPosition = null; // Camera position while hiding (locked)
+        this.lockedCameraQuaternion = null; // Camera rotation while hiding (locked)
+        this.flashlightWasOn = false; // Track if flashlight was on before hiding
 
         // UI Elements
         this.crosshair = null;
         this.interactionPrompt = null;
         this.puzzleUI = null;
-        
+
+        // Initialize Annie interaction handler
+        this.annieInteraction = new AnnieInteraction(this, this.stageManager);
+
         this.setupEventListeners();
         this.createUI();
         this.registerInteractionTypes();
@@ -233,6 +260,22 @@ class InteractionSystem {
                 prompt: "Press E to pick up bucket",
                 handler: this.handleBucketInteraction.bind(this)
             },
+            sofa: {
+                prompt: "Hold E to push sofa",
+                movedPrompt: "Sofa won't move any further",
+                pushingPrompt: "Pushing... (Hold E)",
+                handler: this.handleSofaInteraction.bind(this)
+            },
+            wardrobe: {
+                prompt: "Press E to hide",
+                hidingPrompt: "Press E to exit",
+                handler: this.handleWardrobeInteraction.bind(this)
+            },
+            tic_tac_toe_mirror: {
+                prompt: "Press E to play the haunted mirror game",
+                unlockedPrompt: "The mirror gleams peacefully",
+                handler: this.handleTicTacToeMirrorInteraction.bind(this)
+            },
             computer: {
                 prompt: "Press E to use computer",
                 handler: this.handleComputerInteraction.bind(this)
@@ -328,9 +371,19 @@ class InteractionSystem {
     onKeyDown(event) {
         switch (event.code) {
             case 'KeyE':
-                if (this.controls && this.controls.isFrozen) {
-                return;
+                // Special handling for hiding - allow E key to exit
+                if (this.isHiding) {
+                    this.exitHiding();
+                    return;
                 }
+
+                if (this.controls && this.controls.isFrozen) {
+                    return;
+                }
+
+                // Set E key held state
+                this.isEKeyHeld = true;
+
                 if (!this.currentInteraction) {
                     this.checkInteraction();
                 }
@@ -346,7 +399,23 @@ class InteractionSystem {
     }
 
     onKeyUp(event) {
-        // Handle key up events if needed
+        switch (event.code) {
+            case 'KeyE':
+                // Release E key
+                this.isEKeyHeld = false;
+
+                // Stop moving sofa if currently moving
+                if (this.movingSofa) {
+                    this.showMessage(`Stopped pushing sofa. Moved ${this.movingSofa.distanceMoved.toFixed(2)} units.`);
+                    this.movingSofa = null;
+
+                    // Clear the interaction state
+                    if (this.currentInteraction === 'sofa_movement') {
+                        this.currentInteraction = null;
+                    }
+                }
+                break;
+        }
     }
 
     onTouchStart(event) {
@@ -377,19 +446,43 @@ class InteractionSystem {
         this.raycaster.setFromCamera(new THREE.Vector2(0, 0), this.camera);
         const currentScene = this.getCurrentScene();
         const intersects = this.raycaster.intersectObjects(currentScene.children, true);
-        
+
+        console.log('🎯 checkInteraction: ' + intersects.length + ' intersections found');
+
         if (intersects.length > 0) {
-            const intersectedObject = intersects[0].object;
-            const distance = intersects[0].distance;
-            
-            if (distance <= this.interactionRange) {
-                const interactableData = this.findInteractableData(intersectedObject);
-                if (interactableData) {
-                    this.performInteraction(interactableData.object, interactableData.data);
-                }
-            } else {
-                this.showMessage("Too far away to interact");
+            // Log first 3 intersections
+            for (let i = 0; i < Math.min(3, intersects.length); i++) {
+                const interactData = this.findInteractableData(intersects[i].object);
+                console.log(`  [${i}] ${intersects[i].object.name} - type: ${interactData?.data?.type}, distance: ${intersects[i].distance.toFixed(2)}`);
             }
+
+            // PRIORITY: Check if mirror is in the raycast hits (prioritize mirror over page 6)
+            let intersectedObject = intersects[0].object;
+            let distance = intersects[0].distance;
+
+            let mirrorHit = null;
+            for (let i = 0; i < intersects.length; i++) {
+                const interactData = this.findInteractableData(intersects[i].object);
+                if (interactData?.data?.type === 'tic_tac_toe_mirror' && intersects[i].distance <= this.interactionRange) {
+                    mirrorHit = { object: intersects[i].object, distance: intersects[i].distance, index: i };
+                    console.log('🪞 Mirror prioritized for interaction');
+                    break;
+                }
+            }
+
+            // Use mirror if found, otherwise use closest interactable
+            if (mirrorHit) {
+                intersectedObject = mirrorHit.object;
+                distance = mirrorHit.distance;
+            }
+
+            // Check if the hit object is actually interactable
+            const interactableData = this.findInteractableData(intersectedObject);
+            if (interactableData && distance <= this.interactionRange) {
+                console.log('💬 Performing interaction for:', interactableData.data.type);
+                this.performInteraction(interactableData.object, interactableData.data);
+            }
+            // If not interactable or too far, do nothing (no message)
         }
     }
 
@@ -398,7 +491,7 @@ class InteractionSystem {
         if (object.userData && object.userData.type) {
             return { object: object, data: object.userData };
         }
-        
+
         // Check parent chain
         let parent = object.parent;
         while (parent && parent !== this.scene) {
@@ -407,7 +500,7 @@ class InteractionSystem {
             }
             parent = parent.parent;
         }
-        
+
         return null;
     }
 
@@ -663,16 +756,351 @@ class InteractionSystem {
             return;
         }
 
-        if (userData.pageId) {
-            this.gameManager.collectPage(userData.pageId);
-            this.animateItemPickup(pageObject, () => {
-                if (pageObject.parent) {
-                    pageObject.parent.remove(pageObject);
+        // Extract the actual page ID (handle child meshes like S_Page6_Symbol)
+        let pageId = userData.pageId;
+        if (!pageId) {
+            console.warn('No pageId found');
+            return;
+        }
+
+        // Check if this page has already been collected
+        if (this.gameManager.collectedPages.includes(pageId)) {
+            console.log(`Page ${pageId} already collected, ignoring interaction`);
+            return;
+        }
+
+        // If pageId is a child like "S_Page6_Symbol", extract the parent page ID
+        const pageMatch = pageId.match(/^(S_Page\d+)/);
+        if (pageMatch) {
+            pageId = pageMatch[1];
+        }
+
+        console.log(`📄 Page interaction: "${userData.pageId}" -> "${pageId}"`);
+
+        if (pageId) {
+            // Special handling for Page 6 - Tic-tac-toe mirror puzzle requirement
+            if (pageId === 'S_Page6') {
+                console.log('🎮 Page 6 interaction - checking mirror status');
+                // Check if the player has won the tic-tac-toe puzzle
+                const mirror = this.stageManager.currentLoader.props.get('tic_tac_toe_mirror');
+                console.log('Mirror object:', mirror);
+                console.log('Mirror found:', !!mirror);
+                console.log('Mirror userData:', mirror?.userData);
+                console.log('Mirror won status:', mirror?.userData?.won);
+
+                if (!mirror || !mirror.userData || !mirror.userData.won) {
+                    console.log('❌ Mirror not won - blocking page 6');
+
+                    // Block interaction prompts during ghost warning
+                    this.blockInteractionPrompt = true;
+
+                    // Array of spooky ghost dialogues
+                    const ghostWarnings = [
+                        "A chilling whisper echoes... 'Not yours... Play the mirror game first, mortal...'",
+                        "Cold phantom hands push you away... 'The mirror demands a challenge... Face me there...'",
+                        "The page burns with spectral fire... 'Win the game at the mirror, if you dare...'",
+                        "A ghostly voice hisses... 'This page is MINE... Defeat me at the mirror to claim it...'",
+                        "The air grows icy cold... 'Play... Lose... Die... Or win and take your prize...'",
+                        "Ethereal chains bind the page... 'The mirror awaits... A game for your soul...'"
+                    ];
+
+                    // Pick a random spooky warning
+                    const randomWarning = ghostWarnings[Math.floor(Math.random() * ghostWarnings.length)];
+                    this.showMessage(randomWarning, 6000); // Show for 6 seconds so player can read it
+
+                    // Unblock prompts after message is done (with small buffer)
+                    setTimeout(() => {
+                        this.blockInteractionPrompt = false;
+                    }, 6200);
+
+                    // Play a spooky sound effect
+                    if (this.audioManager) {
+                        this.audioManager.playRandomAmbientSound();
+                    }
+
+                    // Force unfreeze immediately AND after a delay
+                    if (this.controls) {
+                        this.controls.isFrozen = false;
+                        this.controls.unfreeze();
+                    }
+                    return;
                 }
+                console.log('✅ Mirror won - allowing page 6 collection');
+            }
+
+            // Special handling for Page 4 - Annie interaction
+            if (pageId === 'S_Page4') {
+                this.annieInteraction.handleAnniePageInteraction(pageObject, userData);
+                return;
+            }
+
+            // Function to collect the page (used both with and without popup)
+            const collectPageNow = () => {
+                // Mark page as non-interactable immediately to prevent double-interaction
+                if (pageObject.userData) {
+                    pageObject.userData.interactable = false;
+                }
+
+                // Collect the page in the game manager
+                this.gameManager.collectPage(pageId);
+
+                // Animate and remove the page (and all its children including symbol)
+                this.animateItemPickup(pageObject, () => {
+
+                    // Then remove the page itself from its parent
+                    if (pageObject.parent) {
+                        pageObject.parent.remove(pageObject);
+                    }
+                });
+            };
+
+            // Always show page content popup for every page
+            this.showPageContent(pageId, () => {
+                // After viewing, collect the page (with slight delay to prevent double-click)
+                setTimeout(() => {
+                    collectPageNow();
+                }, 100);
             });
         } else {
             console.warn("Tried to pick up a page with no pageId property:", pageObject.name);
         }
+    }
+
+    getPageContent(pageId) {
+        // Define unique content for each page
+        const pageContents = {
+            'S_Page1': {
+                title: 'Page 1: The Beginning',
+                content: `The mansion stands silent tonight, but I can feel it watching me.
+
+Every shadow seems alive, every creak of the floorboards sounds like footsteps. I came here seeking answers about my family's past, but I'm beginning to wonder if some secrets are better left buried.
+
+The old caretaker warned me not to come after dark. I should have listened.`
+            },
+            'S_Page2': {
+                title: 'Page 2: Strange Findings',
+                content: `I found something in the library today. Hidden behind a loose panel, a collection of letters dating back decades. They speak of rituals, of something they tried to contain within these walls.
+
+Whatever it was, I don't think they succeeded.
+
+The lights keep flickering, even though I checked all the fuses.`
+            },
+            'S_Page3': {
+                title: 'Page 3: The Basement',
+                content: `There's something in the basement. I can hear it moving down there when I'm trying to sleep. Heavy, deliberate footsteps that start and stop without reason.
+
+I tried to board up the door, but the next morning all the planks were neatly stacked beside it.
+
+It wants me to come down. But I'm not ready. Not yet.`
+            },
+            'S_Page4': {
+                title: 'Page 4: Annie',
+                content: `I found a doll in one of the bedrooms. The tag says her name is Annie. She has this unnerving smile, and her eyes seem to follow you around the room.
+
+I moved her to the attic, but she keeps appearing back in the bedroom. Always sitting in the same chair, always facing the door.
+
+I've stopped moving her.`
+            },
+            'S_Page5': {
+                title: 'Page 5: The Truth',
+                content: `I understand now. This isn't just a haunted house. This is a prison. The original owners didn't just die here – they were consumed, absorbed into the very fabric of the building.
+
+And now it wants me too.
+
+The walls are breathing. I can feel them contract and expand when I press my hand against them. This place is alive.`
+            },
+            'S_Page6': {
+                title: 'Page 6: Final Entry',
+                content: `If you're reading this, I'm probably gone. Either I escaped, or I became part of the mansion like the others.
+
+There is a way out. The ritual in the basement can be reversed, but it requires all six pages to be placed in the correct order. Look for the symbols on the wall near the entrance.
+
+Whatever you do, don't let the darkness catch you. It knows you're here now.
+
+Run.`
+            }
+        };
+
+        return pageContents[pageId] || {
+            title: 'Unknown Page',
+            content: 'The writing on this page is too faded to read...'
+        };
+    }
+
+    showPageContent(pageId, onClose = null) {
+        console.log(`📄 Showing page content for: ${pageId}`);
+
+        // Immediately hide all prompts BEFORE freezing
+        const currentPrompt = this.interactionPrompt.textContent;
+        if (currentPrompt) {
+            console.log(`📄 Clearing prompt before showing page: "${currentPrompt}"`);
+        }
+        this.interactionPrompt.style.display = 'none';
+        this.interactionPrompt.textContent = '';
+        this.crosshair.style.background = 'white';
+        this.crosshair.style.borderColor = 'rgba(255,255,255,0.8)';
+        this.crosshair.style.width = '4px';
+        this.crosshair.style.height = '4px';
+
+        // Release E key to prevent movement after viewing page
+        this.isEKeyHeld = false;
+
+        if (this.controls) this.controls.freeze();
+        this.currentInteraction = 'page_view';
+
+        const pageData = this.getPageContent(pageId);
+
+        // Remove any existing page overlay first
+        const existingOverlay = document.getElementById('page-overlay');
+        if (existingOverlay) {
+            document.body.removeChild(existingOverlay);
+        }
+
+        // Create old page overlay
+        const pageOverlay = document.createElement('div');
+        pageOverlay.id = 'page-overlay';
+        pageOverlay.tabIndex = -1; // Make focusable
+        pageOverlay.style.cssText = `
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.95);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 3000;
+            backdrop-filter: blur(5px);
+            outline: none;
+        `;
+
+        // Create old page paper
+        const pagePaper = document.createElement('div');
+        pagePaper.style.cssText = `
+            width: 600px;
+            max-height: 80vh;
+            background: linear-gradient(to bottom, #f4e9d4 0%, #e8dcc4 100%);
+            border: 2px solid #8b7355;
+            box-shadow:
+                0 0 40px rgba(0, 0, 0, 0.8),
+                inset 0 0 100px rgba(139, 115, 85, 0.1);
+            padding: 40px;
+            font-family: 'Georgia', serif;
+            color: #2c1810;
+            position: relative;
+            overflow-y: auto;
+
+            /* Old paper texture effect */
+            background-image:
+                repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(139, 115, 85, 0.03) 2px, rgba(139, 115, 85, 0.03) 4px),
+                repeating-linear-gradient(90deg, transparent, transparent 2px, rgba(139, 115, 85, 0.03) 2px, rgba(139, 115, 85, 0.03) 4px);
+        `;
+
+        // Page title
+        const pageTitle = document.createElement('h2');
+        pageTitle.textContent = pageData.title;
+        pageTitle.style.cssText = `
+            font-size: 24px;
+            font-weight: bold;
+            text-align: center;
+            margin-bottom: 30px;
+            color: #1a0f08;
+            text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.1);
+            font-family: 'Georgia', serif;
+            border-bottom: 2px solid #8b7355;
+            padding-bottom: 10px;
+        `;
+
+        // Page content
+        const pageContent = document.createElement('div');
+        pageContent.textContent = pageData.content;
+        pageContent.style.cssText = `
+            font-size: 16px;
+            line-height: 1.8;
+            white-space: pre-line;
+            text-align: justify;
+            color: #3c2415;
+            font-family: 'Georgia', serif;
+            margin-bottom: 30px;
+        `;
+
+        // Close button
+        const closeButton = document.createElement('button');
+        closeButton.textContent = 'Close (Press E)';
+        closeButton.style.cssText = `
+            width: 100%;
+            padding: 15px;
+            background: #5c4a3a;
+            color: #f4e9d4;
+            border: 2px solid #3c2a1a;
+            cursor: pointer;
+            font-family: 'Georgia', serif;
+            font-size: 16px;
+            transition: all 0.3s;
+        `;
+        closeButton.onmouseover = () => {
+            closeButton.style.background = '#6c5a4a';
+        };
+        closeButton.onmouseout = () => {
+            closeButton.style.background = '#5c4a3a';
+        };
+
+        const closePageView = () => {
+            console.log('📄 Closing page view');
+
+            // Check if overlay still exists
+            if (document.body.contains(pageOverlay)) {
+                document.body.removeChild(pageOverlay);
+            }
+
+            this.currentInteraction = null;
+
+            // Check if inventory popup is open - if so, keep controls frozen
+            const inventoryPopup = document.getElementById('inventory-popup');
+            const isInventoryOpen = inventoryPopup && inventoryPopup.style.display === 'block';
+
+            if (this.controls && !isInventoryOpen) {
+                this.controls.unfreeze();
+            }
+
+            // Call onClose callback if provided
+            if (onClose && typeof onClose === 'function') {
+                onClose();
+            }
+        };
+
+        closeButton.onclick = (e) => {
+            e.stopPropagation();
+            closePageView();
+        };
+
+        // Allow E key to close
+        const keyHandler = (e) => {
+            if (e.code === 'KeyE') {
+                e.preventDefault();
+                document.removeEventListener('keydown', keyHandler);
+                closePageView();
+            }
+        };
+        document.addEventListener('keydown', keyHandler);
+
+        pagePaper.appendChild(pageTitle);
+        pagePaper.appendChild(pageContent);
+        pagePaper.appendChild(closeButton);
+        // Prevent clicks on overlay from passing through
+        pageOverlay.addEventListener('click', (e) => {
+            e.stopPropagation();
+        });
+
+        pageOverlay.appendChild(pagePaper);
+        document.body.appendChild(pageOverlay);
+
+        // Focus the overlay to capture keyboard events
+        setTimeout(() => {
+            pageOverlay.focus();
+            console.log('📄 Page overlay focused for keyboard input');
+        }, 100);
     }
 
     handlePageSlotInteraction(slotObject, userData) {
@@ -1486,6 +1914,330 @@ class InteractionSystem {
         await window.gameControls.narrativeManager.triggerEvent('stage1.put_out_fire_objective');
     }
 
+    async handleSofaInteraction(sofa, userData) {
+        // Check if sofa has already been fully moved - silently return (no message)
+        if (userData.moved) {
+            console.log(`🛋️ Sofa ${sofa.name} already moved, ignoring interaction`);
+            return;
+        }
+
+        // Check if already moving this sofa
+        if (this.movingSofa && this.movingSofa.sofa === sofa) {
+            return; // Already moving, continue in tick()
+        }
+
+        // Start moving the sofa in positive Z direction
+        this.movingSofa = {
+            sofa: sofa,
+            userData: userData,
+            distanceMoved: userData.distanceMoved, // Use the sofa's tracked distance
+            initialPosition: sofa.position.clone(),
+            sofaName: sofa.name // Store the name explicitly
+        };
+
+        this.currentInteraction = 'sofa_movement';
+
+        console.log(`🛋️ Started pushing ${sofa.name}. Current distance: ${userData.distanceMoved}. Hold E to continue.`);
+        console.log(`🛋️ Sofa userData:`, userData);
+        this.showMessage("Pushing sofa... Hold E to continue.", 500);
+    }
+
+    async handleWardrobeInteraction(wardrobe, userData) {
+        // Toggle hiding state
+        if (this.isHiding) {
+            // Exit hiding
+            this.exitHiding();
+        } else {
+            // Enter hiding
+            this.enterHiding(wardrobe);
+        }
+    }
+
+    enterHiding(wardrobe) {
+        console.log(`🚪 Entering hiding in ${wardrobe.name}`);
+
+        this.isHiding = true;
+        this.currentHidingSpot = wardrobe;
+        this.hideStartTime = Date.now();
+        this.currentInteraction = 'hiding';
+
+        // Save original camera position and rotation
+        this.originalCameraPosition = this.camera.position.clone();
+        this.originalCameraQuaternion = this.camera.quaternion.clone();
+
+        // Reset hiding session flags
+        this.monsterInvestigationTriggered = false;
+        this.monsterAggroReductionTriggered = false;
+
+        // Calculate wardrobe's world position
+        const wardrobeWorldPos = new THREE.Vector3();
+        wardrobe.getWorldPosition(wardrobeWorldPos);
+
+        // Get the wardrobe's forward direction (where it faces)
+        const wardrobeForward = new THREE.Vector3(0, 0, 1);
+        wardrobeForward.applyQuaternion(wardrobe.quaternion);
+
+        // Position camera slightly in front of the wardrobe, looking out
+        const hidePosition = wardrobeWorldPos.clone();
+        hidePosition.add(wardrobeForward.multiplyScalar(0.3)); // 0.3 units forward
+        hidePosition.y = this.originalCameraPosition.y; // Keep camera at player eye height
+
+        // Move camera to hiding position
+        this.camera.position.copy(hidePosition);
+
+        // Make camera look back at where the player was standing
+        this.camera.lookAt(this.originalCameraPosition);
+
+        // Store the locked camera position and rotation
+        this.lockedCameraPosition = this.camera.position.clone();
+        this.lockedCameraQuaternion = this.camera.quaternion.clone();
+
+        // Teleport physics body to hiding position to prevent falling/movement
+        if (window.gameControls && window.gameControls.physicsManager) {
+            window.gameControls.physicsManager.teleportTo(hidePosition);
+        }
+
+        // Freeze player controls AFTER setting locked position (prevents mouse look and WASD)
+        if (this.controls) {
+            this.controls.freeze();
+        }
+
+        // Turn off flashlight if it's on
+        if (window.gameControls && window.gameControls.flashlight) {
+            this.flashlightWasOn = window.gameControls.flashlight.isOn;
+            if (this.flashlightWasOn) {
+                window.gameControls.flashlight.toggle();
+                console.log('💡 Flashlight turned off while hiding');
+            }
+        }
+
+        // Create and show hiding overlay
+        this.createHidingOverlay();
+
+        // Show message
+        this.showMessage("Hiding... Press E to exit", 2000);
+    }
+
+    exitHiding() {
+        console.log(`🚪 Exiting hiding`);
+
+        this.isHiding = false;
+        this.currentHidingSpot = null;
+        this.currentInteraction = null;
+
+        // Restore original camera position and rotation
+        if (this.originalCameraPosition && this.originalCameraQuaternion) {
+            // Teleport physics body back to original position
+            if (window.gameControls && window.gameControls.physicsManager) {
+                window.gameControls.physicsManager.teleportTo(this.originalCameraPosition);
+            }
+
+            this.camera.position.copy(this.originalCameraPosition);
+            this.camera.quaternion.copy(this.originalCameraQuaternion);
+        }
+
+        // Unfreeze player controls
+        if (this.controls) {
+            this.controls.unfreeze();
+        }
+
+        // Restore flashlight state if it was on before hiding
+        if (this.flashlightWasOn && window.gameControls && window.gameControls.flashlight) {
+            if (!window.gameControls.flashlight.isOn) {
+                window.gameControls.flashlight.toggle();
+                console.log('💡 Flashlight restored after hiding');
+            }
+        }
+
+        // Remove hiding overlay
+        this.removeHidingOverlay();
+
+        // Clear stored positions
+        this.originalCameraPosition = null;
+        this.originalCameraQuaternion = null;
+        this.lockedCameraPosition = null;
+        this.lockedCameraQuaternion = null;
+        this.flashlightWasOn = false;
+
+        // Reset hiding session flags
+        this.monsterInvestigationTriggered = false;
+        this.monsterAggroReductionTriggered = false;
+
+        // Show message
+        this.showMessage("You exit your hiding spot", 2000);
+    }
+
+    createHidingOverlay() {
+        // Remove existing overlay if any
+        this.removeHidingOverlay();
+
+        // Create main overlay container
+        this.hideOverlay = document.createElement('div');
+        this.hideOverlay.style.cssText = `
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            z-index: 500;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        `;
+
+        // Create left door bar
+        const leftDoor = document.createElement('div');
+        leftDoor.style.cssText = `
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 30%;
+            height: 100%;
+            background: linear-gradient(to right,
+                rgba(0, 0, 0, 1) 0%,
+                rgba(10, 10, 10, 0.98) 50%,
+                rgba(0, 0, 0, 0.9) 100%);
+            box-shadow: inset -20px 0 40px rgba(0,0,0,0.9), inset 10px 0 20px rgba(0,0,0,0.7);
+            border-right: 3px solid rgba(0, 0, 0, 1);
+        `;
+
+        // Create right door bar
+        const rightDoor = document.createElement('div');
+        rightDoor.style.cssText = `
+            position: fixed;
+            top: 0;
+            right: 0;
+            width: 30%;
+            height: 100%;
+            background: linear-gradient(to left,
+                rgba(0, 0, 0, 1) 0%,
+                rgba(10, 10, 10, 0.98) 50%,
+                rgba(0, 0, 0, 0.9) 100%);
+            box-shadow: inset 20px 0 40px rgba(0,0,0,0.9), inset -10px 0 20px rgba(0,0,0,0.7);
+            border-left: 3px solid rgba(0, 0, 0, 1);
+        `;
+
+        // Create center vignette overlay
+        const vignette = document.createElement('div');
+        vignette.style.cssText = `
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: radial-gradient(circle at center, rgba(0,0,0,0.4) 0%, rgba(0,0,0,0.8) 100%);
+            pointer-events: none;
+        `;
+
+        // Add hiding status text
+        const statusText = document.createElement('div');
+        statusText.style.cssText = `
+            position: relative;
+            color: rgba(255,255,255,0.8);
+            font-family: 'Courier New', monospace;
+            font-size: 18px;
+            text-align: center;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.8);
+            z-index: 501;
+        `;
+        statusText.innerHTML = `
+            <p style="margin: 0 0 10px 0;">HIDING</p>
+            <p style="margin: 0; font-size: 14px; color: rgba(255,255,255,0.6);">Press E to exit</p>
+        `;
+
+        this.hideOverlay.appendChild(leftDoor);
+        this.hideOverlay.appendChild(rightDoor);
+        this.hideOverlay.appendChild(vignette);
+        this.hideOverlay.appendChild(statusText);
+        document.body.appendChild(this.hideOverlay);
+    }
+
+    removeHidingOverlay() {
+        if (this.hideOverlay) {
+            document.body.removeChild(this.hideOverlay);
+            this.hideOverlay = null;
+        }
+    }
+
+    triggerMonsterInvestigation() {
+        this.monsterInvestigationTriggered = true;
+
+        // Check if monster is spawned and gameStage is 2
+        if (!window.gameControls || !window.gameControls.monsterAI) {
+            console.log('🚪 Monster investigation skipped - monster not spawned yet');
+            return;
+        }
+
+        if (!window.gameControls.gameManager || window.gameControls.gameManager.gameStage !== 2) {
+            console.log('🚪 Monster investigation skipped - not in stage 2 yet');
+            return;
+        }
+
+        const monsterAI = window.gameControls.monsterAI;
+        const monster = monsterAI.monster;
+
+        if (!monster || !monster.visible) {
+            console.log('🚪 Monster investigation skipped - monster not visible');
+            return;
+        }
+
+        console.log('👾 Monster heard something and is investigating your hiding spot...');
+        this.showMessage("You hear footsteps approaching...", 3000);
+
+        // Get hiding spot position
+        const hidePos = this.lockedCameraPosition.clone();
+
+        // Make monster move to near the hiding spot
+        if (monsterAI.pathfinding) {
+            // Find a navmesh node near the hiding spot
+            const zone = monsterAI.pathfinding.zones[monsterAI.ZONE];
+            const nodes = zone.groups[monsterAI.groupID];
+
+            let closestNode = null;
+            let closestDistance = Infinity;
+
+            for (const node of nodes) {
+                const distance = node.centroid.distanceTo(hidePos);
+                if (distance < closestDistance) {
+                    closestDistance = distance;
+                    closestNode = node;
+                }
+            }
+
+            if (closestNode) {
+                // Move monster to investigation spot
+                monster.position.copy(closestNode.centroid);
+                console.log('👾 Monster arrived at hiding spot');
+
+                // Make monster look around for 3 seconds, then move away
+                setTimeout(() => {
+                    this.showMessage("The footsteps are fading away...", 2000);
+                    console.log('👾 Monster found nothing and is moving away');
+
+                    // Spawn monster somewhere else after investigation
+                    setTimeout(() => {
+                        monsterAI.spawn();
+                    }, 2000);
+                }, 3000);
+            }
+        }
+    }
+
+    reduceMonsterAggression() {
+        this.monsterAggroReductionTriggered = true;
+
+        if (window.gameControls && window.gameControls.monsterAI) {
+            const currentLevel = window.gameControls.monsterAI.aggressionLevel;
+            if (currentLevel > 0) {
+                const newLevel = Math.max(0, currentLevel - 1);
+                window.gameControls.monsterAI.setAggressionLevel(newLevel);
+                console.log(`👾 Monster aggression decreased after hiding for 10 seconds: ${currentLevel} -> ${newLevel}`);
+                this.showMessage("You feel safer now...", 2000);
+            }
+        }
+    }
+
     startPuzzle(puzzleData, puzzleObject) {
         switch (puzzleData.type) {
             case 'combination_lock':
@@ -1778,6 +2530,25 @@ class InteractionSystem {
     }
 
     updateCrosshair() {
+        // Don't update crosshair during active interactions (dialogue, page view, etc)
+        // Allow updates for sofa_movement and hiding
+        if (this.currentInteraction && this.currentInteraction !== 'sofa_movement' && this.currentInteraction !== 'hiding') {
+            // Only clear prompts if not showing a message (messages should persist)
+            if (!this.isMessageVisible) {
+                const currentPrompt = this.interactionPrompt.textContent;
+                if (currentPrompt) {
+                    console.log(`[Prompt] Force hiding during interaction: "${currentPrompt}" (currentInteraction: ${this.currentInteraction})`);
+                }
+                this.interactionPrompt.style.display = 'none';
+                this.interactionPrompt.textContent = '';
+                this.crosshair.style.background = 'white';
+                this.crosshair.style.borderColor = 'rgba(255,255,255,0.8)';
+                this.crosshair.style.width = '4px';
+                this.crosshair.style.height = '4px';
+            }
+            return;
+        }
+
         this.raycaster.setFromCamera(new THREE.Vector2(0, 0), this.camera);
         const currentScene = this.getCurrentScene();
         const intersects = this.raycaster.intersectObjects(currentScene.children, true);
@@ -1792,13 +2563,32 @@ class InteractionSystem {
         let interactableData = null; // Store its data
 
         if (intersects.length > 0) {
-            const distance = intersects[0].distance;
+            // PRIORITY: Check if mirror is in the raycast hits (prioritize mirror over page 6)
+            let hitObject = intersects[0].object;
+            let distance = intersects[0].distance;
+
+            let mirrorHit = null;
+            for (let i = 0; i < intersects.length; i++) {
+                const interactData = this.findInteractableData(intersects[i].object);
+                if (interactData?.data?.type === 'tic_tac_toe_mirror' && intersects[i].distance <= this.interactionRange) {
+                    mirrorHit = { object: intersects[i].object, distance: intersects[i].distance, index: i };
+                    break;
+                }
+            }
+
+            // Use mirror if found, otherwise use closest interactable
+            if (mirrorHit) {
+                hitObject = mirrorHit.object;
+                distance = mirrorHit.distance;
+            }
+
             if (distance <= this.interactionRange) {
-                const data = this.findInteractableData(intersects[0].object);
+                const data = this.findInteractableData(hitObject); // Use hitObject
+
                 if (data) {
                     highlightedObject = data.object;
-                    interactableData = data.data;
-                    const type = interactableData.type;
+                    interactableData = data.data; // interactableData is data.data (which is userData)
+                    const type = interactableData.type; // This is correct (userData.type)
                     const typeInfo = this.interactionTypes[type];
 
                     // Game state blocking checks
@@ -1807,20 +2597,32 @@ class InteractionSystem {
                     const isPagesBlocked = type === 'page' && !this.gameManager.telephoneAnswered;
                     const isLaptopBlocked = type === 'laptop' && this.gameManager.collectedPages.length < 6;
                     const isItemNotReady = (type === 'diary' ||
-                                            type === 'fireplace' ||
-                                            type === 'bucket' ||
-                                            type === 'fuse_box' ||
-                                            type === 'crowbar' ||
-                                            type === 'toolbox' ||
-                                            type === 'gas_can_part' ||
-                                            type === 'car_engine_zone' ||
-                                            type === 'notepad' ||
-                                            type === 'newspaper' ||
-                                            type === 'loose_book') && interactableData.interactable === false;
+                        type === 'fireplace' ||
+                        type === 'bucket' ||
+                        type === 'fuse_box' ||
+                        type === 'crowbar' ||
+                        type === 'toolbox' ||
+                        type === 'gas_can_part' ||
+                        type === 'car_engine_zone' ||
+                        type === 'notepad' ||
+                        type === 'newspaper' ||
+                        type === 'loose_book') && interactableData.interactable === false;
 
 
-                    if (isPagesLocked) {
-                        blockedMessage = "The pages are sealed in place..."; // Keep messages shorter
+                    // Never show prompt for Annie (she's triggered through Page 4)
+                    const isAnnie = this.annieInteraction.isAnnieBlock(data); // Corrected: pass 'data'
+
+                    // Check if sofa has already been moved
+                    const isMovedSofa = interactableData.type === 'sofa' && interactableData.moved; // Corrected: remove extra .data
+
+                    if (isAnnie) {
+                        // Don't show any interaction prompt for Annie
+                        isInteractable = false;
+                    } else if (isMovedSofa) {
+                        // Don't show any prompt for sofas that have already been moved
+                        isInteractable = false;
+                    } else if (isPagesLocked) {
+                        blockedMessage = "The pages are sealed in place..."; // Merged: shorter message
                     } else if (isPageSlotBlocked) {
                         blockedMessage = "Symbols don't make sense yet";
                     } else if (isPagesBlocked) {
@@ -1828,11 +2630,8 @@ class InteractionSystem {
                     } else if (isLaptopBlocked) {
                         isInteractable = false; // No prompt needed yet
                     } else if (isItemNotReady) {
-                        // Object exists but is flagged as not interactable yet.
-                        // We might still want a prompt (like "Need tools") set by CarRepairSystem.
                         isInteractable = false; // Base assumption: not interactable
                         disabledPrompt = interactableData.disabledPrompt || ""; // Check for a specific disabled message
-                        // If there's a disabled prompt, we'll show it later.
                     } else if (interactableData.interactable === false) {
                         // Generic case: Object has type but interactable is false, and no specific block applies.
                         isInteractable = false;
@@ -1850,21 +2649,22 @@ class InteractionSystem {
                                 const slotIndex = interactableData.slotIndex;
                                 const hasPage = this.gameManager.placedPages[slotIndex] !== null;
                                 interactionPrompt = hasPage ? typeInfo.promptWithPage : typeInfo.prompt;
-                            } 
-                            else if (type === 'fuse_box') {
-                                interactionPrompt = this.gameManager.fuseBoxFixed ? typeInfo.fixedPrompt : typeInfo.prompt;
-                            } 
+                            }
+                            else if (type === 'fuse_box') { // <--- Merged from caebf...
+                                interactionPrompt = this.gameManager.fuseBoxFixed ?
+                                    typeInfo.fixedPrompt :
+                                    typeInfo.prompt;
+                            }
                             else if (type === "garage_door") {
-                 
-                                if (interactableData.barricaded){
-                                    interactionPrompt = "Barricaded"; 
+                                if (interactableData.barricaded) {
+                                    interactionPrompt = "Barricaded";
                                     isInteractableNow = false; // cant interact when door is barricaded
-                                } 
-                                else if (interactableData.isBarricading){
+                                }
+                                else if (interactableData.isBarricading) {
                                     interactionPrompt = "Barricading...";
-                                     isInteractableNow = false;  // cant interact when door is being barricaded
-                                } 
-                                else if (interactableData.locked){
+                                    isInteractableNow = false;  // cant interact when door is being barricaded
+                                }
+                                else if (interactableData.locked) {
                                     interactionPrompt = this.gameManager.hasItem('Old Key') ? (typeInfo.prompt || "Press E to unlock") : typeInfo.lockedPrompt;
                                     // isInteractableNow remains true, you can try to unlock
                                 }
@@ -1872,7 +2672,33 @@ class InteractionSystem {
                                 else interactionPrompt = typeInfo.openPrompt;
                             }
                             else if (type === 'barricade_plank') {
-                                const garageDoor = this.stageManager.currentScene.getObjectByName('S_Door002'); // Get the door object
+                                // !!!!! THIS IS THE FIX !!!!!
+                                let garageDoor = null;
+                                const log = window.logger || console; // Use logger if available
+
+                                try {
+                                    // This is the line that can fail
+                                    garageDoor = this.stageManager.currentScene.getObjectByName('S_Door002');
+                                } catch (e) {
+                                    // Check if it's the exact error we're expecting
+                                    if (e.message && e.message.includes("reading 'name'")) {
+                                        log.error("InteractionSystem: Caught scene graph traversal error. 'scene.children' might be corrupt.", e);
+                                        
+                                        // Attempt a one-time cleanup of the scene.children array
+                                        this.stageManager.currentScene.children = this.stageManager.currentScene.children.filter(child => child !== undefined);
+                                        log.warn("InteractionSystem: Attempted to clean 'scene.children' of undefined entries.");
+
+                                        // Try one more time after cleaning
+                                        try {
+                                            garageDoor = this.stageManager.currentScene.getObjectByName('S_Door002');
+                                        } catch (e2) {
+                                             log.error("InteractionSystem: Scene graph error persists even after cleaning.", e2);
+                                        }
+                                    } else {
+                                        // If it's a different error, re-throw it
+                                        throw e;
+                                    }
+                                }
                                 
                                 // door must exist and be closed in order to interact 
                                 if (garageDoor && garageDoor.userData.isOpen) {
@@ -1883,14 +2709,15 @@ class InteractionSystem {
                                     // If door doesn't exist for some reason, block interaction
                                     isInteractableNow = false;
                                     blockedMessage = "Error: Door not found";
-                                    logger.error("InteractionSystem: Could not find S_Door002 to check state for barricade plank.");
+                                    log.warn("InteractionSystem: Could not find S_Door002 to check state for barricade plank.");
                                 } 
                                 else {
                                     // Door exists and is closed so we can interact with it
                                     interactionPrompt = interactableData.prompt || typeInfo.prompt || "Press E to use plank";
                                 }
+                                // !!!!! END OF FIX !!!!!
                             }
-                            else if (type === 'car_hood'){
+                            else if (type === 'car_hood') {
                                 const carRepairSystem = window.gameControls?.carRepairSystem;
                                 // Check if the door has been interacted with
                                 if (carRepairSystem && !carRepairSystem.repairState.driverDoorInteractedFirstTime) {
@@ -1906,8 +2733,38 @@ class InteractionSystem {
                                     interactionPrompt = interactableData.prompt || typeInfo.prompt || "Press E";
                                     // isInteractableNow remains true (unless blocked by another condition specific to the hood itself)
                                 }
-                            } 
-                            else if(type === 'car_driver_door_zone' || type === 'car_engine_zone'){
+                            }
+                            // Special handling for sofa to show different prompt based on state
+                            else if (interactableData.type === 'sofa') { // <--- Merged from caebf...
+                                // Check if this sofa is currently being pushed
+                                const isBeingPushed = this.movingSofa && this.movingSofa.sofa === data.object; // Corrected: use data.object
+
+                                if (isBeingPushed) {
+                                    // Show progress while pushing (handled in updateSofaMovement)
+                                    // Skip updating prompt here - updateSofaMovement will handle it
+                                    return;
+                                } else {
+                                    // Moved sofas are handled earlier (isMovedSofa check), so this is only for unmoved sofas
+                                    interactionPrompt = typeInfo.prompt;
+                                }
+                            }
+                            // Special handling for wardrobe to show different prompt based on hiding state
+                            else if (interactableData.type === 'wardrobe') { // <--- Merged from caebf...
+                                interactionPrompt = this.isHiding ?
+                                    typeInfo.hidingPrompt :
+                                    typeInfo.prompt;
+                            }
+                            // Special handling for tic-tac-toe mirror to show different prompt if telephone not answered
+                            else if (interactableData.type === 'tic_tac_toe_mirror') { // <--- Merged from caebf...
+                                if (interactableData.won) {
+                                    interactionPrompt = typeInfo.unlockedPrompt;
+                                } else if (!this.gameManager.telephoneAnswered) {
+                                    interactionPrompt = "The mirror is silent...";
+                                } else {
+                                    interactionPrompt = typeInfo.prompt;
+                                }
+                            }
+                            else if (type === 'car_driver_door_zone' || type === 'car_engine_zone') {
                                 interactionPrompt = interactableData.prompt || typeInfo.prompt || "Press E"; // Prioritize userData prompt
                             }
                             else if (type === 'gas_can_part') {
@@ -1916,10 +2773,14 @@ class InteractionSystem {
                             else if (interactableData.locked && typeInfo.lockedPrompt) {
                                 interactionPrompt = typeInfo.lockedPrompt;
                             }
-
-
-                        } 
-                        else{
+                            // Default handling from caebf...
+                            else { 
+                                interactionPrompt = interactableData.locked ?
+                                    (typeInfo.lockedPrompt || typeInfo.prompt) :
+                                    typeInfo.prompt;
+                            }
+                        }
+                        else {
                             // Type exists in userData but not registered in interactionTypes
                             interactionPrompt = "Interact"; // Generic fallback
                         }
@@ -1929,41 +2790,69 @@ class InteractionSystem {
         }
 
         // --- Final UI Update ---
-        if (isInteractableNow) { // Green crosshair only if truly interactable now
-            this.crosshair.style.background = '#00ff00';
-            this.crosshair.style.borderColor = '#00ff00';
-            this.crosshair.style.width = '8px';
-            this.crosshair.style.height = '8px';
-            this.interactionPrompt.textContent = interactionPrompt;
-            this.interactionPrompt.style.display = 'block';
-        } else if (blockedMessage) { // Red crosshair for game state blocks
-            this.crosshair.style.background = '#ff6666';
-            this.crosshair.style.borderColor = '#ff6666';
-            this.crosshair.style.width = '6px';
-            this.crosshair.style.height = '6px';
-            this.interactionPrompt.textContent = blockedMessage;
-            this.interactionPrompt.style.display = 'block';
-        } else if (disabledPrompt) { // White crosshair but show the disabled message
-            this.crosshair.style.background = 'white';
-            this.crosshair.style.borderColor = 'rgba(255,255,255,0.8)';
-            this.crosshair.style.width = '4px';
-            this.crosshair.style.height = '4px';
-            this.interactionPrompt.textContent = disabledPrompt;
-            this.interactionPrompt.style.display = 'block';
+        // Only update UI if state has changed (prevents flashing)
+        const currentPromptText = this.interactionPrompt.textContent;
+        const currentPromptVisible = this.interactionPrompt.style.display === 'block';
+
+        if (isInteractableNow && !this.blockInteractionPrompt) { // Green crosshair only if truly interactable now
+            // Only update if prompt text changed or visibility changed
+            if (currentPromptText !== interactionPrompt || !currentPromptVisible) {
+                // Get debug info from the last found interactable
+                const debugInfo = intersects.length > 0 ?
+                    this.findInteractableData(intersects[0].object) : null;
+                const objName = debugInfo ? (debugInfo.object.name || 'unnamed') : 'none';
+                const objType = debugInfo ? debugInfo.data.type : 'none';
+
+                console.log(`[Prompt] Showing: "${interactionPrompt}" | Object: ${objName} (${objType}) | Source: updateCrosshair - interactable`);
+                this.crosshair.style.background = '#00ff00';
+                this.crosshair.style.borderColor = '#00ff00';
+                this.crosshair.style.width = '8px';
+                this.crosshair.style.height = '8px';
+                this.interactionPrompt.textContent = interactionPrompt;
+                this.interactionPrompt.style.display = 'block';
+            }
+        } else if (blockedMessage && !this.blockInteractionPrompt) { // Red crosshair for game state blocks
+            // Only update if message changed or visibility changed
+            if (currentPromptText !== blockedMessage || !currentPromptVisible) {
+                console.log(`[Prompt] Showing blocked: "${blockedMessage}" (from updateCrosshair - blocked)`);
+                this.crosshair.style.background = '#ff6666';
+                this.crosshair.style.borderColor = '#ff6666';
+                this.crosshair.style.width = '6px';
+                this.crosshair.style.height = '6px';
+                this.interactionPrompt.textContent = blockedMessage;
+                this.interactionPrompt.style.display = 'block';
+            }
+        } else if (disabledPrompt && !this.blockInteractionPrompt) { // White crosshair but show the disabled message
+            if (currentPromptText !== disabledPrompt || !currentPromptVisible) {
+                this.crosshair.style.background = 'white';
+                this.crosshair.style.borderColor = 'rgba(255,255,255,0.8)';
+                this.crosshair.style.width = '4px';
+                this.crosshair.style.height = '4px';
+                this.interactionPrompt.textContent = disabledPrompt;
+                this.interactionPrompt.style.display = 'block';
+            }
         } else { // Default white crosshair, no prompt
-            this.crosshair.style.background = 'white';
-            this.crosshair.style.borderColor = 'rgba(255,255,255,0.8)';
-            this.crosshair.style.width = '4px';
-            this.crosshair.style.height = '4px';
-            this.interactionPrompt.style.display = 'none';
+            // Only hide if currently visible AND not showing a message
+            if (currentPromptVisible && !this.isMessageVisible) {
+                // Log what prompt is being hidden (but only for debugging, not for messages)
+                console.log(`[Prompt] Hiding: "${currentPromptText}" (from updateCrosshair - no interaction)`);
+                this.crosshair.style.background = 'white';
+                this.crosshair.style.borderColor = 'rgba(255,255,255,0.8)';
+                this.crosshair.style.width = '4px';
+                this.crosshair.style.height = '4px';
+                this.interactionPrompt.style.display = 'none';
+                this.interactionPrompt.textContent = ''; // Clear text when hiding
+            }
+            // If a message is visible, leave it alone - processMessageQueue will handle hiding it
         }
 
         // Highlight update (if implemented)
-         if (this.highlightedObject !== highlightedObject) {
-             // remove old highlight, add new highlight
-             this.highlightedObject = highlightedObject;
-         }
+        if (this.highlightedObject !== highlightedObject) {
+            // remove old highlight, add new highlight
+            this.highlightedObject = highlightedObject;
+        }
     }
+
 
     animateItemPickup(item, onComplete) {
         const startPosition = item.position.clone();
@@ -2007,6 +2896,38 @@ class InteractionSystem {
     }
 
     tick(delta) {
+        // Force camera to stay locked while hiding
+        if (this.isHiding && this.lockedCameraPosition && this.lockedCameraQuaternion) {
+            this.camera.position.copy(this.lockedCameraPosition);
+            this.camera.quaternion.copy(this.lockedCameraQuaternion);
+
+            // Also keep physics body locked at hiding position
+            if (window.gameControls && window.gameControls.physicsManager) {
+                const currentPos = window.gameControls.physicsManager.playerBody?.translation();
+                if (currentPos) {
+                    const distance = new THREE.Vector3(currentPos.x, currentPos.y, currentPos.z)
+                        .distanceTo(this.lockedCameraPosition);
+                    // If physics body has moved, teleport it back
+                    if (distance > 0.1) {
+                        window.gameControls.physicsManager.teleportTo(this.lockedCameraPosition);
+                    }
+                }
+            }
+
+            // Check hiding duration for timed events
+            const hidingDuration = (Date.now() - this.hideStartTime) / 1000; // in seconds
+
+            // At 8 seconds, make monster investigate hiding spot
+            if (hidingDuration >= 8 && !this.monsterInvestigationTriggered) {
+                this.triggerMonsterInvestigation();
+            }
+
+            // At 10 seconds, reduce monster aggression
+            if (hidingDuration >= 10 && !this.monsterAggroReductionTriggered) {
+                this.reduceMonsterAggression();
+            }
+        }
+
         if (!this.currentInteraction) {
             // Performance: Only update crosshair every 2nd frame
             this.crosshairUpdateCounter++;
@@ -2016,7 +2937,167 @@ class InteractionSystem {
             }
         }
 
+        // Handle gradual sofa movement
+        this.updateSofaMovement(delta);
+
         this.updateInteractionEffects(delta);
+    }
+
+    updateSofaMovement(delta) {
+        // If no sofa is being moved, return
+        if (!this.movingSofa) return;
+
+        // Don't update sofa movement if player is in dialogue or other interaction
+        if (this.currentInteraction && this.currentInteraction !== 'sofa_movement') return;
+
+        // If E key is not held, don't continue moving
+        if (!this.isEKeyHeld) return;
+
+        const { sofa, userData, distanceMoved } = this.movingSofa;
+
+        // Check if we've reached max movement
+        if (distanceMoved >= this.sofaMaxMovement) {
+            // Mark as fully moved on this specific sofa's userData
+            userData.moved = true;
+            userData.distanceMoved = distanceMoved;
+
+            // Removed message - sofa just stops moving silently
+            console.log(`🛋️ ${sofa.name} fully moved. Final position: (${sofa.position.x.toFixed(2)}, ${sofa.position.y.toFixed(2)}, ${sofa.position.z.toFixed(2)})`);
+            console.log(`🛋️ Sofa final userData:`, userData);
+
+            // Recalculate physics for BOTH S_Sofa005 and S_Sofa006 each time either is moved
+            const sofaName = this.movingSofa.sofaName || sofa.name;
+            console.log(`🔧 Checking physics recalculation for sofa: "${sofaName}"`);
+
+            // Check if this is one of the trigger sofas (handle both dot and no-dot naming)
+            if (sofaName.includes('S_Sofa.005') || sofaName.includes('S_Sofa.006') ||
+                sofaName.includes('S_Sofa005') || sofaName.includes('S_Sofa006') ||
+                sofaName.includes('Sofa.005') || sofaName.includes('Sofa.006') ||
+                sofaName.includes('Sofa005') || sofaName.includes('Sofa006')) {
+
+                console.log(`🔧 Recalculating physics for BOTH sofas...`);
+                console.log(`🔧 Available props:`, Array.from(this.stageManager.currentLoader.props.keys()));
+
+                // Find both sofas in the scene - try multiple naming variations
+                let sofa5 = this.stageManager.currentLoader.props.get('sofa_S_Sofa005');
+                if (!sofa5) sofa5 = this.stageManager.currentLoader.props.get('S_Sofa005');
+
+                let sofa6 = this.stageManager.currentLoader.props.get('sofa_S_Sofa006');
+                if (!sofa6) sofa6 = this.stageManager.currentLoader.props.get('S_Sofa006');
+
+                console.log(`🔧 Found sofa 5: ${!!sofa5} (name: ${sofa5?.name})`);
+                console.log(`🔧 Found sofa 6: ${!!sofa6} (name: ${sofa6?.name})`);
+
+                // If we couldn't find them in props, search the scene directly
+                if (!sofa5 || !sofa6) {
+                    console.log(`🔧 Sofas not found in props, searching scene...`);
+                    this.scene.traverse((node) => {
+                        if (node.userData && node.userData.type === 'sofa') {
+                            const nodeName = node.name || '';
+                            console.log(`  🔍 Found sofa in scene: ${nodeName}`);
+                            if (!sofa5 && (nodeName.includes('Sofa.005') || nodeName.includes('Sofa005'))) {
+                                sofa5 = node;
+                                console.log(`  ✓ Assigned to sofa5`);
+                            }
+                            if (!sofa6 && (nodeName.includes('Sofa.006') || nodeName.includes('Sofa006'))) {
+                                sofa6 = node;
+                                console.log(`  ✓ Assigned to sofa6`);
+                            }
+                        }
+                    });
+                }
+
+                // Recalculate sofa 5 first - pass mesh objects instead of names
+                if (sofa5) {
+                    console.log(`🔧 Recalculating physics for S_Sofa005...`);
+                    let recalcCount = 0;
+                    let successCount = 0;
+                    sofa5.traverse((child) => {
+                        if (child.isMesh && child.name) {
+                            try {
+                                // Pass the mesh object itself, not the name
+                                const success = this.stageManager.currentLoader.recalculatePhysicsForObject(child);
+                                if (success) {
+                                    successCount++;
+                                    console.log(`  ✓ S_Sofa005 child: ${child.name}`);
+                                } else {
+                                    console.log(`  ⚠ S_Sofa005 child not found: ${child.name}`);
+                                }
+                                recalcCount++;
+                                console.log(`  ✓ S_Sofa005 child: ${child.name}`);
+                            } catch (error) {
+                                console.warn(`  ✗ Failed for ${child.name}:`, error);
+                            }
+                        }
+                    });
+                    console.log(`🔧 Recalculated ${successCount}/${recalcCount} physics bodies for S_Sofa005`);
+                } else {
+                    console.warn(`⚠️ Could not find S_Sofa005 in props for recalculation`);
+                }
+
+                // Then recalculate sofa 6 - pass mesh objects instead of names
+                if (sofa6) {
+                    console.log(`🔧 Recalculating physics for S_Sofa006...`);
+                    let recalcCount = 0;
+                    let successCount = 0;
+                    sofa6.traverse((child) => {
+                        if (child.isMesh && child.name) {
+                            try {
+                                // Pass the mesh object itself, not the name
+                                const success = this.stageManager.currentLoader.recalculatePhysicsForObject(child);
+                                if (success) {
+                                    successCount++;
+                                    console.log(`  ✓ S_Sofa006 child: ${child.name}`);
+                                } else {
+                                    console.log(`  ⚠ S_Sofa006 child not found: ${child.name}`);
+                                }
+                                recalcCount++;
+                                console.log(`  ✓ S_Sofa006 child: ${child.name}`);
+                            } catch (error) {
+                                console.warn(`  ✗ Failed for ${child.name}:`, error);
+                            }
+                        }
+                    });
+                    console.log(`🔧 Recalculated ${successCount}/${recalcCount} physics bodies for S_Sofa006`);
+                } else {
+                    console.warn(`⚠️ Could not find S_Sofa006 in props for recalculation`);
+                }
+
+                console.log(`🔧 Sofa physics recalculation complete for both sofas`);
+            } else {
+                console.log(`⏭️ Skipping physics recalculation for ${sofaName} - not a trigger sofa`);
+            }
+
+            this.movingSofa = null;
+
+            // Clear the interaction state
+            if (this.currentInteraction === 'sofa_movement') {
+                this.currentInteraction = null;
+            }
+
+            return;
+        }
+
+        // Calculate movement for this frame
+        const moveAmount = Math.min(this.sofaMovementSpeed, this.sofaMaxMovement - distanceMoved);
+
+        // Move the sofa in positive Z direction
+        sofa.position.z += moveAmount;
+
+        // Update distance moved
+        this.movingSofa.distanceMoved += moveAmount;
+        userData.distanceMoved = this.movingSofa.distanceMoved;
+
+        // Update prompt to show progress
+        const progress = (this.movingSofa.distanceMoved / this.sofaMaxMovement * 100).toFixed(0);
+        const progressPrompt = `Pushing sofa... ${progress}% (Hold E)`;
+
+        // Only update if changed (prevents spam)
+        if (this.interactionPrompt.textContent !== progressPrompt) {
+            console.log(`[Prompt] Showing: "${progressPrompt}" (from updateSofaMovement)`);
+            this.interactionPrompt.textContent = progressPrompt;
+            this.interactionPrompt.style.display = 'block';
+        }
     }
 
     updateInteractionEffects(delta) {
@@ -3473,6 +4554,90 @@ class InteractionSystem {
         if (window.moveBook) {
             delete window.moveBook;
         }
+    }
+
+    /**
+     * Handle interaction with the tic-tac-toe mirror
+     */
+    async handleTicTacToeMirrorInteraction(mirror, userData) {
+        console.log('🪞 Mirror interaction handler called');
+        console.log('  userData.won:', userData.won);
+
+        // Check if telephone has been answered first
+        if (!this.gameManager.telephoneAnswered) {
+            console.log('❌ Telephone not answered - blocking mirror puzzle');
+            this.showMessage("The mirror whispers... 'Answer the call first, then we shall play...'");
+            return;
+        }
+
+        // Check if player has already won the tic-tac-toe puzzle
+        if (userData.won) {
+            console.log('  Already won - showing unlocked message');
+            this.showMessage(this.interactionTypes.tic_tac_toe_mirror.unlockedPrompt);
+            return;
+        }
+
+        // Show the tic-tac-toe puzzle
+        console.log('  Freezing controls and starting puzzle...');
+        if (this.controls) this.controls.freeze();
+        this.currentInteraction = 'tic_tac_toe';
+
+        // Get the puzzle from the controls
+        const ticTacToePuzzle = this.controls.puzzles.ticTacToePuzzle;
+        console.log('  Puzzle found:', !!ticTacToePuzzle);
+
+        if (!ticTacToePuzzle) {
+            console.error('❌ Tic-tac-toe puzzle not found in controls.puzzles');
+            console.log('  Available puzzles:', Object.keys(this.controls.puzzles || {}));
+            if (this.controls) this.controls.unfreeze();
+            return;
+        }
+
+        // Set up the win callback
+        ticTacToePuzzle.onSolve(() => {
+            console.log('🎮 Tic-tac-toe puzzle won!');
+
+            // Mark the mirror as won so player can collect page 6
+            userData.won = true;
+            console.log('✅ Set mirror userData.won = true');
+            console.log('Mirror userData after win:', userData);
+
+            // Also mark it on the mirror object itself to be safe
+            const mirrorObj = this.stageManager.currentLoader.props.get('tic_tac_toe_mirror');
+            if (mirrorObj && mirrorObj.userData) {
+                mirrorObj.userData.won = true;
+                console.log('✅ Also set mirror object userData.won = true');
+            }
+
+            // Make page 6 interactable
+            const page6 = this.stageManager.currentLoader.pages.find(p => p.name === 'S_Page6');
+            if (page6) {
+                page6.userData.interactable = true;
+                console.log('✨ Page 6 is now unlocked!');
+                console.log('Page 6 userData:', page6.userData);
+            } else {
+                console.warn('⚠️ Could not find Page 6 in mansion.pages');
+                console.log('Available pages:', this.stageManager.currentLoader.pages.map(p => p.name));
+            }
+
+            // Unfreeze controls
+            if (this.controls) this.controls.unfreeze();
+
+            // Show success message
+            this.showMessage('The ghost has released page 6. Collect it to progress...');
+        });
+
+        // Set up the close callback
+        ticTacToePuzzle.onClose(() => {
+            console.log('🎮 Puzzle closed');
+            if (this.controls) this.controls.unfreeze();
+            this.currentInteraction = null;
+        });
+
+        // Show the puzzle UI
+        console.log('🎮 Calling ticTacToePuzzle.show()...');
+        ticTacToePuzzle.show();
+        console.log('🎮 ticTacToePuzzle.show() returned');
     }
 }
 

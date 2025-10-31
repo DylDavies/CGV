@@ -18,6 +18,7 @@ class MansionLoader {
         this.pages = [];
         this.pageSlots = []; // Array to store the puzzle slot objects
         this.glowingSymbols = []; // NEW: An array to hold symbols that need to animate.
+        this.pageSpawnPoints = new Map(); // Map to store page spawn points: pageNum -> [spawn points]
 
         // --- NEW: Pathfinding Properties ---
         this.pathfinding = new Pathfinding();
@@ -224,6 +225,9 @@ class MansionLoader {
 
                     this.setupInstancedMeshes()
                     this.setupPageEffects();
+                    this.setupSofaEffects(); // Apply green glow to sofas with userData from Blender
+                    this.setupWardrobeEffects(); // Setup wardrobes for hiding mechanic
+                    this.randomizePageSpawns(); // Randomly position pages 1, 2, 3, and 5
                     this.setupPuzzleSlots(); // Find and prepare the puzzle slots on the wall
 
                     this.scene.add(this.model);
@@ -284,6 +288,7 @@ class MansionLoader {
                 node.visible = true;
                 console.log("NODE DATA FOR ENGINE: ", node);
             }
+
 
             // Find and store specific, named props
             if (node.name === 'S_Telephone001') {
@@ -363,6 +368,69 @@ class MansionLoader {
                     barricaded: false
                   };
                 logger.log(`🚪 Found prop: ${node.name} (Garage Door)`); // Log confirmation
+            }
+
+            if (node.name === 'Annie') {
+                this.props.set('annie', node);
+                node.userData = { type: 'annie', interactable: false }; // Not directly interactable
+                console.log(`🎎 Found prop: ${node.name} (Annie Doll)`);
+            }
+
+            // Mirror detection - check by name or by custom property type
+            if (node.name === 'S_tic_tac_toe_mirror' || node.userData?.type === 'mirror') {
+                console.log(`🪞 Found mirror: ${node.name}`);
+                this.props.set('tic_tac_toe_mirror', node);
+
+                // Set userData on the parent group
+                node.userData = node.userData || {};
+                node.userData.type = 'tic_tac_toe_mirror';
+                node.userData.interactable = true;
+                node.userData.won = false;
+
+                // IMPORTANT: Also set userData on all child meshes so raycasts work!
+                node.traverse((child) => {
+                    if (child.isMesh) {
+                        child.userData = child.userData || {};
+                        child.userData.type = 'tic_tac_toe_mirror';
+                        child.userData.interactable = true;
+                        child.userData.won = false;
+                    }
+                });
+
+                console.log(`✅ Mirror ready for interaction:`, node.userData);
+            }
+
+            // DEBUG: Log any object with "mirror" or "tic" in name to help find the mirror
+            const nodeLower = node.name.toLowerCase();
+            if (nodeLower.includes('mirror') || nodeLower.includes('tic')) {
+                console.log(`🔍 DEBUG: Found ${node.type} named "${node.name}", userData.type: "${node.userData?.type}"`);
+            }
+
+            // Note: Sofas are now detected in setupSofaEffects() method (like pages)
+
+            // Detect page spawn points with pattern: p_[page number]_spawn_point_[spawn point number]
+            if (node.name.startsWith('p_') && node.name.includes('_spawn_point_')) {
+                const match = node.name.match(/^p_(\d+)_spawn_point_(\d+)$/);
+                if (match) {
+                    const pageNum = parseInt(match[1], 10);
+                    const spawnPointNum = parseInt(match[2], 10);
+
+                    // Initialize array for this page if it doesn't exist
+                    if (!this.pageSpawnPoints.has(pageNum)) {
+                        this.pageSpawnPoints.set(pageNum, []);
+                    }
+
+                    // Add spawn point to the array for this page
+                    this.pageSpawnPoints.get(pageNum).push(node);
+                    console.log(`📍 Found page spawn point: ${node.name} for S_Page${pageNum} (has ${node.children.length} children)`);
+
+                    // DIAGNOSTIC: List children of spawn points
+                    if (node.children.length > 0) {
+                        node.children.forEach(child => {
+                            console.log(`   ⚠️ SPAWN POINT HAS CHILD: ${child.name} - This could cause hierarchy issues!`);
+                        });
+                    }
+                }
             }
 
             // ========== OFFICE STAGE OBJECTS ==========
@@ -486,6 +554,22 @@ class MansionLoader {
         // First, group all meshes by their base name (e.g., "Chair")
         this.model.traverse((node) => {
             if (node.isMesh) {
+                // CRITICAL FIX: Skip meshes that are children of sofas
+                let isSofaChild = false;
+                let parent = node.parent;
+                while (parent) {
+                    if (parent.userData && parent.userData.type === 'sofa') {
+                        isSofaChild = true;
+                        break;
+                    }
+                    parent = parent.parent;
+                }
+
+                // Skip sofa children - they need individual materials for interaction
+                if (isSofaChild) {
+                    return;
+                }
+
                 const baseName = node.name.split('.')[0]; // "Chair.001" -> "Chair"
                 if (!instances.has(baseName)) {
                     instances.set(baseName, []);
@@ -520,11 +604,34 @@ class MansionLoader {
     setupPageEffects() {
         console.log('✨ Searching for pages to apply glow effect...');
         this.model.traverse((node) => {
-            if (node.isMesh && node.userData.type === 'page') {
+            // Check if it's a page by custom property OR by name pattern
+            const isPageByType = node.isMesh && node.userData.type === 'page';
+            const isPageByName = node.name.startsWith('S_Page') && node.name.match(/^S_Page\d+$/);
+
+            if (isPageByType || (isPageByName && node.isMesh)) {
                 console.log(`✨ Found page: ${node.name}. Applying glow effect.`);
+
+                // Ensure it's marked as a page type
+                if (!node.userData.type) {
+                    node.userData.type = 'page';
+                }
+
+                // Set the pageId based on the object name (e.g., "S_Page1" -> "S_Page1")
+                if (!node.userData.pageId) {
+                    node.userData.pageId = node.name;
+                }
+
+                // Ensure page is interactable
+                if (node.userData.interactable === undefined) {
+                    node.userData.interactable = true;
+                }
+
                 node.material = node.material.clone();
                 node.material.emissive = new THREE.Color(0xff0000);
                 node.material.emissiveIntensity = 0;
+
+                // DIAGNOSTIC: Count children before processing
+                console.log(`🔍 ${node.name} has ${node.children.length} children before traverse`);
 
                 // Enable shadows for all page meshes (including children)
                 node.traverse((child) => {
@@ -566,6 +673,13 @@ class MansionLoader {
 
                         // PHYSICAL SEPARATION for symbols
                         if (isSymbol && child.parent) {
+                            // Store reference to symbol on parent page for easy access later
+                            if (!node.userData.symbolMeshes) {
+                                node.userData.symbolMeshes = [];
+                            }
+                            node.userData.symbolMeshes.push(child);
+                            console.log(`🔗 Stored symbol reference: ${child.name} on page ${node.name}`);
+
                             const symbolForward = new THREE.Vector3(0, 0, 1);
                             // Increase separation for symbols that need more space
                             let separationDistance = 0.04; // Increased from 0.025
@@ -577,9 +691,115 @@ class MansionLoader {
                     }
                 });
 
+                // DIAGNOSTIC: Count children after processing
+                console.log(`🔍 ${node.name} has ${node.children.length} children after traverse`);
+                console.log(`🔍 ${node.name} stored ${node.userData.symbolMeshes?.length || 0} symbol references`);
+
                 this.pages.push(node);
             }
         });
+    }
+
+    setupSofaEffects() {
+        // Search for sofas with userData.type === 'sofa' and set them up
+        this.model.traverse((node) => {
+            if (node.userData && node.userData.type === 'sofa') {
+                // Initialize movement tracking properties
+                if (node.userData.moved === undefined) {
+                    node.userData.moved = false;
+                }
+                if (node.userData.distanceMoved === undefined) {
+                    node.userData.distanceMoved = 0;
+                }
+
+                // Store in props for easy access
+                this.props.set(`sofa_${node.name}`, node);
+
+                console.log(`🛋️ Found interactive sofa: ${node.name} (moved: ${node.userData.moved}, distance: ${node.userData.distanceMoved})`);
+            }
+        });
+    }
+
+    setupWardrobeEffects() {
+        // Search for wardrobes in the model and mark them as interactable
+        this.model.traverse((node) => {
+            // Check if node name contains "wardrobe" (case-insensitive)
+            const nodeName = (node.name || '').toLowerCase();
+            if (nodeName.includes('wardrobe')) {
+                // Set up userData for wardrobe interaction
+                node.userData.type = 'wardrobe';
+                node.userData.interactable = true;
+
+                // Store in props for easy access
+                this.props.set(`wardrobe_${node.name}`, node);
+
+                console.log(`🚪 Found interactive wardrobe: ${node.name}`);
+            }
+        });
+    }
+
+    randomizePageSpawns() {
+        logger.log('🎲 Randomizing page spawn locations...');
+
+        // DIAGNOSTIC: Show spawn points map status
+        console.log(`🗺️ Spawn points map has ${this.pageSpawnPoints.size} entries:`);
+        this.pageSpawnPoints.forEach((spawnPoints, pageNum) => {
+            console.log(`   Page ${pageNum}: ${spawnPoints.length} spawn point(s)`);
+        });
+
+        // Pages to randomize: 1, 2, 3, 5 (skip 4 and 6)
+        const pagesToRandomize = [1, 2, 3, 5];
+
+        for (const pageNum of pagesToRandomize) {
+            // Get spawn points for this page
+            const spawnPoints = this.pageSpawnPoints.get(pageNum);
+
+            if (!spawnPoints || spawnPoints.length === 0) {
+                logger.warn(`⚠️ No spawn points found for S_Page${pageNum}`);
+                continue;
+            }
+
+            // Find the page object
+            const pageName = `S_Page${pageNum}`;
+            const pageObject = this.pages.find(page => page.name === pageName);
+
+            if (!pageObject) {
+                logger.warn(`⚠️ ${pageName} not found in pages array`);
+                continue;
+            }
+
+            // DIAGNOSTIC: Check children before randomization
+            console.log(`🎲 BEFORE randomization: ${pageName} has ${pageObject.children.length} children`);
+
+            // Randomly choose one spawn point
+            const randomIndex = Math.floor(Math.random() * spawnPoints.length);
+            const chosenSpawnPoint = spawnPoints[randomIndex];
+
+            // DIAGNOSTIC: Check what children the spawn point has
+            console.log(`🎯 Spawn point ${chosenSpawnPoint.name} has ${chosenSpawnPoint.children.length} children:`);
+            chosenSpawnPoint.children.forEach(child => {
+                console.log(`   - ${child.name} (type: ${child.type})`);
+            });
+
+            // Get world position and rotation of the spawn point
+            const worldPosition = new THREE.Vector3();
+            const worldQuaternion = new THREE.Quaternion();
+            const worldScale = new THREE.Vector3();
+
+            chosenSpawnPoint.updateWorldMatrix(true, false);
+            chosenSpawnPoint.matrixWorld.decompose(worldPosition, worldQuaternion, worldScale);
+
+            // Move the entire page object to the spawn point
+            pageObject.position.copy(worldPosition);
+            pageObject.quaternion.copy(worldQuaternion);
+
+            // DIAGNOSTIC: Check children after randomization
+            console.log(`🎲 AFTER randomization: ${pageName} has ${pageObject.children.length} children`);
+
+            logger.log(`✅ ${pageName} spawned at ${chosenSpawnPoint.name} - Position: (${worldPosition.x.toFixed(2)}, ${worldPosition.y.toFixed(2)}, ${worldPosition.z.toFixed(2)})`);
+        }
+
+        logger.log(`✅ Randomized spawn locations for pages 1, 2, 3, and 5`);
     }
 
     setupPuzzleSlots() {
@@ -711,6 +931,21 @@ class MansionLoader {
         }
     });
 
+        // CRITICAL: Verify symbols are still children of the page before placing
+        console.log(`📄 Placing ${pageId} on slot ${slotIndex}`);
+        console.log(`  ↳ Page has ${pageObject.children.length} children`);
+
+        // List all children to verify symbols are present
+        const symbolChildren = [];
+        pageObject.traverse((child) => {
+            const childName = child.name.toLowerCase();
+            if (childName.includes('_symbol') || childName.includes('symbol')) {
+                symbolChildren.push(child.name);
+            }
+        });
+        console.log(`  ↳ Found ${symbolChildren.length} symbol(s): ${symbolChildren.join(', ')}`);
+        console.log(`  ↳ Stored symbolMeshes: ${pageObject.userData.symbolMeshes?.length || 0}`);
+
         this.scene.add(pageObject);
 
         // Get the world position and rotation of the slot
@@ -726,6 +961,9 @@ class MansionLoader {
         // Add a small offset along the object's normal to prevent z-fighting with the wall
         const normal = new THREE.Vector3(0, 0, 1).applyQuaternion(pageObject.quaternion);
         pageObject.position.add(normal.multiplyScalar(0.015));
+
+        console.log(`  ✅ Page positioned at (${worldPosition.x.toFixed(2)}, ${worldPosition.y.toFixed(2)}, ${worldPosition.z.toFixed(2)})`);
+        console.log(`  ✅ Children should have moved with parent`);
 
         // Make the page visible and turn off the red pulsing glow
         pageObject.visible = true;
@@ -763,23 +1001,39 @@ class MansionLoader {
             return;
         }
 
-        // Find the symbol mesh using the naming convention (e.g., "S_Page1_Symbol").
-        const symbolName = `${pageId}_Symbol`;
-        const symbolMesh = pageObject.getObjectByName(symbolName);
+        // Debug: Check page object structure
+        console.log(`🔍 Attempting to activate glow for ${pageId}`);
+        console.log(`  ↳ Page found: ${pageObject ? 'Yes' : 'No'}`);
+        console.log(`  ↳ Page has ${pageObject.children.length} children in scene graph`);
 
-        if (symbolMesh) {
-            console.log(`✨ Activating glow for symbol: ${symbolName}`);
-            // Clone the material to ensure we're not affecting other objects.
-            symbolMesh.material = symbolMesh.material.clone();
+        // Use the stored symbol references from setupPageEffects()
+        const symbolMeshes = pageObject.userData.symbolMeshes;
 
-            // Set the emissive (glow) color to RED and make it glow immediately
-            symbolMesh.material.emissive.setHex(0xff0000);
-            symbolMesh.material.emissiveIntensity = 1.0; // Start glowing immediately
+        if (symbolMeshes && symbolMeshes.length > 0) {
+            console.log(`✨ Activating glow for ${symbolMeshes.length} symbol(s) on ${pageId}`);
 
-            // Add it to our array for animation in the tick method.
-            this.glowingSymbols.push(symbolMesh);
+            symbolMeshes.forEach((symbolMesh, index) => {
+                // Verify the symbol mesh is still valid
+                if (!symbolMesh || !symbolMesh.material) {
+                    console.error(`  ❌ Symbol ${index} is invalid or has no material!`);
+                    return;
+                }
+
+                console.log(`  ↳ ${symbolMesh.name} - Valid: ${symbolMesh.parent ? 'Yes' : 'No (detached!)'}`);
+
+                // Clone the material to ensure we're not affecting other objects.
+                symbolMesh.material = symbolMesh.material.clone();
+
+                // Set the emissive (glow) color to RED and make it glow immediately
+                symbolMesh.material.emissive.setHex(0xff0000);
+                symbolMesh.material.emissiveIntensity = 1.0; // Start glowing immediately
+
+                // Add it to our array for animation in the tick method.
+                this.glowingSymbols.push(symbolMesh);
+            });
         } else {
-            console.warn(`Could not find a symbol mesh named "${symbolName}" inside ${pageId}.`);
+            console.warn(`Could not find stored symbol references for ${pageId}. Was the page setup correctly?`);
+            console.warn(`  ↳ userData.symbolMeshes = ${pageObject.userData.symbolMeshes}`);
         }
     }
 
@@ -1155,6 +1409,7 @@ class MansionLoader {
             const isPortrait = nodeName.includes('portrait') || nodeName.includes('painting') || nodeName.includes('picture') || nodeName.includes('frame');
             const isDoor = !isSpecialDoor && (nodeName.includes('door') || nodeName.includes('doors') || nodeName.includes('doorway') || nodeName.includes('opening'));
             const isNoCollision = nodeName.includes('nocollision');
+            const isSkyBox = nodeName.includes('skybox');
 
             // Check parent hierarchy for door/nocollision flags (but skip if it's an S_Door)
             let shouldSkipByHierarchy = false;
@@ -1208,7 +1463,7 @@ class MansionLoader {
             const shouldSkipMurphy92 = isMurphy92 && !isMurphy92Body;
 
             // If the object meets any of the exclusion criteria, skip it.
-            if (isDebugObject || hasDebugMaterial || isPortrait || isDoor || isNoCollision || shouldSkipByHierarchy || isStageExcluded || shouldSkipMurphy92) {
+            if (isDebugObject || hasDebugMaterial || isPortrait || isDoor || isNoCollision || isSkyBox || shouldSkipByHierarchy || isStageExcluded || shouldSkipMurphy92) {
                 skippedCount++;
                 return; // Skip to the next node
             }
@@ -1292,15 +1547,28 @@ class MansionLoader {
         return this.physicsManager.createBoxBody(center, size, quaternion);
     }
 
-    recalculatePhysicsForObject(objectName) {
-        console.log(`🔄 Attempting to recalculate physics for "${objectName}"...`);
+    recalculatePhysicsForObject(meshOrName) {
+        // Support both mesh objects and names for backwards compatibility
+        const isMeshObject = typeof meshOrName === 'object' && meshOrName.isMesh;
+        const searchName = isMeshObject ? meshOrName.name : meshOrName;
+
+        console.log(`🔄 Attempting to recalculate physics for "${searchName}"...`);
 
         // Step 1: Find the mesh and its associated physics body.
-        const bodyEntry = this.physicsBodies.find(entry => entry.mesh.name === objectName);
+        // If we have the mesh object, match by reference; otherwise match by name
+        let bodyEntry;
+        if (isMeshObject) {
+            bodyEntry = this.physicsBodies.find(entry => entry.mesh === meshOrName);
+            console.log(`   - Searching by mesh reference`);
+        } else {
+            bodyEntry = this.physicsBodies.find(entry => entry.mesh.name === meshOrName);
+            console.log(`   - Searching by name: "${meshOrName}"`);
+        }
 
         if (!bodyEntry) {
-            console.warn(`[Physics Recalculation] Could not find an object named "${objectName}" with a physics body.`);
-            return;
+            console.warn(`[Physics Recalculation] Could not find "${searchName}" with a physics body.`);
+            console.warn(`   - Available bodies: ${this.physicsBodies.length}`);
+            return false;
         }
 
         const { mesh, body: oldBody } = bodyEntry;
@@ -1308,27 +1576,28 @@ class MansionLoader {
         // Step 2: Remove the old body from the physics world and our tracking array.
         this.physicsManager.removeBody(oldBody);
 
-        const index = this.physicsBodies.findIndex(entry => entry.mesh.name === objectName);
+        const index = this.physicsBodies.findIndex(entry => entry.mesh === mesh);
         if (index !== -1) {
             this.physicsBodies.splice(index, 1);
+            console.log(`   - Removed from tracking array at index ${index}`);
         }
 
-        console.log(`   - Old body for "${objectName}" removed.`);
+        console.log(`   - Old body for "${searchName}" removed from physics world.`);
 
         // Step 3: Create a new physics body using its current transform.
-        // We use the same reliable function we built before.
         const newBody = this.createPhysicsBodyFromMesh(mesh);
 
         if (newBody) {
             // Step 4: Add the new body to our tracking array and the physics manager.
-            // Assign the same userData so debug labels still work.
             newBody.userData = { name: mesh.name };
             this.physicsBodies.push({ mesh: mesh, body: newBody });
-            this.physicsManager.addBody(newBody); // Explicitly add to the manager's list.
-            
-            console.log(`   - New body for "${objectName}" created and added successfully.`);
+            this.physicsManager.addBody(newBody);
+
+            console.log(`   - New body for "${searchName}" created and added successfully.`);
+            return true;
         } else {
-            console.error(`[Physics Recalculation] Failed to create a new physics body for "${objectName}".`);
+            console.error(`[Physics Recalculation] Failed to create a new physics body for "${searchName}".`);
+            return false;
         }
     }
 

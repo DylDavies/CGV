@@ -21,6 +21,7 @@ import { MonsterAI } from './components/Monster/MonsterAI.js';
 import { ColorPuzzle } from './puzzles/colorPuzzle/ColorPuzzle.js';
 import { WirePuzzle } from './puzzles/wirePuzzle/WirePuzzle.js';
 import { KeypadPuzzle } from './puzzles/keypadPuzzle/KeypadPuzzle.js';
+import { TicTacToePuzzle } from './puzzles/ticTacToePuzzle/TicTacToePuzzle.js';
 import { PauseMenu } from './systems/PauseMenu.js';
 import { AudioManager } from './systems/AudioManager.js';
 import { Minimap } from './systems/Minimap.js';
@@ -62,6 +63,9 @@ async function main() {
         const wirePuzzle = new WirePuzzle();
         await wirePuzzle.loadLevels();
         const keypadPuzzle = new KeypadPuzzle(uiManager);
+
+        const ticTacToePuzzle = new TicTacToePuzzle();
+
 
         // --- UI Manager loading ---
         uiManager.showWelcomeScreen(async () => {
@@ -114,7 +118,7 @@ async function main() {
             monster.visible = false;
 
             uiManager.updateLoadingProgress(85, "Preparing your escape...");
-            const controls = new FirstPersonControls(camera, renderer, physicsManager, { colorPuzzle, wirePuzzle, keypadPuzzle }, monsterAI, stageManager.currentLoader);
+            const controls = new FirstPersonControls(camera, renderer, physicsManager, { colorPuzzle, wirePuzzle, keypadPuzzle, ticTacToePuzzle }, monsterAI, stageManager.currentLoader);
             uiManager.setControls(controls);
             const flashlight = new ImprovedFlashlight(camera, scene, stageManager);
             // Pass the renderer to PauseMenu
@@ -124,16 +128,18 @@ async function main() {
 
             const gameManager = new GameManager(stageManager.currentLoader, camera, scene, uiManager, audioManager, controls, stageManager, physicsManager);
             const puzzleSystem = new PuzzleSystem(scene, gameManager);
-            const interactionSystem = new InteractionSystem(camera, scene, gameManager, uiManager, controls, stageManager);
+            const interactionSystem = new InteractionSystem(camera, scene, gameManager, uiManager, controls, audioManager, stageManager);
 
-            controls.puzzles = { colorPuzzle, wirePuzzle, keypadPuzzle };
+            controls.puzzles = { colorPuzzle, wirePuzzle, keypadPuzzle, ticTacToePuzzle };
             colorPuzzle.setControls(controls);
             wirePuzzle.setControls(controls);
             keypadPuzzle.setControls(controls);
+            ticTacToePuzzle.setControls(controls);
 
             puzzleSystem.registerPuzzle('colorPuzzle', colorPuzzle);
             puzzleSystem.registerPuzzle('wirePuzzle', wirePuzzle);
             puzzleSystem.registerPuzzle('keypadPuzzle', keypadPuzzle);
+            puzzleSystem.registerPuzzle('ticTacToePuzzle', ticTacToePuzzle);
 
             uiManager.updateLoadingText("Creating minimap...");
             const minimap = new Minimap(scene, camera, stageManager, renderer);
@@ -189,7 +195,7 @@ async function main() {
             // --- Setup gameControls for debugging ---
             window.gameControls = {
                 camera, scene, flashlight, physicsManager, gameManager,
-                interactionSystem, puzzleSystem, atmosphere, colorPuzzle, wirePuzzle, keypadPuzzle,
+                interactionSystem, puzzleSystem, atmosphere, colorPuzzle, wirePuzzle, keypadPuzzle, ticTacToePuzzle,
                 audioManager, monsterAI, narrativeManager, uiManager, minimap, stageManager,
                 carInteraction, qteManager, garageSystem, carRepairSystem,
                 // Always get current loader from stageManager, not cached reference
@@ -214,6 +220,31 @@ async function main() {
                 toggleMansion: () => mansionLoader.toggleMansionVisibility(),
                 toggleNavMeshNodes: () => mansionLoader.toggleNavMeshNodesVisualizer(),
                 toggleMinimap: () => minimap.toggle(),
+                spawnMonster: () => {
+                    console.log('👾 DEBUG: Spawning monster...');
+                    if (monsterAI && monsterAI.monster) {
+                        monsterAI.monster.visible = true;
+                        monsterAI.spawn();
+
+                        // Start heartbeat if not already started
+                        if (!monsterAI.heartbeatStarted && audioManager) {
+                            audioManager.playHeartbeat();
+                            monsterAI.heartbeatStarted = true;
+                        }
+
+                        // Set game to stage 2 if not already
+                        if (gameManager.gameStage !== 2) {
+                            gameManager.gameStage = 2;
+                            console.log('👾 DEBUG: Game stage set to 2');
+                        }
+
+                        console.log('👾 DEBUG: Monster spawned successfully');
+                        console.log(`   Position: (${monsterAI.monster.position.x.toFixed(2)}, ${monsterAI.monster.position.y.toFixed(2)}, ${monsterAI.monster.position.z.toFixed(2)})`);
+                        console.log(`   Aggression level: ${monsterAI.aggressionLevel}`);
+                    } else {
+                        console.error('❌ Monster AI not available');
+                    }
+                },
                 listPhysics: () => stageManager.currentLoader?.listPhysicsBodies?.(),
                 toggleOcclusionViz: (enabled) => {
                     // Toggle occlusion culling visualization on ALL stages
@@ -333,6 +364,9 @@ async function main() {
             logger.log('🔧 Debug controls available in `window.gameControls`.');
             logger.log("庁 To toggle the navigation mesh visualizer, type `gameControls.toggleNavMesh()` in the console.");
             logger.log("🎬 Stage transitions: gameControls.toMansion() or gameControls.toOffice()");
+            logger.log('');
+            logger.log('👾 MONSTER DEBUG:');
+            logger.log('   gameControls.spawnMonster()  - Spawn the monster for testing');
             logger.log('');
             logger.log('📝 LOGGING COMMANDS:');
             logger.log('   logger.disable()       - Disable console logging');

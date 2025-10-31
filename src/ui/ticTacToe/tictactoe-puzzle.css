@@ -1,0 +1,841 @@
+#tictactoe-puzzle-container {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(10, 0, 0, 0.95);
+    backdrop-filter: blur(12px);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 1001;
+    animation: vignette-pulse 3s ease-in-out infinite;
+    background-image:
+        radial-gradient(ellipse at center, transparent 0%, rgba(0, 0, 0, 0.9) 100%),
+        repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(139, 0, 0, 0.03) 3px);
+}
+
+#tictactoe-puzzle-box {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 20px;
+    background:
+        linear-gradient(135deg, rgba(20, 0, 0, 0.95) 0%, rgba(0, 0, 0, 0.98) 100%),
+        repeating-linear-gradient(45deg, transparent, transparent 10px, rgba(139, 0, 0, 0.05) 11px);
+    border: 4px solid #660000;
+    border-radius: 0;
+    padding: 20px 40px;
+    box-shadow:
+        0 0 50px rgba(139, 0, 0, 0.8),
+        inset 0 0 40px rgba(0, 0, 0, 0.9),
+        0 0 100px rgba(255, 0, 0, 0.3);
+    font-family: 'Courier New', monospace;
+    color: #ff3333;
+    width: 95%;
+    max-width: 700px;
+    max-height: 95vh;
+    overflow-y: auto;
+    position: relative;
+    z-index: 2;
+    box-sizing: border-box;
+    animation: box-shake 0.3s infinite, box-flicker 4s infinite;
+    filter: contrast(1.2) brightness(0.9);
+}
+
+#tictactoe-puzzle-header {
+    text-align: center;
+    position: relative;
+    z-index: 2;
+    flex-shrink: 0;
+}
+
+#tictactoe-puzzle-header h3 {
+    font-size: 52px;
+    color: #cc0000;
+    margin: 0 0 10px 0;
+    text-shadow:
+        0 0 20px rgba(255, 0, 0, 0.8),
+        0 0 40px rgba(139, 0, 0, 0.6),
+        2px 2px 0 #000,
+        -2px -2px 0 #000;
+    letter-spacing: 6px;
+    font-weight: 900;
+    text-transform: uppercase;
+    font-family: 'Impact', 'Arial Black', sans-serif;
+}
+
+.glitch-text {
+    position: relative;
+    animation: glitch-skew 3s infinite;
+}
+
+.glitch-text::before,
+.glitch-text::after {
+    content: attr(data-text);
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+}
+
+.glitch-text::before {
+    left: 2px;
+    text-shadow: -2px 0 #ff00ff;
+    clip: rect(24px, 550px, 90px, 0);
+    animation: glitch-anim-1 2s infinite linear alternate-reverse;
+}
+
+.glitch-text::after {
+    left: -2px;
+    text-shadow: -2px 0 #00ffff;
+    clip: rect(85px, 550px, 140px, 0);
+    animation: glitch-anim-2 2.5s infinite linear alternate-reverse;
+}
+
+#tictactoe-puzzle-header p {
+    font-size: 18px;
+    color: #ff0000;
+    margin: 5px 0;
+    font-style: normal;
+    font-weight: bold;
+    letter-spacing: 3px;
+}
+
+.warning-text {
+    font-size: 14px !important;
+    color: #888 !important;
+    font-style: italic !important;
+    letter-spacing: 1px !important;
+    animation: fade-pulse 2s ease-in-out infinite;
+}
+
+#tictactoe-puzzle-board {
+    background: #000000;
+    padding: 20px;
+    border: 3px solid #330000;
+    border-radius: 0;
+    margin: 0;
+    box-shadow:
+        inset 0 0 30px rgba(139, 0, 0, 0.5),
+        0 0 30px rgba(139, 0, 0, 0.5),
+        inset 0 0 80px rgba(0, 0, 0, 0.95);
+    position: relative;
+    z-index: 1;
+    overflow: hidden;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 90%;
+    aspect-ratio: 1 / 1;
+    max-width: 500px;
+    box-sizing: border-box;
+    animation: board-pulse 2s ease-in-out infinite;
+}
+
+#tictactoe-puzzle-canvas {
+    display: block;
+    background: #0a0a0a;
+    border: 2px solid #1a0000;
+    image-rendering: pixelated;
+    cursor: crosshair;
+    width: 100%;
+    height: 100%;
+    filter: brightness(0.85) contrast(1.3);
+    position: relative;
+    z-index: 2;
+}
+
+#tictactoe-puzzle-controls {
+    text-align: center;
+    width: 100%;
+    position: relative;
+    z-index: 10;
+    flex-shrink: 0;
+}
+
+#tictactoe-turn-indicator {
+    font-size: 24px;
+    color: #ff3333;
+    margin: 10px 0;
+    font-weight: bold;
+    text-shadow:
+        0 0 10px rgba(255, 0, 0, 0.8),
+        0 0 20px rgba(139, 0, 0, 0.5);
+    letter-spacing: 2px;
+    animation: text-flicker 1.5s infinite;
+}
+
+#tictactoe-game-status {
+    animation: pulse-red 1.5s ease-in-out infinite;
+}
+
+@keyframes pulse-red {
+    0%, 100% {
+        color: #ff0000;
+        text-shadow: 0 0 10px rgba(255, 0, 0, 0.6);
+    }
+    50% {
+        color: #cc0000;
+        text-shadow: 0 0 20px rgba(255, 0, 0, 0.9);
+    }
+}
+
+.puzzle-buttons {
+    display: flex;
+    gap: 15px;
+    justify-content: center;
+    margin-top: 15px;
+}
+
+.puzzle-buttons button {
+    background: linear-gradient(135deg, #1a0000 0%, #000000 100%);
+    border: 3px solid #660000;
+    color: #ff3333;
+    padding: 15px 50px;
+    font-size: 18px;
+    font-weight: bold;
+    cursor: pointer;
+    border-radius: 0;
+    transition: all 0.2s ease;
+    text-shadow: 0 0 10px rgba(255, 0, 0, 0.8);
+    box-shadow:
+        0 0 20px rgba(139, 0, 0, 0.6),
+        inset 0 0 10px rgba(0, 0, 0, 0.9);
+    font-family: 'Courier New', monospace;
+    letter-spacing: 2px;
+    position: relative;
+    overflow: hidden;
+}
+
+.puzzle-buttons button::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: -100%;
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(90deg, transparent, rgba(255, 0, 0, 0.2), transparent);
+    transition: left 0.5s;
+}
+
+.puzzle-buttons button:hover::before {
+    left: 100%;
+}
+
+.puzzle-buttons button:hover {
+    background: linear-gradient(135deg, #330000 0%, #1a0000 100%);
+    box-shadow:
+        0 0 30px rgba(255, 0, 0, 0.8),
+        inset 0 0 15px rgba(0, 0, 0, 0.9);
+    border-color: #990000;
+    color: #ff6666;
+    transform: scale(1.05);
+}
+
+.puzzle-buttons button:active {
+    transform: scale(0.95);
+    box-shadow:
+        0 0 10px rgba(139, 0, 0, 0.5),
+        inset 0 0 20px rgba(0, 0, 0, 0.95);
+}
+
+/* --- MIRROR DIALOGUE --- */
+.mirror-dialogue {
+    position: absolute;
+    top: -80px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: linear-gradient(135deg, rgba(20, 0, 0, 0.98) 0%, rgba(0, 0, 0, 0.95) 100%);
+    border: 3px solid #660000;
+    padding: 15px 25px;
+    border-radius: 0;
+    box-shadow:
+        0 0 30px rgba(255, 0, 0, 0.8),
+        inset 0 0 20px rgba(0, 0, 0, 0.9);
+    z-index: 100;
+    min-width: 300px;
+    max-width: 500px;
+    animation: dialogue-appear 0.5s ease-out, dialogue-shake 0.2s infinite;
+}
+
+.mirror-dialogue.hidden {
+    display: none;
+}
+
+.mirror-dialogue::before {
+    content: '';
+    position: absolute;
+    bottom: -15px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 0;
+    height: 0;
+    border-left: 15px solid transparent;
+    border-right: 15px solid transparent;
+    border-top: 15px solid #660000;
+    filter: drop-shadow(0 0 10px rgba(255, 0, 0, 0.6));
+}
+
+.mirror-dialogue .dialogue-text {
+    color: #ff3333;
+    font-size: 18px;
+    font-family: 'Courier New', monospace;
+    text-align: center;
+    letter-spacing: 2px;
+    text-shadow:
+        0 0 10px rgba(255, 0, 0, 0.8),
+        0 0 20px rgba(139, 0, 0, 0.5);
+    animation: text-pulse 1.5s ease-in-out infinite;
+    font-weight: bold;
+}
+
+@keyframes dialogue-appear {
+    from {
+        opacity: 0;
+        transform: translateX(-50%) translateY(-20px);
+    }
+    to {
+        opacity: 1;
+        transform: translateX(-50%) translateY(0);
+    }
+}
+
+@keyframes dialogue-shake {
+    0%, 100% {
+        transform: translateX(-50%) translateY(0) rotate(0deg);
+    }
+    25% {
+        transform: translateX(-50%) translateY(-1px) rotate(-0.3deg);
+    }
+    50% {
+        transform: translateX(-50%) translateY(1px) rotate(0.3deg);
+    }
+    75% {
+        transform: translateX(-50%) translateY(-1px) rotate(-0.3deg);
+    }
+}
+
+@keyframes text-pulse {
+    0%, 100% {
+        opacity: 0.9;
+        text-shadow:
+            0 0 10px rgba(255, 0, 0, 0.8),
+            0 0 20px rgba(139, 0, 0, 0.5);
+    }
+    50% {
+        opacity: 1;
+        text-shadow:
+            0 0 20px rgba(255, 0, 0, 1),
+            0 0 40px rgba(139, 0, 0, 0.8);
+    }
+}
+
+/* --- BLOOD DRIP EFFECTS --- */
+.blood-drip {
+    position: absolute;
+    width: 2px;
+    background: linear-gradient(180deg, #8b0000 0%, #660000 50%, transparent 100%);
+    opacity: 0.8;
+    animation: drip 3s ease-in infinite;
+    z-index: 5;
+}
+
+.blood-drip-1 {
+    top: 0;
+    left: 15%;
+    height: 60px;
+    animation-delay: 0s;
+}
+
+.blood-drip-2 {
+    top: 0;
+    left: 50%;
+    height: 80px;
+    animation-delay: 1s;
+}
+
+.blood-drip-3 {
+    top: 0;
+    right: 20%;
+    height: 50px;
+    animation-delay: 2s;
+}
+
+@keyframes drip {
+    0% {
+        height: 0;
+        opacity: 0;
+    }
+    20% {
+        opacity: 0.8;
+    }
+    100% {
+        height: 100px;
+        opacity: 0;
+    }
+}
+
+/* --- MIRROR CRACK EFFECTS --- */
+.mirror-crack {
+    position: absolute;
+    width: 100%;
+    height: 100%;
+    pointer-events: none;
+    z-index: 3;
+    opacity: 0.3;
+}
+
+.mirror-crack-1 {
+    background: linear-gradient(45deg, transparent 48%, #666 49%, #666 51%, transparent 52%);
+    animation: crack-flicker 2s infinite;
+}
+
+.mirror-crack-2 {
+    background: linear-gradient(-30deg, transparent 48%, #555 49.5%, #555 50.5%, transparent 52%);
+    animation: crack-flicker 2.5s infinite;
+}
+
+.mirror-crack-3 {
+    background: linear-gradient(70deg, transparent 48%, #444 49.5%, #444 50.5%, transparent 52%);
+    animation: crack-flicker 3s infinite;
+}
+
+@keyframes crack-flicker {
+    0%, 100% {
+        opacity: 0.2;
+    }
+    50% {
+        opacity: 0.4;
+    }
+}
+
+/* --- GHOST OVERLAY EFFECT --- */
+.ghost-overlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: radial-gradient(circle at 50% 50%, rgba(255, 255, 255, 0.05) 0%, transparent 50%);
+    pointer-events: none;
+    z-index: 4;
+    animation: ghost-pulse 4s ease-in-out infinite;
+}
+
+@keyframes ghost-pulse {
+    0%, 100% {
+        opacity: 0.2;
+        transform: scale(1);
+    }
+    50% {
+        opacity: 0.5;
+        transform: scale(1.05);
+    }
+}
+
+/* --- HORROR ANIMATIONS --- */
+@keyframes vignette-pulse {
+    0%, 100% {
+        box-shadow: inset 0 0 100px rgba(0, 0, 0, 0.5);
+    }
+    50% {
+        box-shadow: inset 0 0 150px rgba(139, 0, 0, 0.3);
+    }
+}
+
+@keyframes box-shake {
+    0%, 100% {
+        transform: translate(0, 0);
+    }
+    25% {
+        transform: translate(-1px, 1px);
+    }
+    50% {
+        transform: translate(1px, -1px);
+    }
+    75% {
+        transform: translate(-1px, -1px);
+    }
+}
+
+@keyframes box-flicker {
+    0%, 100% {
+        opacity: 1;
+    }
+    50% {
+        opacity: 0.98;
+    }
+    51% {
+        opacity: 1;
+    }
+}
+
+@keyframes glitch-skew {
+    0%, 100% {
+        transform: skew(0deg, 0deg);
+    }
+    20% {
+        transform: skew(0.5deg, 0deg);
+    }
+    40% {
+        transform: skew(-0.5deg, 0deg);
+    }
+    60% {
+        transform: skew(0deg, 0.5deg);
+    }
+    80% {
+        transform: skew(0deg, -0.5deg);
+    }
+}
+
+@keyframes glitch-anim-1 {
+    0% {
+        clip: rect(24px, 9999px, 90px, 0);
+    }
+    25% {
+        clip: rect(50px, 9999px, 120px, 0);
+    }
+    50% {
+        clip: rect(10px, 9999px, 60px, 0);
+    }
+    75% {
+        clip: rect(70px, 9999px, 130px, 0);
+    }
+    100% {
+        clip: rect(24px, 9999px, 90px, 0);
+    }
+}
+
+@keyframes glitch-anim-2 {
+    0% {
+        clip: rect(85px, 9999px, 140px, 0);
+    }
+    25% {
+        clip: rect(30px, 9999px, 100px, 0);
+    }
+    50% {
+        clip: rect(60px, 9999px, 110px, 0);
+    }
+    75% {
+        clip: rect(15px, 9999px, 80px, 0);
+    }
+    100% {
+        clip: rect(85px, 9999px, 140px, 0);
+    }
+}
+
+@keyframes board-pulse {
+    0%, 100% {
+        box-shadow:
+            inset 0 0 30px rgba(139, 0, 0, 0.5),
+            0 0 30px rgba(139, 0, 0, 0.5),
+            inset 0 0 80px rgba(0, 0, 0, 0.95);
+    }
+    50% {
+        box-shadow:
+            inset 0 0 40px rgba(139, 0, 0, 0.7),
+            0 0 40px rgba(139, 0, 0, 0.7),
+            inset 0 0 80px rgba(0, 0, 0, 0.95);
+    }
+}
+
+@keyframes text-flicker {
+    0%, 100% {
+        opacity: 1;
+    }
+    50% {
+        opacity: 0.8;
+    }
+    51% {
+        opacity: 1;
+    }
+}
+
+@keyframes fade-pulse {
+    0%, 100% {
+        opacity: 0.5;
+    }
+    50% {
+        opacity: 1;
+    }
+}
+
+/* --- MEDIA QUERY FOR SMALL SCREENS --- */
+@media (max-height: 600px) or (max-width: 500px) {
+    #tictactoe-puzzle-header h3 {
+        font-size: 32px;
+    }
+    #tictactoe-puzzle-header p {
+        font-size: 16px;
+    }
+    #tictactoe-turn-indicator {
+        font-size: 20px;
+    }
+    .puzzle-buttons button {
+        padding: 10px 25px;
+        font-size: 16px;
+    }
+    #tictactoe-puzzle-box {
+        padding: 20px;
+        gap: 15px;
+    }
+    /* Make canvas smaller on short screens */
+    #tictactoe-puzzle-canvas {
+        height: 55vh;
+    }
+}
+
+/* --- RESULT OVERLAY --- */
+#tictactoe-puzzle-result-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.95);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1002;
+    backdrop-filter: blur(10px);
+    animation: result-vignette 2s ease-in-out infinite;
+}
+
+#tictactoe-puzzle-result-overlay.hidden {
+    display: none;
+}
+
+#tictactoe-puzzle-result-overlay.success {
+    background: radial-gradient(ellipse at center, rgba(0, 50, 0, 0.3) 0%, rgba(0, 0, 0, 0.95) 100%);
+    animation: success-flash 0.5s ease-out;
+}
+
+#tictactoe-puzzle-result-overlay.failure {
+    background: radial-gradient(ellipse at center, rgba(139, 0, 0, 0.5) 0%, rgba(0, 0, 0, 0.95) 100%);
+    animation: failure-shake 0.5s ease-out, blood-screen 2s ease-in-out infinite;
+}
+
+#tictactoe-result-message {
+    text-align: center;
+    background: linear-gradient(135deg, rgba(10, 0, 0, 0.98) 0%, rgba(0, 0, 0, 0.98) 100%);
+    border: 4px solid #660000;
+    padding: 50px;
+    border-radius: 0;
+    box-shadow:
+        0 0 60px rgba(139, 0, 0, 0.8),
+        inset 0 0 40px rgba(0, 0, 0, 0.9);
+    animation: fadeIn 0.5s ease-out, message-shake 0.2s infinite;
+    position: relative;
+    overflow: hidden;
+}
+
+#tictactoe-result-message::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: repeating-linear-gradient(
+        0deg,
+        transparent,
+        transparent 2px,
+        rgba(139, 0, 0, 0.05) 3px
+    );
+    pointer-events: none;
+    animation: scan-lines 8s linear infinite;
+}
+
+#tictactoe-puzzle-result-overlay.success #tictactoe-result-message {
+    border-color: #003300;
+    box-shadow:
+        0 0 60px rgba(0, 139, 0, 0.6),
+        inset 0 0 40px rgba(0, 0, 0, 0.9);
+}
+
+#tictactoe-puzzle-result-overlay.failure #tictactoe-result-message {
+    border-color: #990000;
+    box-shadow:
+        0 0 80px rgba(255, 0, 0, 0.9),
+        inset 0 0 50px rgba(139, 0, 0, 0.3);
+    animation: fadeIn 0.5s ease-out, message-shake 0.15s infinite, message-pulse 1s ease-in-out infinite;
+}
+
+#tictactoe-result-title {
+    font-size: 64px;
+    margin: 0 0 20px 0;
+    color: #ff3333;
+    text-shadow:
+        0 0 30px rgba(255, 0, 0, 0.9),
+        0 0 60px rgba(139, 0, 0, 0.6),
+        3px 3px 0 #000;
+    font-weight: 900;
+    font-family: 'Impact', 'Arial Black', sans-serif;
+    letter-spacing: 4px;
+    animation: title-flicker 0.5s infinite;
+}
+
+#tictactoe-puzzle-result-overlay.success #tictactoe-result-title {
+    color: #00ff00;
+    text-shadow:
+        0 0 30px rgba(0, 255, 0, 0.8),
+        0 0 60px rgba(0, 139, 0, 0.5),
+        3px 3px 0 #000;
+}
+
+#tictactoe-puzzle-result-overlay.failure #tictactoe-result-title {
+    color: #ff0000;
+    animation: title-glitch 0.3s infinite, title-flicker 0.5s infinite;
+}
+
+#tictactoe-result-subtitle {
+    font-size: 20px;
+    color: #999;
+    margin: 0 0 20px 0;
+    font-style: italic;
+    letter-spacing: 2px;
+    font-family: 'Courier New', monospace;
+}
+
+#tictactoe-ghost-dialogue {
+    font-size: 18px;
+    color: #ff6666;
+    margin: 20px 0 0 0;
+    font-style: italic;
+    text-shadow: 0 0 15px rgba(255, 0, 0, 0.6);
+    border-top: 2px solid #660000;
+    padding-top: 20px;
+    font-family: 'Courier New', monospace;
+    animation: dialogue-pulse 2s ease-in-out infinite;
+}
+
+#tictactoe-puzzle-result-overlay.success #tictactoe-ghost-dialogue {
+    color: #66ff66;
+    text-shadow: 0 0 15px rgba(0, 255, 0, 0.5);
+    border-top-color: #006600;
+}
+
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+        transform: scale(0.8) rotate(-2deg);
+    }
+    to {
+        opacity: 1;
+        transform: scale(1) rotate(0deg);
+    }
+}
+
+@keyframes result-vignette {
+    0%, 100% {
+        box-shadow: inset 0 0 200px rgba(0, 0, 0, 0.8);
+    }
+    50% {
+        box-shadow: inset 0 0 250px rgba(139, 0, 0, 0.4);
+    }
+}
+
+@keyframes success-flash {
+    0% {
+        background: radial-gradient(ellipse at center, rgba(0, 80, 0, 0.4) 0%, rgba(0, 0, 0, 0.95) 100%);
+    }
+    100% {
+        background: radial-gradient(ellipse at center, rgba(0, 50, 0, 0.3) 0%, rgba(0, 0, 0, 0.95) 100%);
+    }
+}
+
+@keyframes failure-shake {
+    0%, 100% {
+        transform: translate(0, 0);
+    }
+    10%, 30%, 50%, 70%, 90% {
+        transform: translate(-10px, 0);
+    }
+    20%, 40%, 60%, 80% {
+        transform: translate(10px, 0);
+    }
+}
+
+@keyframes blood-screen {
+    0%, 100% {
+        background: radial-gradient(ellipse at center, rgba(139, 0, 0, 0.5) 0%, rgba(0, 0, 0, 0.95) 100%);
+    }
+    50% {
+        background: radial-gradient(ellipse at center, rgba(139, 0, 0, 0.7) 0%, rgba(0, 0, 0, 0.95) 100%);
+    }
+}
+
+@keyframes message-shake {
+    0%, 100% {
+        transform: translate(0, 0) rotate(0deg);
+    }
+    25% {
+        transform: translate(-2px, 1px) rotate(-0.5deg);
+    }
+    50% {
+        transform: translate(2px, -1px) rotate(0.5deg);
+    }
+    75% {
+        transform: translate(-1px, -1px) rotate(-0.3deg);
+    }
+}
+
+@keyframes message-pulse {
+    0%, 100% {
+        box-shadow:
+            0 0 80px rgba(255, 0, 0, 0.9),
+            inset 0 0 50px rgba(139, 0, 0, 0.3);
+    }
+    50% {
+        box-shadow:
+            0 0 120px rgba(255, 0, 0, 1),
+            inset 0 0 70px rgba(139, 0, 0, 0.5);
+    }
+}
+
+@keyframes title-flicker {
+    0%, 100% {
+        opacity: 1;
+    }
+    50% {
+        opacity: 0.9;
+    }
+    51% {
+        opacity: 1;
+    }
+}
+
+@keyframes title-glitch {
+    0%, 100% {
+        transform: translate(0, 0);
+    }
+    33% {
+        transform: translate(-3px, 2px);
+    }
+    66% {
+        transform: translate(3px, -2px);
+    }
+}
+
+@keyframes dialogue-pulse {
+    0%, 100% {
+        opacity: 0.9;
+    }
+    50% {
+        opacity: 1;
+    }
+}
+
+@keyframes scan-lines {
+    0% {
+        transform: translateY(0);
+    }
+    100% {
+        transform: translateY(10px);
+    }
+}
+

@@ -30,6 +30,7 @@ export class UIManager {
         await this._loadHTML('src/ui/qtes/buttonMash/button-mash.html', 'qte-button-mash-container');
         await this._loadHTML('src/ui/qtes/skillCheck/skill-check.html', 'qte-skill-check-container');
         await this._loadHTML('src/ui/qtes/bouncingRing/bouncing-ring.html', 'qte-bouncing-ring-container');
+        await this._loadHTML('src/ui/ticTacToe/tictactoe-puzzle.html', 'tictactoe-puzzle-container');
 
         // Now that the HTML is loaded, cache the elements inside it
         this.uiElements = {
@@ -42,7 +43,8 @@ export class UIManager {
             monsterIcon: document.getElementById('monster-icon'), 
             loadingText: document.getElementById('loading-text'),
             puzzleContainer: document.getElementById('puzzle-container'),
-            wirePuzzleContainer: document.getElementById('wire-puzzle-container'), 
+            wirePuzzleContainer: document.getElementById('wire-puzzle-container'),
+            ticTacToePuzzleContainer: document.getElementById('tictactoe-puzzle-container'),
             crosshair: document.getElementById('crosshair'),
             interactionPrompt: document.getElementById('interaction-prompt'),
             creditsScreen: document.getElementById('credits-screen'),
@@ -125,6 +127,7 @@ export class UIManager {
     async reloadResultScreen() {
         // Reload the result screen HTML to ensure it persists across stage transitions
         await this._loadHTML('src/ui/resultScreen/result-screen.html', 'result-screen-container');
+        await this._loadHTML('src/ui/ticTacToe/tictactoe-puzzle.html', 'tictactoe-puzzle-container');
         // Recache the result overlay element
         this.uiElements.resultOverlay = document.getElementById('result-screen-overlay');
     }

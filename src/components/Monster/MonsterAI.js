@@ -66,6 +66,13 @@ class MonsterAI {
         this.mixer = monsterMesh.mixer;
         this.animations = monsterMesh.animations;
         this.activeAnimation = null;
+
+        // Attack system
+        this.isAttacking = false;
+        this.attackStartTime = 0;
+        this.ATTACK_DURATION = 1500; // 1.5 seconds for attack animation
+        this.savedPosition = null; // Lock position during attack
+        this.savedQuaternion = null; // Lock rotation during attack
         // --- END REVISED ---
 
         console.log("👾 Monster AI Initialized with NavMesh pathfinding.");
@@ -256,6 +263,19 @@ class MonsterAI {
             this.audioManager.updateHeartbeat(distanceToPlayer, 25);
         }
 
+        // Check if we should attack (within attack range)
+        // Only hostile or bold monsters attack
+        // Attack range matches kill range (1.5) so player dies when monster attacks
+        if (!this.isAttacking && (this.aggressionLevel >= 4) && distanceToPlayer < 1.5) {
+            this.startAttack();
+            return; // Skip normal AI logic during attack
+        }
+
+        // If attacking, don't do normal AI - just wait for attack to complete
+        if (this.isAttacking) {
+            return;
+        }
+
         switch (this.aggressionLevel) {
             case 1: // Docile
                 if (this.canSeePlayer()) {
@@ -373,6 +393,11 @@ class MonsterAI {
     }
     
     setAnimation(animationName) {
+        // Don't interrupt attack animation
+        if (this.isAttacking && this.activeAnimation === 'attack') {
+            return;
+        }
+
         if (this.activeAnimation === animationName) {
             return;
         }
@@ -388,6 +413,68 @@ class MonsterAI {
         }
 
         this.activeAnimation = animationName;
+    }
+
+    startAttack() {
+        if (this.isAttacking) return; // Already attacking
+
+        this.isAttacking = true;
+        this.attackStartTime = Date.now();
+        this.path = []; // Stop moving
+        this.directPursuit = false;
+
+        // Look at player before starting attack
+        const lookTarget = this.player.position.clone();
+        lookTarget.y = this.monster.position.y;
+        this.monster.lookAt(lookTarget);
+
+        // Save current position and quaternion AFTER looking at player
+        this.savedPosition = this.monster.position.clone();
+        this.savedQuaternion = this.monster.quaternion.clone();
+
+        console.log('🗡️ Monster attacking player!');
+        console.log(`   Locked position: (${this.savedPosition.x.toFixed(2)}, ${this.savedPosition.y.toFixed(2)}, ${this.savedPosition.z.toFixed(2)})`);
+
+        // Play attack sound
+        if (this.audioManager) {
+            try {
+                this.audioManager.playSound('monster_attack', 'public/audio/sfx/monster-attack.mp3');
+            } catch (error) {
+                console.warn('⚠️ Could not play monster attack sound:', error.message);
+            }
+        }
+
+        // Play attack animation
+        if (this.activeAnimation && this.animations[this.activeAnimation]) {
+            this.animations[this.activeAnimation].stop();
+        }
+
+        if (this.animations['attack']) {
+            console.log('✅ Playing attack animation');
+            this.animations['attack'].reset();
+            this.animations['attack'].play();
+            this.activeAnimation = 'attack';
+        } else {
+            console.warn('❌ Attack animation not found! Available animations:', Object.keys(this.animations));
+        }
+    }
+
+    isAttackComplete() {
+        return this.isAttacking && (Date.now() - this.attackStartTime >= this.ATTACK_DURATION);
+    }
+
+    resetAttack() {
+        console.log('🔄 Resetting attack - monster can move again');
+        this.isAttacking = false;
+        this.attackStartTime = 0;
+        this.savedPosition = null;
+        this.savedQuaternion = null;
+
+        // Stop attack animation
+        if (this.animations['attack']) {
+            this.animations['attack'].stop();
+        }
+        this.activeAnimation = null;
     }
 
     moveDirectlyToPlayer(delta) {
@@ -610,7 +697,19 @@ class MonsterAI {
         if (this.mixer) {
             this.mixer.update(delta);
         }
+
         this.update(delta);
+
+        // FINAL LOCK - Force position and rotation after EVERYTHING else
+        // This is the absolute last thing that happens, overriding anything the animation or AI did
+        if (this.isAttacking && this.savedPosition && this.savedQuaternion) {
+            // Force exact position using set() for each component
+            this.monster.position.x = this.savedPosition.x;
+            this.monster.position.y = this.savedPosition.y;
+            this.monster.position.z = this.savedPosition.z;
+            this.monster.quaternion.copy(this.savedQuaternion);
+            this.monster.scale.set(0.35, 0.35, 0.35); // Force scale to stay constant
+        }
     }
 }
 //this is the monsterAI
