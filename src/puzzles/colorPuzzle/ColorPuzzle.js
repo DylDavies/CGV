@@ -96,6 +96,7 @@ export class ColorPuzzle {
         const animationSteps = this.logic.getAnimatedFloodFillSteps(row, col);
 
         if (animationSteps) {
+            this.ui.setPalleteLocked(true);
             this.isAnimating = true;
             await this.ui.animateTileChanges(animationSteps, this.logic.selectedColor);
             
@@ -118,6 +119,7 @@ export class ColorPuzzle {
                 this.successMessage);
             }
             this.isAnimating = false;
+            this.ui.setPalleteLocked(false);
         }
     }
 
