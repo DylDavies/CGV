@@ -4,7 +4,7 @@ import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.127.0/build/three.m
 import { PointerLockControls } from 'https://cdn.jsdelivr.net/npm/three@0.127.0/examples/jsm/controls/PointerLockControls.js';
 
 class FirstPersonControls {
-   constructor(camera, renderer, physicsManager = null, puzzles = {}, monsterAI = null, mansionLoader = null) {
+   constructor(camera, renderer, physicsManager = null, puzzles = {}, monsterAI = null, mansionLoader = null, audioManager = null) {
         this.camera = camera;
         this.monsterAI = monsterAI;
         this.renderer = renderer;
@@ -15,6 +15,9 @@ class FirstPersonControls {
         this.mansionLoader = mansionLoader;
         this.qtesManager = null;
         this.currentTestQTEIndex = -1;
+
+        this.audioManager = audioManager;
+        this.isWalking = false;
 
         // Testing puzzle works with new system
         this.puzzles = puzzles;
@@ -353,6 +356,26 @@ class FirstPersonControls {
             // Let physics manager handle movement
             this.physicsManager.tick(delta, inputs);
 
+
+            // Walking sounds
+            if (this.audioManager) {
+                const state = this.physicsManager.getMovementState();
+                // Check if the player is moving AND on the ground
+                const isMovingOnGround = state.isMoving && state.isOnGround;
+
+                if (isMovingOnGround && !this.isWalkingSoundPlaying) {
+                    console.log("AUDIO SOUND IS CURRENTLY PLAYING");
+                    // Player started moving on the ground -> PLAY sound
+                    this.audioManager.playSound('walking', this.audioManager.soundPaths.walking, true, 0.5); // volume of walking
+                    this.isWalkingSoundPlaying = true;
+                } 
+                else if ((!isMovingOnGround || this.isFrozen) && this.isWalkingSoundPlaying) {
+                    // Player stopped moving, is in the air, or is frozen -> STOP sound
+                    this.audioManager.stopSound('walking');
+                    this.isWalkingSoundPlaying = false;
+                }
+            }
+
             // Update stats display
             this.updateStats();
 
@@ -455,6 +478,12 @@ class FirstPersonControls {
 
         this.isFrozen = true;
         this.resetInputs(); // Stop any movement input
+
+        if (this.audioManager && this.isWalkingSoundPlaying) {
+            this.audioManager.stopSound('walking');
+            this.isWalkingSoundPlaying = false;
+        }
+
         this.controls.unlock(); // Release the mouse pointer
         console.log("Player controls FROZEN.");
     }
@@ -513,6 +542,12 @@ class FirstPersonControls {
         }
         if (this.onKeyUp) {
             document.removeEventListener('keyup', this.onKeyUp);
+        }
+
+
+        if (this.audioManager && this.isWalkingSoundPlaying) {
+            this.audioManager.stopSound('walking');
+            this.isWalkingSoundPlaying = false;
         }
 
         // Remove stats display
