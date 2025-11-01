@@ -144,7 +144,13 @@ export class CarInteraction {
         const startTime = performance.now();
 
         logger.log(`🚗 ${this.isHoodOpen ? 'Closing' : 'Opening'} car hood via JS rotation...`);
-        this.audioManager.playSound(this.isHoodOpen ? 'car_hood_close' : 'car_hood_open', 'public/audio/sfx/monster-huff.mp3'); // Placeholder
+        if(this.isHoodOpen){
+            this.audioManager.playSound('car_hood_close', 'public/audio/sfx/hood-close.mp3');
+        }
+        else{
+            this.audioManager.playSound('car_hood_open', 'public/audio/sfx/hood-open.mp3');
+        }
+        //this.audioManager.playSound(this.isHoodOpen ? 'car_hood_close' : 'car_hood_open', 'public/audio/sfx/monster-huff.mp3'); // Placeholder
 
         const animateRotation = () => {
             const now = performance.now();

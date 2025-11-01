@@ -1547,43 +1547,50 @@ class MansionLoader {
         return this.physicsManager.createBoxBody(center, size, quaternion);
     }
 
-    recalculatePhysicsForObject(meshOrName) {
+recalculatePhysicsForObject(meshOrName) {
         // Support both mesh objects and names for backwards compatibility
         const isMeshObject = typeof meshOrName === 'object' && meshOrName.isMesh;
         const searchName = isMeshObject ? meshOrName.name : meshOrName;
 
         console.log(`🔄 Attempting to recalculate physics for "${searchName}"...`);
 
-        // Step 1: Find the mesh and its associated physics body.
-        // If we have the mesh object, match by reference; otherwise match by name
-        let bodyEntry;
+        // Step 1: Find the MESH first. We can't rely on the body being in physicsBodies.
+        let mesh = null;
         if (isMeshObject) {
-            bodyEntry = this.physicsBodies.find(entry => entry.mesh === meshOrName);
-            console.log(`   - Searching by mesh reference`);
+            mesh = meshOrName;
         } else {
-            bodyEntry = this.physicsBodies.find(entry => entry.mesh.name === meshOrName);
-            console.log(`   - Searching by name: "${meshOrName}"`);
+            // Find the mesh in the model by name
+            this.model.traverse((node) => {
+                if (node.name === searchName) {
+                    mesh = node;
+                }
+            });
         }
 
-        if (!bodyEntry) {
-            console.warn(`[Physics Recalculation] Could not find "${searchName}" with a physics body.`);
-            console.warn(`   - Available bodies: ${this.physicsBodies.length}`);
+        if (!mesh) {
+            console.error(`[Physics Recalculation] Could not find MESH "${searchName}" in the scene.`);
             return false;
         }
+        console.log(`   - Found mesh: ${mesh.name}`);
 
-        const { mesh, body: oldBody } = bodyEntry;
-
-        // Step 2: Remove the old body from the physics world and our tracking array.
-        this.physicsManager.removeBody(oldBody);
-
-        const index = this.physicsBodies.findIndex(entry => entry.mesh === mesh);
-        if (index !== -1) {
-            this.physicsBodies.splice(index, 1);
-            console.log(`   - Removed from tracking array at index ${index}`);
+        // Step 2: Find and remove the OLD body entry, if it exists.
+        const bodyEntryIndex = this.physicsBodies.findIndex(entry => entry.mesh === mesh);
+        
+        if (bodyEntryIndex !== -1) {
+            // A body entry exists. Remove it from the manager and the tracking array.
+            const oldBody = this.physicsBodies[bodyEntryIndex].body;
+            if (oldBody) {
+                this.physicsManager.removeBody(oldBody);
+                console.log(`   - Old body for "${searchName}" removed from physics world.`);
+            }
+            this.physicsBodies.splice(bodyEntryIndex, 1);
+            console.log(`   - Removed old entry from tracking array.`);
+        } 
+        else {
+            // No body entry was found (e.g., the door was opened). This is fine.
+            console.log(`   - No old physics body found in tracking array (this is expected for an open door).`);
         }
-
-        console.log(`   - Old body for "${searchName}" removed from physics world.`);
-
+        
         // Step 3: Create a new physics body using its current transform.
         const newBody = this.createPhysicsBodyFromMesh(mesh);
 

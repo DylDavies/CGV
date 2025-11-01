@@ -193,6 +193,8 @@ export class CarRepairSystem {
 
         // Interacted with door but the car won't start
         if (!this.repairState.carWontStartTriggered) {
+            this.audioManager.playSound('open_car_door', 'public/audio/sfx/open-car-door.mp3');
+
             logger.log("   Step 1: Triggering 'car_wont_start'.");
 
             await this.narrativeManager.triggerEvent("stage3.car_wont_start");
@@ -228,7 +230,7 @@ export class CarRepairSystem {
             await this.narrativeManager.triggerEvent("stage3.car_ready");
 
             this.repairState.carReadyTriggered = true; 
-            this.audioManager.playSound('car_start', 'public/audio/sfx/crack-sound.mp3'); // Placeholder
+            this.audioManager.playSound('car_starting', 'public/audio/sfx/car-starting.mp3'); // Placeholder
             userData.interactable = false;
 
             // Wait a bit and play and play some audio and stuf for the monster breaking in
@@ -330,7 +332,7 @@ export class CarRepairSystem {
                 logger.log("   Step 3: Player has crowbar. Prying hood open.");
 
                 this.repairState.justUsedCrowbar = true; 
-                this.audioManager.playSound('pry_hood', 'public/audio/sfx/hit_sound.mp3');  // Audio for playing crowbar sound
+                //this.audioManager.playSound('pry_hood', 'public/audio/sfx/hit_sound.mp3');  // Audio for playing crowbar sound
 
                 userData.prompt = "Opening..."; 
                 this.interactionSystem.updateCrosshair();

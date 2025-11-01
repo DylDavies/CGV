@@ -28,6 +28,10 @@ class AudioManager {
             phone_linging: 'public/audio/sfx/yo_phone_linging.mp3',
             interview_audio: 'public/audio/sfx/interview.wav', // Placeholder for interview audio
             walking: 'public/audio/sfx/walking-on-wood.mp3',
+            open_car_door: 'public/audio/sfx/open-car-door.mp3',
+            car_hood_open: 'public/audio/sfx/hood-open.mp3',
+            car_hood_close: 'public/audio/sfx/hood-close.mp3',
+            car_starting: 'public/audio/sfx/car-starting.mp3',
 
             //ambient sound effects - to be used for random sound generation
             ambientSounds: [

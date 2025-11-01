@@ -628,13 +628,12 @@ class InteractionSystem {
             if (physicsBodyEntry?.body) {
                 this.gameManager.physicsManager.removeBody(physicsBodyEntry.body);
                 log.log(`   - Removed physics for opening door: ${doorMesh.name}`);
-                const index = this.stageManager.currentLoader.physicsBodies.findIndex(entry => entry.mesh === doorMesh);
-                if (index !== -1) this.stageManager.currentLoader.physicsBodies.splice(index, 1);
+                //const index = this.stageManager.currentLoader.physicsBodies.findIndex(entry => entry.mesh === doorMesh);
+                //if (index !== -1) this.stageManager.currentLoader.physicsBodies.splice(index, 1);
             } else {
                 log.warn(`   - No valid physics body entry found for ${doorMesh.name} during open.`);
             }
         }
-        // --- End Physics Handling Setup ---
 
         // --- Animation Logic (Animating PIVOT's Y-axis - common for hinges) ---
         const startRotationY = pivotObject.rotation.y;
