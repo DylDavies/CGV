@@ -53,6 +53,11 @@ class GameManager {
         this.puzzleFailureCount = 0; // Track wrong puzzle attempts
         this.maxPuzzleFailures = 3; // Die after 3 failures
 
+        // Player health system
+        this.playerHits = 0; // Track number of hits taken (max 2 before death)
+        this.maxPlayerHits = 1; // Player dies on 2nd hit
+        this.hitBorderOverlay = null; // Visual indicator for being hit
+        this.annieHasHealed = false; // Track if Annie doll has healed the player (only once)
 
         this.ui = this.createUI();
         this.audioEnabled = true;
@@ -476,7 +481,79 @@ class GameManager {
         ui.inventoryPopup = this.createInventoryPopup();
         document.body.appendChild(ui.inventoryPopup);
 
+        // Create hit border overlay for visual damage indicator
+        this.createHitBorderOverlay();
+
         return ui;
+    }
+
+    createHitBorderOverlay() {
+        this.hitBorderOverlay = document.createElement('div');
+        this.hitBorderOverlay.id = 'hit-border-overlay';
+        this.hitBorderOverlay.style.cssText = `
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            width: 100vw;
+            height: 100vh;
+            pointer-events: none;
+            z-index: 999999;
+            opacity: 0;
+            transition: opacity 0.3s ease;
+        `;
+        document.body.appendChild(this.hitBorderOverlay);
+        console.log('💔 Hit border overlay created and added to body');
+    }
+
+    updateHitBorderOverlay() {
+        if (!this.hitBorderOverlay) {
+            console.error('❌ Hit border overlay not found!');
+            return;
+        }
+
+        // Ensure element is in DOM - re-add if missing
+        if (!document.body.contains(this.hitBorderOverlay)) {
+            console.log('⚠️ Hit border overlay was removed from DOM - re-adding it');
+            document.body.appendChild(this.hitBorderOverlay);
+        }
+
+        if (this.playerHits > 0) {
+            // Show subtle red border vignette with intensity based on hit count
+            const borderThickness = this.playerHits * 50; // 50px per hit - more subtle
+            const opacity = 0.4 + (this.playerHits * 0.15); // Gentler opacity increase
+
+            // Ensure element is visible with explicit display and high z-index
+            this.hitBorderOverlay.style.display = 'block';
+            this.hitBorderOverlay.style.zIndex = '999999';
+            this.hitBorderOverlay.style.opacity = '1';
+
+            // Remove any border (was causing offset issues)
+            this.hitBorderOverlay.style.border = 'none';
+
+            // Use box-shadow inset for proper edge vignette effect
+            // Creates a red glow that fades from edges toward center
+            this.hitBorderOverlay.style.boxShadow = `
+                inset 0 0 ${borderThickness}px ${borderThickness * 0.3}px rgba(139, 0, 0, ${opacity}),
+                inset 0 0 ${borderThickness * 2}px ${borderThickness * 0.5}px rgba(100, 0, 0, ${opacity * 0.5}),
+                inset 0 0 ${borderThickness * 3}px ${borderThickness * 0.7}px rgba(80, 0, 0, ${opacity * 0.3})
+            `;
+
+            // Add a very subtle red vignette to entire screen
+            this.hitBorderOverlay.style.background = `radial-gradient(circle at center, transparent 50%, rgba(139, 0, 0, ${opacity * 0.2}) 100%)`;
+
+            console.log(`💔 Hit border displayed! Hits: ${this.playerHits}, Border: ${borderThickness}px, Opacity: ${opacity}`);
+            console.log('   Is in DOM:', document.body.contains(this.hitBorderOverlay));
+        } else {
+            // Hide border when no hits
+            this.hitBorderOverlay.style.display = 'none';
+            this.hitBorderOverlay.style.opacity = '0';
+            this.hitBorderOverlay.style.border = 'none';
+            this.hitBorderOverlay.style.boxShadow = 'none';
+            this.hitBorderOverlay.style.background = 'transparent';
+            console.log('💚 Hit border hidden - no hits');
+        }
     }
 
      createInventoryPopup() {
@@ -614,7 +691,8 @@ class GameManager {
             'weight_object': '⚖️',
             'symbol': '🔮',
             'potion': '🧪',
-            'book': '📖'
+            'book': '📖',
+            'companion': '🧿'  // Evil eye/voodoo doll icon for Annie (creepy look)
         };
         return icons[itemType] || '📦';
     }
@@ -1428,6 +1506,12 @@ class GameManager {
         console.log('🎭 Starting Stage 2...');
         this.gameStage = 2;
 
+        // Reset player hits for Stage 2
+        this.playerHits = 0;
+        this.annieHasHealed = false; // Reset Annie's healing ability for new stage
+        this.updateHitBorderOverlay();
+        console.log('💚 Player health reset for Stage 2');
+
         // Show Stage 2 title screen
         await window.gameControls.narrativeManager.triggerEvent('stage2.stage_2_title');
 
@@ -1485,6 +1569,100 @@ class GameManager {
         } catch (error) {
             console.error("Failed to spawn monster near study:", error);
             monsterAI.spawn(); // Fallback
+        }
+    }
+
+    spawnMonsterAtRandomNode() {
+        console.log('👾 Attempting to spawn monster at random node...');
+
+        const monsterAI = window.gameControls.monsterAI;
+        if (!monsterAI) {
+            console.error('❌ Monster AI not found!');
+            return;
+        }
+
+        console.log('✅ Monster AI found');
+
+        const pathfinding = monsterAI.pathfinding;
+        if (!pathfinding) {
+            console.error('❌ Pathfinding system not available!');
+            return;
+        }
+
+        console.log('✅ Pathfinding system found');
+        console.log('   ZONE:', monsterAI.ZONE);
+        console.log('   Group ID:', monsterAI.groupID);
+
+        if (!pathfinding.zones) {
+            console.error('❌ Pathfinding zones not loaded!');
+            return;
+        }
+
+        const zone = pathfinding.zones[monsterAI.ZONE];
+        if (!zone) {
+            console.error(`❌ Zone '${monsterAI.ZONE}' not found!`);
+            console.log('   Available zones:', Object.keys(pathfinding.zones));
+            return;
+        }
+
+        console.log('✅ Zone found');
+
+        if (!zone.groups) {
+            console.error('❌ Zone has no groups!');
+            return;
+        }
+
+        const nodes = zone.groups[monsterAI.groupID];
+        if (!nodes || nodes.length === 0) {
+            console.error(`❌ No nodes available for group ${monsterAI.groupID}!`);
+            console.log('   Available groups:', Object.keys(zone.groups));
+            console.log('   Trying group 0 as fallback...');
+
+            // Try group 0 as fallback
+            const fallbackNodes = zone.groups[0];
+            if (!fallbackNodes || fallbackNodes.length === 0) {
+                console.error('❌ Fallback group 0 also has no nodes!');
+                return;
+            }
+
+            // Use fallback nodes
+            const randomNode = fallbackNodes[Math.floor(Math.random() * fallbackNodes.length)];
+            monsterAI.monster.position.copy(randomNode.centroid);
+            monsterAI.monster.visible = true;
+            monsterAI.groupID = 0; // Update group ID
+
+            // Start heartbeat if not already started
+            if (!monsterAI.heartbeatStarted && monsterAI.audioManager) {
+                monsterAI.audioManager.playHeartbeat();
+                monsterAI.heartbeatStarted = true;
+            }
+
+            console.log(`✅ Monster spawned at random node (group 0): (${randomNode.centroid.x.toFixed(2)}, ${randomNode.centroid.y.toFixed(2)}, ${randomNode.centroid.z.toFixed(2)})`);
+            return;
+        }
+
+        console.log(`✅ Found ${nodes.length} nodes in group ${monsterAI.groupID}`);
+
+        try {
+            // Pick a random node
+            const randomNode = nodes[Math.floor(Math.random() * nodes.length)];
+
+            // Spawn monster at random node
+            monsterAI.monster.position.copy(randomNode.centroid);
+            monsterAI.monster.visible = true;
+
+            // Start heartbeat if not already started
+            if (!monsterAI.heartbeatStarted && monsterAI.audioManager) {
+                monsterAI.audioManager.playHeartbeat();
+                monsterAI.heartbeatStarted = true;
+            }
+
+            console.log(`✅ Monster spawned at random node: (${randomNode.centroid.x.toFixed(2)}, ${randomNode.centroid.y.toFixed(2)}, ${randomNode.centroid.z.toFixed(2)})`);
+            console.log(`   Aggression level: ${monsterAI.aggressionLevel}`);
+        } catch (error) {
+            console.error("❌ Failed to spawn monster at random node:", error);
+            console.error("   Error details:", error.message);
+            console.error("   Stack:", error.stack);
         }
     }
 
@@ -1556,31 +1734,51 @@ class GameManager {
         console.log('💀 Press R to restart the game');
     }
 
-    checkMonsterCollision() {
+    registerMonsterHit(aggressionLevel) {
         if (this.gameState !== 'playing') return;
-        if (!window.gameControls.monsterAI) return;
 
-        // Only check collision if we're in Stage 2 (monster is spawned)
-        if (this.gameStage !== 2) return;
+        // Increment hit counter
+        this.playerHits++;
+        console.log(`💔 Player hit! Hits: ${this.playerHits}/${this.maxPlayerHits + 1}`);
 
-        // Don't check collision if player is hiding
-        if (window.gameControls.interactionSystem && window.gameControls.interactionSystem.isHiding) {
-            return;
+        // Play hit sound
+        if (this.audioManager) {
+            this.audioManager.playSound('player_hit', 'public/audio/sfx/hit_sound.mp3');
         }
 
-        const monsterAI = window.gameControls.monsterAI;
-        const monster = monsterAI.monster;
-        if (!monster) return;
+        // Update visual hit indicator
+        this.updateHitBorderOverlay();
 
-        const playerPos = this.camera.position;
-        const monsterPos = monster.position;
+        // Check if Annie doll can heal (only once, and only on first hit)
+        if (this.playerHits === 1 && !this.annieHasHealed && this.hasItem('Annie (Doll)')) {
+            console.log('🎎 Annie doll will heal the player in 2 seconds...');
 
-        const distance = playerPos.distanceTo(monsterPos);
+            // Wait 2 seconds so player can register the hit first
+            setTimeout(() => {
+                console.log('🎎 Annie is healing the player now!');
 
-        // If player is close (within 1.5 units) and attack is complete, kill player
-        if (distance < 1.5 && monsterAI.isAttackComplete()) {
+                // Trigger Annie's healing dialogue
+                if (window.gameControls.narrativeManager) {
+                    window.gameControls.narrativeManager.triggerEvent('stage2.annie_heal');
+                }
+
+                // Reset hit counter (Annie healed you)
+                this.playerHits = 0;
+                this.annieHasHealed = true;
+
+                // Update visual to hide the border
+                this.updateHitBorderOverlay();
+
+                // Show special message
+                this.showHint('Annie healed your wounds... but this gift comes only once.', 4000);
+            }, 2000); // 2 second delay
+
+            return; // Exit early - no death check needed
+        }
+
+        // Check if player has died (2nd hit)
+        if (this.playerHits > this.maxPlayerHits) {
             // Determine death message based on monster aggression level
-            const aggressionLevel = monsterAI.aggressionLevel;
             let deathType;
             if (aggressionLevel >= 5) {
                 deathType = 'monster_hostile';
@@ -1590,15 +1788,30 @@ class GameManager {
                 deathType = 'monster_curious';
             }
 
-            // Reset attack state
-            monsterAI.resetAttack();
-
-            // Kill player
+            // Kill player on 2nd hit
             this.onPlayerDeath(deathType);
+        } else {
+            // Show warning message for non-fatal hits (1st hit)
+            const hitsRemaining = (this.maxPlayerHits + 1) - this.playerHits;
+            this.showHint(`You've been hit! ${hitsRemaining} hit${hitsRemaining === 1 ? '' : 's'} remaining before death!`, 3000);
+        }
+    }
+
+    checkMonsterCollision() {
+        if (this.gameState !== 'playing') return;
+        if (!window.gameControls.monsterAI) return;
+
+        // Don't check collision if player is hiding
+        if (window.gameControls.interactionSystem && window.gameControls.interactionSystem.isHiding) {
+            return;
         }
 
-        // If attack is complete but player escaped (distance > 1.5), reset attack so monster can move again
-        if (monsterAI.isAttackComplete() && distance > 1.5) {
+        const monsterAI = window.gameControls.monsterAI;
+        const monster = monsterAI.monster;
+        if (!monster || !monster.visible) return; // Also check if monster is visible
+
+        // Simply reset attack when complete (hit is registered in startAttack now)
+        if (monsterAI.isAttackComplete()) {
             monsterAI.resetAttack();
         }
     }

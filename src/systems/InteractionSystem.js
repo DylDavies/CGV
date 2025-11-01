@@ -49,6 +49,7 @@ class InteractionSystem {
         this.lockedCameraPosition = null; // Camera position while hiding (locked)
         this.lockedCameraQuaternion = null; // Camera rotation while hiding (locked)
         this.flashlightWasOn = false; // Track if flashlight was on before hiding
+        this.lastHideTeleportTime = 0; // Track last teleport to prevent multiple teleports
 
         // UI Elements
         this.crosshair = null;
@@ -1134,7 +1135,7 @@ Run.`
         }
 
         // If the slot is empty, the rest of the function works as before to place a new page.
-        const availablePages = this.gameManager.inventory.filter(item => item.pageId);
+        const availablePages = this.gameManager.inventory.filter(item => item.pageId && item.symbol);
 
         if (availablePages.length === 0) {
             this.showMessage("You don't have any pages to place.");
@@ -1587,6 +1588,18 @@ Run.`
     }
 
     async handleEntranceDoorInteraction(door, userData) {
+        // In Stage 1, check if pages have been placed
+        if (this.gameManager.gameStage === 1) {
+            if (!this.gameManager.allPagesPlaced) {
+                this.showMessage("I am not ready to leave yet...");
+                return;
+            }
+            // If pages are placed, this will be handled by the page placement completion sequence
+            // Don't allow manual door interaction in Stage 1
+            this.showMessage("The door is closed.");
+            return;
+        }
+
         // Only allow interaction in stage 2 and if escape objective is active
         if (this.gameManager.gameStage !== 2) {
             this.showMessage("The door is closed.");
@@ -1995,6 +2008,7 @@ Run.`
         // Teleport physics body to hiding position to prevent falling/movement
         if (window.gameControls && window.gameControls.physicsManager) {
             window.gameControls.physicsManager.teleportTo(hidePosition);
+            this.lastHideTeleportTime = Date.now(); // Track initial teleport
         }
 
         // Freeze player controls AFTER setting locked position (prevents mouse look and WASD)
@@ -2773,6 +2787,23 @@ Run.`
                             else if (interactableData.locked && typeInfo.lockedPrompt) {
                                 interactionPrompt = typeInfo.lockedPrompt;
                             }
+                            else if (interactableData.type === 'entrance_door') {
+                                if (this.gameManager.gameStage === 1) {
+                                    if (!this.gameManager.allPagesPlaced) {
+                                        interactionPrompt = "I am not ready to leave yet...";
+                                    } else {
+                                        interactionPrompt = "The door is closed.";
+                                    }
+                                } else if (this.gameManager.gameStage === 2) {
+                                    if (interactableData.triedToEscape) {
+                                        interactionPrompt = "The door is locked from the outside.";
+                                    } else {
+                                        interactionPrompt = typeInfo.prompt;
+                                    }
+                                } else {
+                                    interactionPrompt = "The door is closed.";
+                                }
+                            }
                             // Default handling from caebf...
                             else { 
                                 interactionPrompt = interactableData.locked ?
@@ -2822,24 +2853,20 @@ Run.`
                 this.interactionPrompt.textContent = blockedMessage;
                 this.interactionPrompt.style.display = 'block';
             }
-        } else if (disabledPrompt && !this.blockInteractionPrompt) { // White crosshair but show the disabled message
-            if (currentPromptText !== disabledPrompt || !currentPromptVisible) {
+        } else {
+            // Always reset crosshair to white when not looking at anything interactable
+            const currentCrosshairColor = this.crosshair.style.background;
+            if (currentCrosshairColor !== 'white') {
                 this.crosshair.style.background = 'white';
                 this.crosshair.style.borderColor = 'rgba(255,255,255,0.8)';
                 this.crosshair.style.width = '4px';
                 this.crosshair.style.height = '4px';
-                this.interactionPrompt.textContent = disabledPrompt;
-                this.interactionPrompt.style.display = 'block';
             }
-        } else { // Default white crosshair, no prompt
-            // Only hide if currently visible AND not showing a message
+
+            // Only hide prompt if currently visible AND not showing a message
             if (currentPromptVisible && !this.isMessageVisible) {
                 // Log what prompt is being hidden (but only for debugging, not for messages)
                 console.log(`[Prompt] Hiding: "${currentPromptText}" (from updateCrosshair - no interaction)`);
-                this.crosshair.style.background = 'white';
-                this.crosshair.style.borderColor = 'rgba(255,255,255,0.8)';
-                this.crosshair.style.width = '4px';
-                this.crosshair.style.height = '4px';
                 this.interactionPrompt.style.display = 'none';
                 this.interactionPrompt.textContent = ''; // Clear text when hiding
             }
@@ -2902,14 +2929,18 @@ Run.`
             this.camera.quaternion.copy(this.lockedCameraQuaternion);
 
             // Also keep physics body locked at hiding position
-            if (window.gameControls && window.gameControls.physicsManager) {
+            // Only check and teleport once every 500ms to prevent multiple rapid teleports
+            const now = Date.now();
+            if (window.gameControls && window.gameControls.physicsManager && (now - this.lastHideTeleportTime > 1000)) {
                 const currentPos = window.gameControls.physicsManager.playerBody?.translation();
                 if (currentPos) {
                     const distance = new THREE.Vector3(currentPos.x, currentPos.y, currentPos.z)
                         .distanceTo(this.lockedCameraPosition);
-                    // If physics body has moved, teleport it back
-                    if (distance > 0.1) {
+                    // If physics body has moved significantly, teleport it back
+                    if (distance > 0.76) {
                         window.gameControls.physicsManager.teleportTo(this.lockedCameraPosition);
+                        this.lastHideTeleportTime = now;
+                        console.log(`🚪 Correcting physics position while hiding (distance: ${distance.toFixed(2)})`);
                     }
                 }
             }

@@ -245,6 +245,13 @@ async function main() {
                         console.error('❌ Monster AI not available');
                     }
                 },
+                spawnMonsterAtRandomNode: () => {
+                    if (gameManager) {
+                        gameManager.spawnMonsterAtRandomNode();
+                    } else {
+                        console.error('❌ Game Manager not available');
+                    }
+                },
                 listPhysics: () => stageManager.currentLoader?.listPhysicsBodies?.(),
                 toggleOcclusionViz: (enabled) => {
                     // Toggle occlusion culling visualization on ALL stages
@@ -366,7 +373,8 @@ async function main() {
             logger.log("🎬 Stage transitions: gameControls.toMansion() or gameControls.toOffice()");
             logger.log('');
             logger.log('👾 MONSTER DEBUG:');
-            logger.log('   gameControls.spawnMonster()  - Spawn the monster for testing');
+            logger.log('   gameControls.spawnMonster()             - Spawn the monster for testing');
+            logger.log('   gameControls.spawnMonsterAtRandomNode() - Spawn monster at random navmesh node');
             logger.log('');
             logger.log('📝 LOGGING COMMANDS:');
             logger.log('   logger.disable()       - Disable console logging');

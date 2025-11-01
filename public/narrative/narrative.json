@@ -411,6 +411,12 @@
     "monster_breaks_in": {
         "type": "warning",
         "text": "The monster has broken through the barricade!"
+    },
+    "annie_heal": {
+      "type": "speechBubble",
+      "title": "Annie",
+      "text": "I'll stitch you up just this once.",
+      "duration": 4000
     }
   },
   "endings": {

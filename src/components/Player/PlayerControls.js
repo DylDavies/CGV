@@ -168,32 +168,6 @@ class FirstPersonControls {
                         }
                     }
                     break;
-
-                // Temporary Test key for QTES : (FOR DEV TESTING)
-                // --- QTE Test Trigger ---
-                case 'KeyT':
-                    if (this.qteManager && !this.qteManager.isActive()) {
-                        event.preventDefault(); // Prevent typing 't' if game active
-                        const types = ['buttonMash', 'skillCheck', 'bouncingRing'];
-                        // Cycle through QTE types for testing
-                        this.currentTestQTEIndex = (this.currentTestQTEIndex + 1) % types.length;
-                        const typeToTest = types[this.currentTestQTEIndex];
-                        console.log(`--- TESTING QTE: ${typeToTest} (Index: ${this.currentTestQTEIndex}) ---`);
-
-                        // Use the globally accessible test function for consistency
-                        if (window.gameControls && window.gameControls.testQTE) {
-                            window.gameControls.testQTE(typeToTest);
-                        } else {
-                            console.warn("window.gameControls.testQTE not found. Cannot trigger test QTE.");
-                        }
-
-                    } else if (this.qteManager && this.qteManager.isActive()) {
-                        console.log("QTE already active. Press Escape or wait for it to finish.");
-                    } else {
-                         console.warn("QTEManager not available. Cannot trigger test QTE.");
-                    }
-                    break;
-                 // --- End QTE Test Trigger ---
                 }
         };
 
@@ -366,7 +340,7 @@ class FirstPersonControls {
                 if (isMovingOnGround && !this.isWalkingSoundPlaying) {
                     console.log("AUDIO SOUND IS CURRENTLY PLAYING");
                     // Player started moving on the ground -> PLAY sound
-                    this.audioManager.playSound('walking', this.audioManager.soundPaths.walking, true, 0.5); // volume of walking
+                    this.audioManager.playSound('walking', this.audioManager.soundPaths.walking, true, 0.1); // volume of walking
                     this.isWalkingSoundPlaying = true;
                 } 
                 else if ((!isMovingOnGround || this.isFrozen) && this.isWalkingSoundPlaying) {

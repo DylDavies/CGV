@@ -174,6 +174,9 @@ class AnnieInteraction {
         // Track which endings have been reached (allows re-exploring different branches)
         this.completedEndings = new Set();
 
+        // Track which dialogue choices have been selected (to hide them on subsequent interactions)
+        this.selectedChoices = new Set();
+
         // Current playing audio ID for dialogue
         this.currentDialogueAudio = null;
     }
@@ -482,6 +485,14 @@ class AnnieInteraction {
                     type: 'companion',
                     description: 'Your new best friend. She giggles softly from your bag.'
                 });
+
+                // Make Annie doll disappear from the scene
+                const annieDoll = this.stageManager.currentLoader.props.get('annie');
+                if (annieDoll) {
+                    annieDoll.visible = false;
+                    console.log('🎎 Annie doll removed from scene - she joined you!');
+                }
+
                 this.interactionSystem.animateItemPickup(pageObject, () => {
                     if (pageObject.parent) {
                         pageObject.parent.remove(pageObject);
@@ -914,7 +925,11 @@ class AnnieInteraction {
         }
         // If there are edges (choices), show them as buttons
         else if (node.edges && node.edges.length > 0) {
-            const availableEdges = node.edges.filter(edge => edge.isAvailable());
+            // Filter out already selected choices and check availability
+            const availableEdges = node.edges.filter(edge => {
+                const choiceKey = `${node.id}:${edge.choiceText}`;
+                return edge.isAvailable() && !this.selectedChoices.has(choiceKey);
+            });
 
             availableEdges.forEach((edge, index) => {
                 const button = document.createElement('button');
@@ -938,6 +953,11 @@ class AnnieInteraction {
                     button.style.borderColor = '#8b4513';
                 };
                 button.onclick = () => {
+                    // Track this choice as selected
+                    const choiceKey = `${node.id}:${edge.choiceText}`;
+                    this.selectedChoices.add(choiceKey);
+                    console.log(`💬 Choice selected and tracked: ${choiceKey}`);
+
                     // Call onSelect callback if present
                     if (edge.onSelect) {
                         edge.onSelect();
