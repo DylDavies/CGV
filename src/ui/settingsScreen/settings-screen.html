@@ -3,7 +3,7 @@
         <h1>Settings</h1>
         <div class="settings-tabs">
             <button class="tab-btn active" data-tab="controls">Controls</button>
-            <button class="tab-btn" data-tab="audio" disabled>Audio</button>
+            <button class="tab-btn" data-tab="audio">Audio</button>
             <button class="tab-btn" data-tab="video">Video</button>
         </div>
         <div class="settings-content">
@@ -24,7 +24,64 @@
                 </ul>
             </div>
             <div id="audio-tab" class="tab-content">
+                <h2>Audio Settings</h2>
+
+                <!-- Master Volume -->
+                <div class="audio-setting">
+                    <div class="volume-control">
+                        <label for="master-volume">
+                            <span class="setting-label">Master Volume</span>
+                            <span class="volume-value">100%</span>
+                        </label>
+                        <input type="range" id="master-volume" min="0" max="100" value="100" class="volume-slider">
+                    </div>
+                    <p class="setting-description">
+                        Overall game volume level
+                    </p>
                 </div>
+
+                <!-- Music Volume -->
+                <div class="audio-setting">
+                    <div class="volume-control">
+                        <label for="music-volume">
+                            <span class="setting-label">Music Volume</span>
+                            <span class="volume-value">90%</span>
+                        </label>
+                        <input type="range" id="music-volume" min="0" max="100" value="90" class="volume-slider">
+                    </div>
+                    <p class="setting-description">
+                        Background music
+                    </p>
+                </div>
+
+                <!-- SFX Volume -->
+                <div class="audio-setting">
+                    <div class="volume-control">
+                        <label for="sfx-volume">
+                            <span class="setting-label">Effects Volume</span>
+                            <span class="volume-value">95%</span>
+                        </label>
+                        <input type="range" id="sfx-volume" min="0" max="100" value="95" class="volume-slider">
+                    </div>
+                    <p class="setting-description">
+                        Sound effects and interactions
+                    </p>
+                </div>
+
+                <!-- Ambience Volume -->
+                <div class="audio-setting">
+                    <div class="volume-control">
+                        <label for="ambience-volume">
+                            <span class="setting-label">Ambience Volume</span>
+                            <span class="volume-value">50%</span>
+                        </label>
+                        <input type="range" id="ambience-volume" min="0" max="100" value="50" class="volume-slider">
+                    </div>
+                    <p class="setting-description">
+                        Environmental and atmospheric sounds
+                    </p>
+                </div>
+            </div>
             <div id="video-tab" class="tab-content">
                 <h2>Graphics Settings</h2>
 
