@@ -321,6 +321,12 @@
       "type": "objective",
       "id": "escape_front_door",
       "description": "Escape through the front door."
+    },
+    "annie_heal": {
+      "type": "speechBubble",
+      "title": "Annie",
+      "text": "I'll stitch you up just this once.",
+      "duration": 4000
     }
   },
   "endings": {

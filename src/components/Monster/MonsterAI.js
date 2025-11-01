@@ -19,10 +19,6 @@ class MonsterAI {
         
         // Group ID for pathfinding
         this.groupID = 0;
-        
-        // Path visualization for debugging
-        this.pathLine = null;
-        this.pathVisualizationEnabled = false; // Path line is off by default
 
         // For Direct Pursuit
         this.raycaster = new THREE.Raycaster();
@@ -53,7 +49,7 @@ class MonsterAI {
         this.aggressionLevels = {
             1: { name: 'DOCILE', speed: 1.5, color: 0x00ff00 },
             2: { name: 'CAUTIOUS', speed: 2.0, color: 0xADD8E6 }, // Light Blue
-            3: { name: 'CURIOUS', speed: 2.5, color: 0xffff00, distance: 12, fleeDistance: 10 }, // Increased flee distance to 10 (runs away earlier)
+            3: { name: 'CURIOUS', speed: 2.5, color: 0xffff00, innerBubble: 5, outerBubble: 10 }, // Inner = aggressive, Outer = approach range
             4: { name: 'BOLD', speed: 3.0, color: 0xffa500, distance: 1 },
             5: { name: 'HOSTILE', speed: 4, color: 0xff0000, distance: 0 }
         };
@@ -61,7 +57,7 @@ class MonsterAI {
         this.lastWander = 0;
         this.isFleeing = false;
         this.fleeTimer = 0;
-        this.fleeDuration = 8000; // 8 seconds in milliseconds - increased time before becoming hostile
+        this.fleeDuration = 10000; // 10 seconds before becoming bold
 
         this.mixer = monsterMesh.mixer;
         this.animations = monsterMesh.animations;
@@ -96,15 +92,6 @@ class MonsterAI {
             this.wanderTarget = null; // Clear wander target
         }
     }
-
-    togglePathVisualization() {
-        this.pathVisualizationEnabled = !this.pathVisualizationEnabled;
-        if (this.pathLine) {
-            this.pathLine.visible = this.pathVisualizationEnabled;
-        }
-        console.log(`Path visualization ${this.pathVisualizationEnabled ? 'ON' : 'OFF'}`);
-    }
-
 
     createVisuals() {
         this.sightLine = null;
@@ -185,7 +172,7 @@ class MonsterAI {
         // Performance: Cache obstacles array if not already cached
         if (!this.cachedObstacles) {
             this.cachedObstacles = this.scene.children.filter(obj => {
-                return obj !== this.monster && obj !== this.sightLine && obj !== this.pathLine && !obj.name.toLowerCase().includes('monster');
+                return obj !== this.monster && obj !== this.sightLine && !obj.name.toLowerCase().includes('monster');
             });
         }
 
@@ -208,7 +195,7 @@ class MonsterAI {
         // Performance: Use cached obstacles if available
         if (!this.cachedObstacles) {
             this.cachedObstacles = this.scene.children.filter(obj =>
-                !obj.name.toLowerCase().includes('monster') && obj !== this.sightLine && obj !== this.pathLine
+                !obj.name.toLowerCase().includes('monster') && obj !== this.sightLine
             );
         }
 
@@ -266,7 +253,9 @@ class MonsterAI {
         // Check if we should attack (within attack range)
         // Only hostile or bold monsters attack
         // Attack range matches kill range (1.5) so player dies when monster attacks
-        if (!this.isAttacking && (this.aggressionLevel >= 4) && distanceToPlayer < 1.5) {
+        // Don't attack if player is hiding
+        const playerIsHiding = window.gameControls?.interactionSystem?.isHiding || false;
+        if (!this.isAttacking && !playerIsHiding && (this.aggressionLevel >= 4) && distanceToPlayer < 1.5) {
             this.startAttack();
             return; // Skip normal AI logic during attack
         }
@@ -301,37 +290,50 @@ class MonsterAI {
                 }
                 break;
 
-            case 3: // Curious
-                if (this.isFleeing) {
-                    if (now - this.fleeTimer > this.fleeDuration) {
-                        if (distanceToPlayer < currentState.fleeDistance) {
-                            this.aggressionLevel = 5; // Jumps to Hostile
-                            this.isFleeing = false;
-                        } else {
-                            this.isFleeing = false;
-                            this.path = []; 
-                        }
+            case 3: // Curious - Flee from outer bubble, approach from outside
+                // Inner bubble: Become AGGRESSIVE (hostile)
+                if (distanceToPlayer < currentState.innerBubble) {
+                    this.aggressionLevel = 5; // Becomes Hostile
+                    this.isFleeing = false;
+                    this.fleeTimer = 0;
+                    console.log('👾 Monster became HOSTILE - player entered inner bubble');
+                }
+                // Outer bubble: FLEE away from player
+                else if (distanceToPlayer >= currentState.innerBubble && distanceToPlayer < currentState.outerBubble) {
+                    if (!this.isFleeing) {
+                        // Start fleeing
+                        this.isFleeing = true;
+                        this.fleeTimer = now;
+                        this.speed = currentState.speed * 1.5;
+                        console.log('👾 Monster fleeing - player entered outer bubble');
                     } else {
-                        if (now - this.lastPathRecalculation > this.recalculationInterval) {
-                            this.recalculateFleePath();
+                        // Check if we've been fleeing for more than 8 seconds
+                        if (now - this.fleeTimer > 8000) {
+                            // Player stayed in outer bubble for 8+ seconds - become BOLD
+                            this.aggressionLevel = 4; // Becomes Bold
+                            this.isFleeing = false;
+                            this.path = [];
+                            console.log('👾 Monster became BOLD after fleeing for 8 seconds');
                         }
+                    }
+
+                    // Recalculate flee path if needed
+                    if (this.isFleeing && now - this.lastPathRecalculation > this.recalculationInterval) {
+                        this.recalculateFleeToOutsideBubble(currentState.outerBubble);
                     }
                 }
+                // Outside both bubbles: Approach to just outside outer bubble and watch
                 else {
-                    if (distanceToPlayer < currentState.fleeDistance) {
-                        this.isFleeing = true;
-                        this.fleeTimer = now; 
-                        this.speed = currentState.speed * 1.5; 
-                        this.recalculateFleePath(); 
+                    if (this.isFleeing) {
+                        // Player left the outer bubble - stop fleeing
+                        this.isFleeing = false;
+                        this.fleeTimer = 0;
+                        console.log('👾 Monster stopped fleeing - player left outer bubble');
                     }
-                    else if (distanceToPlayer > currentState.distance) {
-                        if (now - this.lastPathRecalculation > this.recalculationInterval) {
-                            this.recalculateChasePath();
-                        }
-                    }
-                    else {
-                        this.path = [];
-                        this.smoothLookAtPlayer(delta);
+
+                    // Pathfind to position just outside outer bubble
+                    if (now - this.lastPathRecalculation > this.recalculationInterval) {
+                        this.recalculateApproachToOutsideBubble(currentState.outerBubble);
                     }
                 }
                 this.followPath(delta);
@@ -357,15 +359,13 @@ class MonsterAI {
                 this.followPath(delta);
                 break;
             case 5: // Hostile
-                this.recalculationInterval = 800; 
+                this.recalculationInterval = 800;
                 const canSee = this.canSeePlayer();
                 if (canSee) {
                     this.directPursuit = true;
                     this.path = [];
-                    if (this.pathLine) this.pathLine.visible = false;
                 } else {
                     this.directPursuit = false;
-                    if (this.pathLine) this.pathLine.visible = true;
                     if (now - this.lastPathRecalculation > this.recalculationInterval) {
                         this.recalculateChasePath();
                     }
@@ -434,6 +434,11 @@ class MonsterAI {
 
         console.log('🗡️ Monster attacking player!');
         console.log(`   Locked position: (${this.savedPosition.x.toFixed(2)}, ${this.savedPosition.y.toFixed(2)}, ${this.savedPosition.z.toFixed(2)})`);
+
+        // Register hit immediately when attack animation starts
+        if (window.gameControls && window.gameControls.gameManager) {
+            window.gameControls.gameManager.registerMonsterHit(this.aggressionLevel);
+        }
 
         // Play attack sound
         if (this.audioManager) {
@@ -561,7 +566,7 @@ class MonsterAI {
 
         this.lastPathRecalculation = Date.now();
         const fleeDirection = this.monster.position.clone().sub(this.player.position).normalize();
-        const fleeDistance = 15;
+        const fleeDistance = 10;
         const targetPoint = this.monster.position.clone().add(fleeDirection.multiplyScalar(fleeDistance));
         const groupID = this.pathfinding.getGroup(this.ZONE, this.monster.position, true);
         const closestFleeNode = this.pathfinding.getClosestNode(targetPoint, this.ZONE, groupID);
@@ -576,6 +581,70 @@ class MonsterAI {
             }
         } else {
              this.path = [];
+        }
+    }
+
+    recalculateFleeToOutsideBubble(bubbleRadius) {
+        // Safety check - if no pathfinding data (office stage), skip pathfinding
+        if (!this.pathfinding || !this.pathfinding.zones || !this.pathfinding.zones[this.ZONE]) {
+            this.path = [];
+            return;
+        }
+
+        this.lastPathRecalculation = Date.now();
+
+        // Calculate direction away from player
+        const fleeDirection = this.monster.position.clone().sub(this.player.position).normalize();
+
+        // Target position is just outside the outer bubble (add 2 units buffer)
+        const targetDistance = bubbleRadius + 2;
+        const targetPoint = this.player.position.clone().add(fleeDirection.multiplyScalar(targetDistance));
+
+        const groupID = this.pathfinding.getGroup(this.ZONE, this.monster.position, true);
+        const closestFleeNode = this.pathfinding.getClosestNode(targetPoint, this.ZONE, groupID);
+        const closestMonsterNode = this.pathfinding.getClosestNode(this.monster.position, this.ZONE, groupID);
+
+        if (closestFleeNode && closestMonsterNode) {
+            const path = this.pathfinding.findPath(closestMonsterNode.centroid, closestFleeNode.centroid, this.ZONE, groupID);
+            if (path && path.length > 0) {
+                this.path = path;
+            } else {
+                this.path = [];
+            }
+        } else {
+            this.path = [];
+        }
+    }
+
+    recalculateApproachToOutsideBubble(bubbleRadius) {
+        // Safety check - if no pathfinding data (office stage), skip pathfinding
+        if (!this.pathfinding || !this.pathfinding.zones || !this.pathfinding.zones[this.ZONE]) {
+            this.path = [];
+            return;
+        }
+
+        this.lastPathRecalculation = Date.now();
+
+        // Calculate direction toward player
+        const approachDirection = this.player.position.clone().sub(this.monster.position).normalize();
+
+        // Target position is just outside the outer bubble (subtract 1 unit buffer to stay outside)
+        const targetDistance = bubbleRadius + 1;
+        const targetPoint = this.player.position.clone().sub(approachDirection.multiplyScalar(targetDistance));
+
+        const groupID = this.pathfinding.getGroup(this.ZONE, this.monster.position, true);
+        const closestTargetNode = this.pathfinding.getClosestNode(targetPoint, this.ZONE, groupID);
+        const closestMonsterNode = this.pathfinding.getClosestNode(this.monster.position, this.ZONE, groupID);
+
+        if (closestTargetNode && closestMonsterNode) {
+            const path = this.pathfinding.findPath(closestMonsterNode.centroid, closestTargetNode.centroid, this.ZONE, groupID);
+            if (path && path.length > 0) {
+                this.path = path;
+            } else {
+                this.path = [];
+            }
+        } else {
+            this.path = [];
         }
     }
 
@@ -597,7 +666,7 @@ class MonsterAI {
             const path = this.pathfinding.findPath(closestMonsterNode.centroid, randomSpot, this.ZONE, groupID);
             if (path) {
                 this.path = path;
-                this.visualizePath();
+                // this.visualizePath(); // Commented out - causing bugs
             }
             return;
         }
@@ -651,46 +720,6 @@ class MonsterAI {
                 // this.visualizePath(); // Commented out - causing bugs
             }
         }
-    }
-
-    visualizePath() {
-        if (!this.path || this.path.length === 0) {
-            if (this.pathLine) {
-                this.pathLine.visible = false;
-            }
-            this.lastPathLength = 0;
-            return;
-        }
-
-        // Performance: Only recreate geometry if path length changed significantly
-        const pathLengthChanged = Math.abs(this.path.length - this.lastPathLength) > 2;
-
-        if (this.pathLine && !pathLengthChanged) {
-            // Just update positions without recreating geometry
-            const points = [this.monster.position.clone(), ...this.path];
-            this.pathLine.geometry.setFromPoints(points);
-            this.pathLine.visible = this.pathVisualizationEnabled;
-            return;
-        }
-
-        // Recreate geometry only when path changes significantly
-        if (this.pathLine) {
-            this.scene.remove(this.pathLine);
-            this.pathLine.geometry.dispose();
-            this.pathLine.material.dispose();
-        }
-
-        const points = [this.monster.position.clone(), ...this.path];
-        const geometry = new THREE.BufferGeometry().setFromPoints(points);
-        const material = new THREE.LineBasicMaterial({
-            color: this.isFleeing ? 0x0000ff : 0xffff00,
-            linewidth: 5
-        });
-        this.pathLine = new THREE.Line(geometry, material);
-        this.pathLine.visible = this.pathVisualizationEnabled;
-        this.scene.add(this.pathLine);
-
-        this.lastPathLength = this.path.length;
     }
 
     tick(delta) {
