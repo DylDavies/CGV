@@ -118,7 +118,7 @@ async function main() {
             monster.visible = false;
 
             uiManager.updateLoadingProgress(85, "Preparing your escape...");
-            const controls = new FirstPersonControls(camera, renderer, physicsManager, { colorPuzzle, wirePuzzle, keypadPuzzle, ticTacToePuzzle }, monsterAI, stageManager.currentLoader);
+            const controls = new FirstPersonControls(camera, renderer, physicsManager, { colorPuzzle, wirePuzzle, keypadPuzzle, ticTacToePuzzle }, monsterAI, stageManager.currentLoader, audioManager);
             uiManager.setControls(controls);
             const flashlight = new ImprovedFlashlight(camera, scene, stageManager);
             // Pass the renderer to PauseMenu

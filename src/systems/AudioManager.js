@@ -27,6 +27,7 @@ class AudioManager {
             door_thud: 'public/audio/sfx/door_bang_1.mp3', // Fallback to door_bang_1 until proper file added
             phone_linging: 'public/audio/sfx/yo_phone_linging.mp3',
             interview_audio: 'public/audio/sfx/interview.wav', // Placeholder for interview audio
+            walking: 'public/audio/sfx/walking-on-wood.mp3',
 
             //ambient sound effects - to be used for random sound generation
             ambientSounds: [
