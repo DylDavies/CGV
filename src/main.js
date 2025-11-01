@@ -36,7 +36,7 @@ import { CarRepairSystem } from './systems/CarRepairSystem.js';
 
 async function main() {
     try {
-        logger.log('噫 Initializing Project HER...');
+        logger.log(' Initializing Project HER...');
         await RAPIER.init();
         logger.log(`📊 Logger initialized - File logging: ${logger.fileLoggingEnabled ? 'ENABLED' : 'DISABLED'}`);
         
