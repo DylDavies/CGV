@@ -169,7 +169,7 @@ export class GarageSystem {
         // Keep interaction disabled permanently for this plank
         plankObject.userData.interactable = false;
 
-        this.audioManager.playSound('plank_place', 'public/audio/sfx/hit_sound.mp3'); // ToDO: audio for placing a plank
+        //this.audioManager.playSound('plank_place', 'public/audio/sfx/wood-block.mp3'); // ToDO: audio for placing a plank
 
         // Animate the plank to its target position on door
         const target = (plankId === 1) ? this.plank1Target : this.plank2Target;
@@ -177,6 +177,7 @@ export class GarageSystem {
             this.isAnimatingPlank = false; // Clear animation flag when done
 
             logger.log(`   Plank ${plankId} animation finished.`);
+            this.audioManager.playSound('plank_place', 'public/audio/sfx/wood-block.mp3'); // ToDO: audio for placing a plank
             this.checkBarricadeCompletion(); // check if we have barricaded the door
         });
     }
