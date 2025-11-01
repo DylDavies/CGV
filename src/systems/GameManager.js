@@ -12,12 +12,13 @@ const PAGE_DATA = {
 };
 
 class GameManager {
-    constructor(mansion, camera, scene, uiManager, audioManager, controls, stageManager = null) {
+    constructor(mansion, camera, scene, uiManager, audioManager, controls, stageManager = null, physicsManager = null) {
         this.mansion = mansion;
         this.camera = camera;
         this.scene = scene;
         this.uiManager = uiManager;
         this.audioManager = audioManager;
+        this.physicsManager = physicsManager;
         this.controls = controls;   // NEW: Store the controls object
         this.stageManager = stageManager;   // Stage manager for stage-aware gameplay
         this.inventory = [];
@@ -83,12 +84,17 @@ class GameManager {
     async solveSafePuzzle() {
         this.safePuzzleSolved = true;
         this.addToInventory({
-            name: 'Entrance Key',
+            name: 'Old Key',
             type: 'key',
-            id: 'entrance_key',
+            id: 'old_key',
             description: 'A key that might open the entrance door.'
         });
         this.showHint("You found a key inside the safe!");
+
+        // TRIGGER THE MONSTER GETTING ANGRY SEQUENCE - THIS STILL NEEDS TO BE ADDED, consists of:
+        // - Teleport Monster to on suite bathroom
+        // - Play the crashing noises
+        // - Change the aggression level of the monster
 
         await window.gameControls.narrativeManager.triggerEvent("stage2.escape_front_door");
     }

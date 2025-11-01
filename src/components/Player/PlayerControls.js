@@ -13,6 +13,8 @@ class FirstPersonControls {
         this.domElement = renderer.domElement;
         this.physicsManager = physicsManager;
         this.mansionLoader = mansionLoader;
+        this.qtesManager = null;
+        this.currentTestQTEIndex = -1;
 
         // Testing puzzle works with new system
         this.puzzles = puzzles;
@@ -52,8 +54,26 @@ class FirstPersonControls {
         console.log('Press F9 for dev mode, F10 for fly mode (in dev), F11 for stats');
     }
 
+    // Method to receive the QTEManager instance from main.js
+    setQTEManager(qteManagerInstance) {
+        this.qteManager = qteManagerInstance;
+        console.log("⚡ QTEManager attached to PlayerControls");
+    }
+
     addEventListeners() {
         const onKeyDown = (event) => {
+            // *** QTE Input Handling Check ***
+            if (this.qteManager && this.qteManager.isActive()) {
+                // If a QTE is active, pass the input ONLY to the QTEManager
+                // Check if the pressed key is the one the QTE is waiting for OR Escape
+                 if (event.code === this.qteManager.activeQTE.key || event.code === 'Escape') {
+                      event.preventDefault(); // Prevent default action (like spacebar jump)
+                      this.qteManager.handleInput(event.code); // QTEManager decides what to do
+                 }
+                 // Do not process any other game input while QTE is active
+                return;
+            }
+
             // Prevent default for movement keys to stop page scrolling
             if (this.controls.isLocked) {
                 const gameKeys = ['KeyW', 'KeyA', 'KeyS', 'KeyD', 'Space', 'ShiftLeft', 'KeyQ', 'KeyE', 'KeyF'];
@@ -128,11 +148,12 @@ class FirstPersonControls {
                 case 'KeyK': // Temporary key for testing
                     if (window.gameControls && window.gameControls.gameManager) {
                         window.gameControls.gameManager.addToInventory({
-                            name: 'S_KeyBehindFire',
+                            name: 'Old Key',
                             type: 'key',
-                            id: 'S_KeyBehindFire'
+                            id: 'garage_key',
+                            description: 'A key found in the safe. (DEBUG SPAWNED)'
                         });
-                        console.log("Testing: Added S_KeyBehindFire to inventory.");
+                        console.log("Testing: Added Garage Key (S_KeyInSafe) to inventory via K key.");
                     }
                     break;
                 case 'KeyR': // Restart game when dead
@@ -144,6 +165,32 @@ class FirstPersonControls {
                         }
                     }
                     break;
+
+                // Temporary Test key for QTES : (FOR DEV TESTING)
+                // --- QTE Test Trigger ---
+                case 'KeyT':
+                    if (this.qteManager && !this.qteManager.isActive()) {
+                        event.preventDefault(); // Prevent typing 't' if game active
+                        const types = ['buttonMash', 'skillCheck', 'bouncingRing'];
+                        // Cycle through QTE types for testing
+                        this.currentTestQTEIndex = (this.currentTestQTEIndex + 1) % types.length;
+                        const typeToTest = types[this.currentTestQTEIndex];
+                        console.log(`--- TESTING QTE: ${typeToTest} (Index: ${this.currentTestQTEIndex}) ---`);
+
+                        // Use the globally accessible test function for consistency
+                        if (window.gameControls && window.gameControls.testQTE) {
+                            window.gameControls.testQTE(typeToTest);
+                        } else {
+                            console.warn("window.gameControls.testQTE not found. Cannot trigger test QTE.");
+                        }
+
+                    } else if (this.qteManager && this.qteManager.isActive()) {
+                        console.log("QTE already active. Press Escape or wait for it to finish.");
+                    } else {
+                         console.warn("QTEManager not available. Cannot trigger test QTE.");
+                    }
+                    break;
+                 // --- End QTE Test Trigger ---
                 }
         };
 
@@ -397,20 +444,39 @@ class FirstPersonControls {
         return this.controls.isLocked;
     }
 
-    // For interactions that require mouse interactivity
+    // Freeze controls
     freeze() {
+         // If a QTE is active when controls are frozen externally (e.g., by opening a puzzle),
+         // we should probably end the QTE as a failure.
+         if (this.qteManager && this.qteManager.isActive()) {
+             console.warn("Controls frozen externally during active QTE. Ending QTE as failure.");
+             this.qteManager.endQTE(false);
+         }
+
         this.isFrozen = true;
+        this.resetInputs(); // Stop any movement input
         this.controls.unlock(); // Release the mouse pointer
+        console.log("Player controls FROZEN.");
     }
 
+    // Unfreeze controls
     unfreeze() {
+         // Check if a QTE is still supposed to be active (e.g., puzzle closed but QTE should resume?)
+         // This depends on game design. For now, assume unfreezing means QTE is done.
+         // if (this.qteManager && this.qteManager.isActive()) {
+         //     console.log("Controls unfrozen, but QTE is still marked active?");
+         // }
+
         this.isFrozen = false;
-        // Small delay before relocking to prevent pause menu from showing
+        console.log("Player controls UNFROZEN.");
+        // Small delay before relocking to prevent pause menu from showing immediately
+        // and allow browser to process unlock/lock difference
         setTimeout(() => {
-            if (!this.isFrozen) { // Only lock if still not frozen
+            // Check again if still unfrozen before locking (e.g., pause menu didn't open)
+            if (!this.isFrozen && !document.pointerLockElement) {
                 this.controls.lock();
             }
-        }, 100);
+        }, 100); // 100ms delay
     }
 
     resetInputs() {
