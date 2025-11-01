@@ -91,6 +91,8 @@ export class NarrativeManager {
                 }
             });
 
+            window.gameControls.carRepairSystem.initialize();
+
             // Reload result screen after stage transition to ensure it persists
             if (window.gameControls && window.gameControls.uiManager) {
                 await window.gameControls.uiManager.reloadResultScreen();

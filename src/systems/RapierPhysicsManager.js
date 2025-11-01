@@ -115,6 +115,27 @@ class RapierPhysicsManager {
         }
     }
 
+    /**
+     * Switch active scene (for multi-scene architecture like StageManager)
+     * Moves debug renderer to new scene if it exists
+     */
+    switchScene(newScene) {
+        if (!newScene) return;
+
+        // If debug renderer exists, move it to the new scene
+        if (this.debugEnabled && this.debugRenderer && this.debugRenderer.lines) {
+            // Remove from old scene
+            if (this.scene) {
+                this.scene.remove(this.debugRenderer.lines);
+            }
+            // Add to new scene
+            newScene.add(this.debugRenderer.lines);
+            console.log('🔄 Debug renderer moved to new scene');
+        }
+
+        this.scene = newScene;
+    }
+
     createPlayerShadowMesh() {
         // Create a capsule-shaped mesh that represents the player for shadow casting
         // The mesh is invisible but casts shadows
@@ -775,13 +796,17 @@ class RapierPhysicsManager {
             const material = new THREE.LineBasicMaterial({
                 color: 0xffffff,
                 vertexColors: true,
-                linewidth: 2
+                linewidth: 2,
+                transparent: false,
+                fog: false,
+                toneMapped: false
             });
             const geometry = new THREE.BufferGeometry();
             const lineSegments = new THREE.LineSegments(geometry, material);
 
             // Make sure the debug renderer is visible and renders on top
             lineSegments.renderOrder = 999;
+            lineSegments.frustumCulled = false; // Always render debug visualization
 
             this.scene.add(lineSegments);
 
@@ -792,18 +817,30 @@ class RapierPhysicsManager {
                         const { vertices, colors } = this.world.debugRender();
 
                         if (vertices && vertices.length > 0) {
-                            this.debugRenderer.lines.geometry.setAttribute(
-                                'position',
-                                new THREE.BufferAttribute(vertices, 3)
-                            );
-                            this.debugRenderer.lines.geometry.setAttribute(
-                                'color',
-                                new THREE.BufferAttribute(colors, 4)
-                            );
+                            // Update or create position attribute
+                            if (this.debugRenderer.lines.geometry.attributes.position) {
+                                this.debugRenderer.lines.geometry.attributes.position.array = vertices;
+                                this.debugRenderer.lines.geometry.attributes.position.needsUpdate = true;
+                            } else {
+                                this.debugRenderer.lines.geometry.setAttribute(
+                                    'position',
+                                    new THREE.BufferAttribute(vertices, 3)
+                                );
+                            }
 
-                            // Make sure geometry updates
-                            this.debugRenderer.lines.geometry.attributes.position.needsUpdate = true;
-                            this.debugRenderer.lines.geometry.attributes.color.needsUpdate = true;
+                            // Update or create color attribute
+                            if (this.debugRenderer.lines.geometry.attributes.color) {
+                                this.debugRenderer.lines.geometry.attributes.color.array = colors;
+                                this.debugRenderer.lines.geometry.attributes.color.needsUpdate = true;
+                            } else {
+                                this.debugRenderer.lines.geometry.setAttribute(
+                                    'color',
+                                    new THREE.BufferAttribute(colors, 4)
+                                );
+                            }
+
+                            // Compute bounding sphere for proper rendering
+                            this.debugRenderer.lines.geometry.computeBoundingSphere();
                         }
                     } catch (error) {
                         console.error('Error updating debug renderer:', error);

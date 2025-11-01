@@ -8,12 +8,13 @@ import logger from '../utils/Logger.js';
 import { MansionLoader } from './MansionLoader.js';
 
 export class StageManager {
-    constructor(physicsManager, camera, quality = 'medium', loop = null, audioManager = null) {
+    constructor(physicsManager, camera, quality = 'medium', loop = null, audioManager = null, renderer = null) {
         this.physicsManager = physicsManager;
         this.camera = camera;
         this.quality = quality;
         this.loop = loop;
         this.audioManager = audioManager;
+        this.renderer = renderer; // For passing to MansionLoader for shader pre-warming
 
         // Track scenes per stage
         this.scenes = {
@@ -48,7 +49,7 @@ export class StageManager {
             },
             mansion: {
                 name: 'Haunted Mansion',
-                modelPath: 'blender/Mansion.glb',
+                modelPath: 'blender/Mansion.glb', 
                 navMeshPath: 'blender/NavMesh.glb',
                 spawnPoint: null, // Will use entrance door spawn
                 ambientIntensity: 0.005,
@@ -57,6 +58,7 @@ export class StageManager {
                     lamps: true,
                     fireplaces: true
                 },
+                physicsExclusions: ['icosphere', 's_skybox'],
                 physicsExclusions: ['icosphere']
             }
         };
@@ -146,7 +148,9 @@ export class StageManager {
         const loader = new MansionLoader(
             stageScene,
             this.physicsManager,
-            this.quality
+            this.quality,
+            this.renderer,
+            this.camera
         );
 
         // Set physics exclusions if defined
@@ -234,6 +238,25 @@ export class StageManager {
         // Activate physics for the new stage (add to world)
         if (this.currentLoader && this.currentLoader.activatePhysics) {
             this.currentLoader.activatePhysics();
+        }
+
+        // Switch the physics manager's scene (for debug renderer)
+        if (this.physicsManager && this.physicsManager.switchScene) {
+            this.physicsManager.switchScene(this.currentScene);
+        }
+
+        // Disable lamp shadows during stage transition (performance optimization)
+        if (this.currentLoader && this.currentLoader.lamps) {
+            this.currentLoader.lamps.forEach(lamp => {
+                lamp.light.castShadow = false;
+            });
+            logger.log(`💡 Lamp shadows disabled for ${newStageName} scene (performance)`);
+        }
+
+        // Re-warm car shaders in the new scene context
+        if (this.currentLoader && this.currentLoader.preWarmCarShaders) {
+            logger.log(`🔄 Re-warming car shaders for ${newStageName} scene...`);
+            this.currentLoader.preWarmCarShaders();
         }
 
         logger.log(`🎨 Switched rendering to ${newStageName} scene`);

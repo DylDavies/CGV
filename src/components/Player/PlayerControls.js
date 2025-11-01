@@ -4,7 +4,7 @@ import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.127.0/build/three.m
 import { PointerLockControls } from 'https://cdn.jsdelivr.net/npm/three@0.127.0/examples/jsm/controls/PointerLockControls.js';
 
 class FirstPersonControls {
-   constructor(camera, renderer, physicsManager = null, puzzles = {}, monsterAI = null, mansionLoader = null) {
+   constructor(camera, renderer, physicsManager = null, puzzles = {}, monsterAI = null, mansionLoader = null, audioManager = null) {
         this.camera = camera;
         this.monsterAI = monsterAI;
         this.renderer = renderer;
@@ -13,6 +13,11 @@ class FirstPersonControls {
         this.domElement = renderer.domElement;
         this.physicsManager = physicsManager;
         this.mansionLoader = mansionLoader;
+        this.qtesManager = null;
+        this.currentTestQTEIndex = -1;
+
+        this.audioManager = audioManager;
+        this.isWalking = false;
 
         // Testing puzzle works with new system
         this.puzzles = puzzles;
@@ -52,8 +57,26 @@ class FirstPersonControls {
         console.log('Press F9 for dev mode, F10 for fly mode (in dev), F11 for stats');
     }
 
+    // Method to receive the QTEManager instance from main.js
+    setQTEManager(qteManagerInstance) {
+        this.qteManager = qteManagerInstance;
+        console.log("⚡ QTEManager attached to PlayerControls");
+    }
+
     addEventListeners() {
         const onKeyDown = (event) => {
+            // *** QTE Input Handling Check ***
+            if (this.qteManager && this.qteManager.isActive()) {
+                // If a QTE is active, pass the input ONLY to the QTEManager
+                // Check if the pressed key is the one the QTE is waiting for OR Escape
+                 if (event.code === this.qteManager.activeQTE.key || event.code === 'Escape') {
+                      event.preventDefault(); // Prevent default action (like spacebar jump)
+                      this.qteManager.handleInput(event.code); // QTEManager decides what to do
+                 }
+                 // Do not process any other game input while QTE is active
+                return;
+            }
+
             // Prevent default for movement keys to stop page scrolling
             if (this.controls.isLocked) {
                 const gameKeys = ['KeyW', 'KeyA', 'KeyS', 'KeyD', 'Space', 'ShiftLeft', 'KeyQ', 'KeyE', 'KeyF'];
@@ -128,11 +151,12 @@ class FirstPersonControls {
                 case 'KeyK': // Temporary key for testing
                     if (window.gameControls && window.gameControls.gameManager) {
                         window.gameControls.gameManager.addToInventory({
-                            name: 'S_KeyBehindFire',
+                            name: 'Old Key',
                             type: 'key',
-                            id: 'S_KeyBehindFire'
+                            id: 'garage_key',
+                            description: 'A key found in the safe. (DEBUG SPAWNED)'
                         });
-                        console.log("Testing: Added S_KeyBehindFire to inventory.");
+                        console.log("Testing: Added Garage Key (S_KeyInSafe) to inventory via K key.");
                     }
                     break;
                 case 'KeyR': // Restart game when dead
@@ -306,6 +330,26 @@ class FirstPersonControls {
             // Let physics manager handle movement
             this.physicsManager.tick(delta, inputs);
 
+
+            // Walking sounds
+            if (this.audioManager) {
+                const state = this.physicsManager.getMovementState();
+                // Check if the player is moving AND on the ground
+                const isMovingOnGround = state.isMoving && state.isOnGround;
+
+                if (isMovingOnGround && !this.isWalkingSoundPlaying) {
+                    console.log("AUDIO SOUND IS CURRENTLY PLAYING");
+                    // Player started moving on the ground -> PLAY sound
+                    this.audioManager.playSound('walking', this.audioManager.soundPaths.walking, true, 0.1); // volume of walking
+                    this.isWalkingSoundPlaying = true;
+                } 
+                else if ((!isMovingOnGround || this.isFrozen) && this.isWalkingSoundPlaying) {
+                    // Player stopped moving, is in the air, or is frozen -> STOP sound
+                    this.audioManager.stopSound('walking');
+                    this.isWalkingSoundPlaying = false;
+                }
+            }
+
             // Update stats display
             this.updateStats();
 
@@ -397,20 +441,45 @@ class FirstPersonControls {
         return this.controls.isLocked;
     }
 
-    // For interactions that require mouse interactivity
+    // Freeze controls
     freeze() {
+         // If a QTE is active when controls are frozen externally (e.g., by opening a puzzle),
+         // we should probably end the QTE as a failure.
+         if (this.qteManager && this.qteManager.isActive()) {
+             console.warn("Controls frozen externally during active QTE. Ending QTE as failure.");
+             this.qteManager.endQTE(false);
+         }
+
         this.isFrozen = true;
+        this.resetInputs(); // Stop any movement input
+
+        if (this.audioManager && this.isWalkingSoundPlaying) {
+            this.audioManager.stopSound('walking');
+            this.isWalkingSoundPlaying = false;
+        }
+
         this.controls.unlock(); // Release the mouse pointer
+        console.log("Player controls FROZEN.");
     }
 
+    // Unfreeze controls
     unfreeze() {
+         // Check if a QTE is still supposed to be active (e.g., puzzle closed but QTE should resume?)
+         // This depends on game design. For now, assume unfreezing means QTE is done.
+         // if (this.qteManager && this.qteManager.isActive()) {
+         //     console.log("Controls unfrozen, but QTE is still marked active?");
+         // }
+
         this.isFrozen = false;
-        // Small delay before relocking to prevent pause menu from showing
+        console.log("Player controls UNFROZEN.");
+        // Small delay before relocking to prevent pause menu from showing immediately
+        // and allow browser to process unlock/lock difference
         setTimeout(() => {
-            if (!this.isFrozen) { // Only lock if still not frozen
+            // Check again if still unfrozen before locking (e.g., pause menu didn't open)
+            if (!this.isFrozen && !document.pointerLockElement) {
                 this.controls.lock();
             }
-        }, 100);
+        }, 100); // 100ms delay
     }
 
     resetInputs() {
@@ -447,6 +516,12 @@ class FirstPersonControls {
         }
         if (this.onKeyUp) {
             document.removeEventListener('keyup', this.onKeyUp);
+        }
+
+
+        if (this.audioManager && this.isWalkingSoundPlaying) {
+            this.audioManager.stopSound('walking');
+            this.isWalkingSoundPlaying = false;
         }
 
         // Remove stats display

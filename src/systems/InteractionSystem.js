@@ -62,6 +62,8 @@ class InteractionSystem {
         this.setupEventListeners();
         this.createUI();
         this.registerInteractionTypes();
+
+        this.firstTimeGarageDoorUnlocked = 0;
     }
 
     setupEventListeners() {
@@ -290,8 +292,58 @@ class InteractionSystem {
             loose_book: {
                 prompt: "Press E to examine book",
                 handler: this.handleLooseBookInteraction.bind(this)
+            },
+            garage_door: { // door leading into the garage (not the big door)
+                prompt: "Press E to unlock door",
+                lockedPrompt: "The door is locked.",
+                openPrompt: "Press E to open door",
+                closePrompt: "Press E to close door",
+                barricadePrompt: "Press E to barricade door",
+                handler: this.handleGarageDoorInteraction.bind(this)
+            },
+            barricade_plank: {
+                prompt: "Press E to use plank to barricade door",
+                handler: null // Will be set by GarageSystem when activated
+            },
+            'car_hood': {
+                 prompt: "Press E to open hood", // Default prompt
+                 // Handler is now managed by CarInteraction calling CarRepairSystem
+                 handler: this.handleCarHoodProxy.bind(this) // Add a proxy handler
+            },
+            'car_driver_door_zone': { // Invisible zone near driver door
+                prompt: "Press E", // CarRepairSystem will update this
+                handler: null // CarRepairSystem will set this in its initialize
+            },
+            'car_engine_zone': { // Invisible zone near engine
+                prompt: "Press E", // CarRepairSystem will update this
+                handler: null // CarRepairSystem will set this
+            },
+            'crowbar': { // The crowbar object
+                prompt: "Press E to pick up crowbar",
+                handler: null // CarRepairSystem will set this
+            },
+            'toolbox': { // The toolbox object
+                prompt: "Press E to pick up toolbox",
+                handler: null // CarRepairSystem will set this
+            },
+            'gas_can_part': { // For both gas can body and cap
+                prompt: "Press E to pick up", // CarRepairSystem will update prompt more specifically if needed
+                handler: null // CarRepairSystem will set this
             }
+            // --- END NEW CAR REPAIR TYPES ---
         };
+    }
+
+    // --- NEW PROXY HANDLER for Car Hood ---
+    handleCarHoodProxy(interactedObject, userData) {
+        // This proxy simply calls the CarInteraction's handler.
+        // CarInteraction's handler will now internally check with CarRepairSystem.
+        const carInteraction = window.gameControls.carInteraction;
+        if (carInteraction) {
+            carInteraction.handleHoodInteraction(interactedObject, userData);
+        } else {
+            logger.error("InteractionSystem: CarInteraction system not found in gameControls.");
+        }
     }
 
     onMouseClick(event) {
@@ -452,6 +504,218 @@ class InteractionSystem {
 
         return null;
     }
+
+
+    // Door to Garage interaction handler
+    async handleGarageDoorInteraction(interactedObject, userData) { // interactable object is "S_Door002"
+        // Use logger if available, otherwise console.log
+        const log = window.logger || console;
+        log.log(`Handling interaction with garage door object: ${interactedObject.name}. State: ${JSON.stringify(userData)}`);
+
+        // --- Find the Correct Object to Animate (the Parent Pivot) ---
+        let doorGroup = interactedObject;
+        // Traverse up if the interacted object is the mesh inside S_Door002
+        while (doorGroup && doorGroup.name !== 'S_Door002' && doorGroup.parent) {
+            doorGroup = doorGroup.parent;
+        }
+
+        // Now find the parent pivot
+        const pivotObject = doorGroup ? doorGroup.parent : null;
+
+        // Validate we found the expected hierarchy
+        if (!doorGroup || doorGroup.name !== 'S_Door002' || !pivotObject || !pivotObject.name.includes('S_Door_Pivot')) {
+            log.error(`❌ Unexpected hierarchy for garage door. Interacted: ${interactedObject.name}, Found Door Group: ${doorGroup?.name}, Found Pivot: ${pivotObject?.name}. Cannot animate.`);
+            this.showMessage("Error: Door structure incorrect.");
+            return;
+        }
+        log.log(`   - Identified Door Group: ${doorGroup.name}`);
+        log.log(`   - Identified Pivot Object: ${pivotObject.name}`);
+
+
+        // --- Get UserData (should be on S_Door002) ---
+        // Ensure we're reading/writing state to the correct object's userData
+        const doorUserData = doorGroup.userData;
+
+        // --- Barricade Checks (using doorUserData) ---
+        if (doorUserData.barricaded) {
+            this.showMessage("The door is barricaded.");
+            log.log("-> Door is barricaded, interaction stopped.");
+            return;
+        }
+        if (doorUserData.isBarricading) {
+            this.showMessage("Focus on barricading!");
+            log.log("-> Door is being barricaded, interaction stopped.");
+            return;
+        }
+        // --- End barricade checks ---
+
+        if (doorUserData.locked) {
+            log.log("-> Door is locked. Checking for key...");
+            log.log("--> Current Inventory:", JSON.stringify(this.gameManager.inventory));
+
+            const playerHasKey = this.gameManager.hasItem('Old Key');
+            log.log(`--> Player has 'Old Key' in inventory: ${playerHasKey}`);
+
+            if (playerHasKey) {
+                log.log("---> Unlocking door...");
+                doorUserData.locked = false; // Update state on S_Door002's userData
+                this.gameManager.removeFromInventory('Old Key');
+                if (this.gameManager.audioManager) {
+                    this.gameManager.audioManager.playSound('door_unlock', 'public/audio/sfx/unlock-door.mp3'); //
+                }
+                this.showMessage("The key fits! The garage door unlocks.");
+                this.updateCrosshair();
+                log.log("---> Door unlocked. Prompt should now be 'Open'.");
+            } else {
+                log.log("---> Player missing 'Old Key'. Cannot unlock.");
+                this.showMessage(this.interactionTypes.garage_door.lockedPrompt); //
+            }
+        }
+        // Use doorUserData for state checks, pass pivotObject for animation
+        else if (!doorUserData.isOpen && !doorUserData.isAnimating) {
+             log.log("-> Door is unlocked and closed. Attempting to open...");
+             this.animateGarageDoorOpen(pivotObject, doorGroup, true); // Pass pivot and doorGroup
+        }
+        else if (doorUserData.isOpen && !doorUserData.isAnimating) {
+            log.log("-> Door is open. Attempting to close...");
+             this.animateGarageDoorOpen(pivotObject, doorGroup, false); // Pass pivot and doorGroup
+        }
+        else if (doorUserData.isAnimating) {
+             log.log("-> Door is currently animating. Interaction ignored.");
+        }
+        else {
+             log.log("-> Unhandled door state.");
+        }
+    }
+
+
+    // --- Animate Using Parent Pivot Object ---
+    
+    animateGarageDoorOpen(pivotObject, doorGroup, open = true) {
+        this.firstTimeGarageDoorUnlocked += 1;
+
+        // Use logger if available, otherwise console.log
+        const log = window.logger || console;
+        log.log(`Animating pivot: ${pivotObject.name} for door: ${doorGroup.name}, Open: ${open}`);
+
+        // Get state from doorGroup's userData
+        const doorUserData = doorGroup.userData;
+
+        // Check animation/state flags on doorGroup's userData
+        if (doorUserData.isAnimating) { log.warn("-> Animation already in progress."); return; }
+        if (open && doorUserData.isOpen) { this.showMessage("Door is already open."); log.log("-> Already open."); return; }
+        if (!open && !doorUserData.isOpen) { this.showMessage("Door is already closed."); log.log("-> Already closed."); return; }
+
+        // Set animating flag on doorGroup's userData
+        doorUserData.isAnimating = true;
+
+        // --- Physics Handling (Targets the mesh INSIDE doorGroup) ---
+        let doorMesh = doorGroup.children.find(child => child.isMesh); // Find mesh within S_Door002
+        if (!doorMesh) {
+            log.error(`Cannot find Mesh child within Group ${doorGroup.name}`);
+            doorUserData.isAnimating = false; return;
+        }
+        log.log(`   - Found mesh for physics: ${doorMesh.name}`);
+
+        // Managers check
+        if (!this.gameManager?.physicsManager || !this.gameManager?.mansion?.physicsBodies) {
+            log.error("   - CRITICAL: Missing managers!");
+            doorUserData.isAnimating = false; return;
+        }
+
+        const physicsBodyEntry = this.stageManager.currentLoader.physicsBodies.find(entry => entry.mesh === doorMesh);
+
+        if (open) { // Remove physics BEFORE opening
+            if (physicsBodyEntry?.body) {
+                this.gameManager.physicsManager.removeBody(physicsBodyEntry.body);
+                log.log(`   - Removed physics for opening door: ${doorMesh.name}`);
+                const index = this.stageManager.currentLoader.physicsBodies.findIndex(entry => entry.mesh === doorMesh);
+                if (index !== -1) this.stageManager.currentLoader.physicsBodies.splice(index, 1);
+            } else {
+                log.warn(`   - No valid physics body entry found for ${doorMesh.name} during open.`);
+            }
+        }
+        // --- End Physics Handling Setup ---
+
+        // --- Animation Logic (Animating PIVOT's Y-axis - common for hinges) ---
+        const startRotationY = pivotObject.rotation.y;
+        // Amount to rotate: -90 degrees for standard inward swing
+        const rotationAmount = Math.PI / 2;
+        // Calculate target rotation relative to current pivot rotation
+        const targetRotationY = open ? (startRotationY + rotationAmount) : (startRotationY - rotationAmount);
+
+        log.log(`   - Animation Start: Pivot Y=${startRotationY.toFixed(2)}, Target Y=${targetRotationY.toFixed(2)}`);
+
+         // Check if already at target
+         if (Math.abs(pivotObject.rotation.y - targetRotationY) < 0.01) {
+             log.log(`   - Pivot already at target Y rotation. Setting final state.`);
+             pivotObject.rotation.y = targetRotationY; // Snap
+             doorUserData.isAnimating = false; // Update flag on doorGroup
+             doorUserData.isOpen = open;       // Update state on doorGroup
+             this.updateCrosshair();
+             // Recalculate physics immediately if closing
+             if (!open) {
+                 if (this.stageManager.currentLoader?.recalculatePhysicsForObject) {
+                    this.stageManager.currentLoader.recalculatePhysicsForObject(doorMesh.name);
+                    log.log(`   - Re-added physics for closed door (already at target): ${doorMesh.name}`);
+                 } else { log.error(`   - Cannot recalculate physics.`); }
+             }
+             return;
+        }
+
+        const duration = 1500;
+        const startTime = Date.now();
+
+        if (this.gameManager.audioManager) {
+            this.gameManager.audioManager.playSound(open ? 'door_open' : 'door_close', 'public/audio/ambience/creaking-knocking.mp3'); //
+        }
+
+        const animate = () => {
+            // Check flag on doorGroup
+            if (!doorUserData.isAnimating) { log.warn("-> Animation stopped externally."); return; }
+
+            const elapsedTime = Date.now() - startTime;
+            const progress = Math.min(elapsedTime / duration, 1);
+            const easedProgress = 1 - Math.pow(1 - progress, 4); // Ease out
+
+            // *** Animate the PIVOT Object's Y rotation ***
+            pivotObject.rotation.y = startRotationY + (targetRotationY - startRotationY) * easedProgress;
+
+            if (progress < 1) {
+                requestAnimationFrame(animate);
+            } else {
+                // Snap PIVOT Y rotation
+                pivotObject.rotation.y = targetRotationY;
+                // Update flags on doorGroup's userData
+                doorUserData.isAnimating = false;
+                doorUserData.isOpen = open;
+
+                log.log(`   - Animation finished. Pivot: ${pivotObject.name}, Open: ${open}`);
+
+                // Door is now open, change the narrative events
+                if(this.firstTimeGarageDoorUnlocked == 1){
+                    window.gameControls.narrativeManager.triggerEvent("stage2.garage_unlocked");
+                    window.gameControls.narrativeManager.triggerEvent("stage2.barricade_door");
+
+                    // Start the Garage Sequence
+                    if (window.gameControls.garageSystem) {
+                        window.gameControls.garageSystem.activateBarricadeSequence();
+                    }
+                }
+
+
+                // Recalculate physics AFTER closing animation finishes
+                if (!open) {
+                     if (this.stageManager.currentLoader?.recalculatePhysicsForObject) {
+                        this.stageManager.currentLoader.recalculatePhysicsForObject(doorMesh.name);
+                        log.log(`   - Re-added physics for closed door: ${doorMesh.name}`);
+                     } else { log.error(`   - Cannot recalculate physics.`); }
+                }
+                this.updateCrosshair(); // Update prompt
+            }
+        };
+        requestAnimationFrame(animate);
+    } // --- End animateGarageDoorOpen ---
 
     performInteraction(object, userData) {
         // Check if interaction should be available based on current objective
@@ -1259,7 +1523,7 @@ Run.`
             (hours, minutes) => {
                 const timeString = `${hours}:${minutes.toString().padStart(2, '0')}`;
                 
-                if (this.gameManager.mansion.puzzleSystem?.setClockTime(clock, hours, minutes)) {
+                if (this.stageManager.currentLoader.puzzleSystem?.setClockTime(clock, hours, minutes)) {
                     this.showMessage("The clock chimes ominously... something has changed.");
                     userData.solved = true;
                 } else {
@@ -2011,7 +2275,7 @@ Run.`
         this.showCombinationDialog(
             `${puzzleData.hint}\n\nEnter combination:`,
             (combination) => {
-                if (this.gameManager.mansion.solvePuzzle(
+                if (this.stageManager.currentLoader.solvePuzzle(
                     this.gameManager.currentRoom.id, 
                     puzzleData.type, 
                     combination
@@ -2033,7 +2297,7 @@ Run.`
             books,
             (arrangement) => {
                 const colors = arrangement.map(book => book.split(' ')[0].toLowerCase());
-                if (this.gameManager.mansion.puzzleSystem?.solveBookCipher(bookshelf, colors)) {
+                if (this.stageManager.currentLoader.puzzleSystem?.solveBookCipher(bookshelf, colors)) {
                     this.showMessage("The books click into place! A secret compartment opens.");
                 } else {
                     this.showMessage("Nothing happens. Try a different arrangement.");
@@ -2303,9 +2567,14 @@ Run.`
         const currentScene = this.getCurrentScene();
         const intersects = this.raycaster.intersectObjects(currentScene.children, true);
 
-        let isInteractable = false;
+        let isInteractable = false; // Potentially interactable
+        let isInteractableNow = false; // Definitely interactable right now
         let interactionPrompt = '';
-        let blockedMessage = '';
+        let blockedMessage = ''; // Use this for messages when interaction is blocked by game state
+        let disabledPrompt = ''; // Use this for messages when interactable flag is false but object is known
+
+        let highlightedObject = null; // Store the potential object
+        let interactableData = null; // Store its data
 
         if (intersects.length > 0) {
             // PRIORITY: Check if mirror is in the raycast hits (prioritize mirror over page 6)
@@ -2328,44 +2597,37 @@ Run.`
             }
 
             if (distance <= this.interactionRange) {
-                const interactableData = this.findInteractableData(hitObject);
+                const data = this.findInteractableData(hitObject); // Use hitObject
 
-                if (interactableData) {
-                    const interactionType = this.interactionTypes[interactableData.data.type];
-                    const objectName = interactableData.object.name || 'unnamed';
-                    const objectType = interactableData.data.type;
+                if (data) {
+                    highlightedObject = data.object;
+                    interactableData = data.data; // interactableData is data.data (which is userData)
+                    const type = interactableData.type; // This is correct (userData.type)
+                    const typeInfo = this.interactionTypes[type];
 
-                    // Check if this is a page/page_slot and puzzle is completed
-                    const isPagesLocked = this.gameManager.pagesPuzzleCompleted &&
-                        (interactableData.data.type === 'page' || interactableData.data.type === 'page_slot');
+                    // Game state blocking checks
+                    const isPagesLocked = this.gameManager.pagesPuzzleCompleted && (type === 'page' || type === 'page_slot');
+                    const isPageSlotBlocked = type === 'page_slot' && !this.gameManager.laptopPuzzleCompleted;
+                    const isPagesBlocked = type === 'page' && !this.gameManager.telephoneAnswered;
+                    const isLaptopBlocked = type === 'laptop' && this.gameManager.collectedPages.length < 6;
+                    const isItemNotReady = (type === 'diary' ||
+                        type === 'fireplace' ||
+                        type === 'bucket' ||
+                        type === 'fuse_box' ||
+                        type === 'crowbar' ||
+                        type === 'toolbox' ||
+                        type === 'gas_can_part' ||
+                        type === 'car_engine_zone' ||
+                        type === 'notepad' ||
+                        type === 'newspaper' ||
+                        type === 'loose_book') && interactableData.interactable === false;
 
-                    // Check if page slot is blocked because laptop puzzle not complete
-                    const isPageSlotBlocked = interactableData.data.type === 'page_slot' &&
-                        !this.gameManager.laptopPuzzleCompleted;
-
-                    // Check if phone puzzle not completed (for pages)
-                    const isPagesBlocked = interactableData.data.type === 'page' &&
-                        !this.gameManager.telephoneAnswered;
-
-                    // Check if laptop is blocked (need all 6 pages first)
-                    const isLaptopBlocked = interactableData.data.type === 'laptop' &&
-                                           this.gameManager.collectedPages.length < 6;
-
-                    // Check if item is interactable (for diary, fireplace, bucket, fuse_box, notepad, newspaper, loose_book)
-                    const isNotYetInteractable = (interactableData.data.type === 'diary' ||
-                                                  interactableData.data.type === 'fireplace' ||
-                                                  interactableData.data.type === 'bucket' ||
-                                                  interactableData.data.type === 'fuse_box' ||
-                                                  interactableData.data.type === 'notepad' ||
-                                                  interactableData.data.type === 'newspaper' ||
-                                                  interactableData.data.type === 'loose_book') &&
-                                                 !interactableData.data.interactable;
 
                     // Never show prompt for Annie (she's triggered through Page 4)
-                    const isAnnie = this.annieInteraction.isAnnieBlock(interactableData);
+                    const isAnnie = this.annieInteraction.isAnnieBlock(data); // Corrected: pass 'data'
 
                     // Check if sofa has already been moved
-                    const isMovedSofa = interactableData.data.type === 'sofa' && interactableData.data.moved;
+                    const isMovedSofa = interactableData.type === 'sofa' && interactableData.moved; // Corrected: remove extra .data
 
                     if (isAnnie) {
                         // Don't show any interaction prompt for Annie
@@ -2374,36 +2636,122 @@ Run.`
                         // Don't show any prompt for sofas that have already been moved
                         isInteractable = false;
                     } else if (isPagesLocked) {
-                        blockedMessage = "The pages are sealed in place by ancient magic";
+                        blockedMessage = "The pages are sealed in place..."; // Merged: shorter message
                     } else if (isPageSlotBlocked) {
-                        blockedMessage = "These symbols don't make sense yet";
+                        blockedMessage = "Symbols don't make sense yet";
                     } else if (isPagesBlocked) {
-                        blockedMessage = "I should focus on what's important first";
+                        blockedMessage = "Need to focus elsewhere first";
                     } else if (isLaptopBlocked) {
-                        // Don't show any prompt for laptop until all pages collected
+                        isInteractable = false; // No prompt needed yet
+                    } else if (isItemNotReady) {
+                        isInteractable = false; // Base assumption: not interactable
+                        disabledPrompt = interactableData.disabledPrompt || ""; // Check for a specific disabled message
+                    } else if (interactableData.interactable === false) {
+                        // Generic case: Object has type but interactable is false, and no specific block applies.
                         isInteractable = false;
-                    } else if (isNotYetInteractable) {
-                        // Don't show any prompt for items that aren't interactable yet
-                        isInteractable = false;
-                    } else {
-                        isInteractable = true;
-                        if (interactionType) {
-                            // Special handling for page_slot to show different prompt based on whether page is placed
-                            if (interactableData.data.type === 'page_slot') {
-                                const slotIndex = interactableData.data.slotIndex;
+                        disabledPrompt = interactableData.disabledPrompt || ""; // Check for disabled message
+                    }
+                    else {
+                        // --- Object IS Currently Interactable ---
+                        isInteractable = true; // Potentially interactable
+                        isInteractableNow = true; // Definitely interactable right now
+
+                        if (typeInfo) {
+                            interactionPrompt = interactableData.prompt || typeInfo.prompt || "Interact"; // Base prompt
+
+                            if (type === 'page_slot') {
+                                const slotIndex = interactableData.slotIndex;
                                 const hasPage = this.gameManager.placedPages[slotIndex] !== null;
-                                interactionPrompt = hasPage ? interactionType.promptWithPage : interactionType.prompt;
+                                interactionPrompt = hasPage ? typeInfo.promptWithPage : typeInfo.prompt;
                             }
-                            // Special handling for fuse_box to show different prompt if fixed
-                            else if (interactableData.data.type === 'fuse_box') {
+                            else if (type === 'fuse_box') { // <--- Merged from caebf...
                                 interactionPrompt = this.gameManager.fuseBoxFixed ?
-                                    interactionType.fixedPrompt :
-                                    interactionType.prompt;
+                                    typeInfo.fixedPrompt :
+                                    typeInfo.prompt;
+                            }
+                            else if (type === "garage_door") {
+                                if (interactableData.barricaded) {
+                                    interactionPrompt = "Barricaded";
+                                    isInteractableNow = false; // cant interact when door is barricaded
+                                }
+                                else if (interactableData.isBarricading) {
+                                    interactionPrompt = "Barricading...";
+                                    isInteractableNow = false;  // cant interact when door is being barricaded
+                                }
+                                else if (interactableData.locked) {
+                                    interactionPrompt = this.gameManager.hasItem('Old Key') ? (typeInfo.prompt || "Press E to unlock") : typeInfo.lockedPrompt;
+                                    // isInteractableNow remains true, you can try to unlock
+                                }
+                                else if (interactableData.isOpen) interactionPrompt = typeInfo.closePrompt;
+                                else interactionPrompt = typeInfo.openPrompt;
+                            }
+                            else if (type === 'barricade_plank') {
+                                // !!!!! THIS IS THE FIX !!!!!
+                                let garageDoor = null;
+                                const log = window.logger || console; // Use logger if available
+
+                                try {
+                                    // This is the line that can fail
+                                    garageDoor = this.stageManager.currentScene.getObjectByName('S_Door002');
+                                } catch (e) {
+                                    // Check if it's the exact error we're expecting
+                                    if (e.message && e.message.includes("reading 'name'")) {
+                                        log.error("InteractionSystem: Caught scene graph traversal error. 'scene.children' might be corrupt.", e);
+                                        
+                                        // Attempt a one-time cleanup of the scene.children array
+                                        this.stageManager.currentScene.children = this.stageManager.currentScene.children.filter(child => child !== undefined);
+                                        log.warn("InteractionSystem: Attempted to clean 'scene.children' of undefined entries.");
+
+                                        // Try one more time after cleaning
+                                        try {
+                                            garageDoor = this.stageManager.currentScene.getObjectByName('S_Door002');
+                                        } catch (e2) {
+                                             log.error("InteractionSystem: Scene graph error persists even after cleaning.", e2);
+                                        }
+                                    } else {
+                                        // If it's a different error, re-throw it
+                                        throw e;
+                                    }
+                                }
+                                
+                                // door must exist and be closed in order to interact 
+                                if (garageDoor && garageDoor.userData.isOpen) {
+                                    isInteractableNow = false; // cant interact
+                                    blockedMessage = "Need to close the door first"; 
+                                } 
+                                else if (!garageDoor) {
+                                    // If door doesn't exist for some reason, block interaction
+                                    isInteractableNow = false;
+                                    blockedMessage = "Error: Door not found";
+                                    log.warn("InteractionSystem: Could not find S_Door002 to check state for barricade plank.");
+                                } 
+                                else {
+                                    // Door exists and is closed so we can interact with it
+                                    interactionPrompt = interactableData.prompt || typeInfo.prompt || "Press E to use plank";
+                                }
+                                // !!!!! END OF FIX !!!!!
+                            }
+                            else if (type === 'car_hood') {
+                                const carRepairSystem = window.gameControls?.carRepairSystem;
+                                // Check if the door has been interacted with
+                                if (carRepairSystem && !carRepairSystem.repairState.driverDoorInteractedFirstTime) {
+                                    // Door NOT interacted with yet:
+                                    isInteractableNow = false; // Visually disable interaction
+                                    interactionPrompt = '';    // <<< Explicitly clear the prompt text
+                                    // Clear other potential messages too, just in case
+                                    blockedMessage = '';
+                                    disabledPrompt = '';
+                                } else {
+                                    // Door HAS been interacted with:
+                                    // Proceed with normal prompt logic for the hood
+                                    interactionPrompt = interactableData.prompt || typeInfo.prompt || "Press E";
+                                    // isInteractableNow remains true (unless blocked by another condition specific to the hood itself)
+                                }
                             }
                             // Special handling for sofa to show different prompt based on state
-                            else if (interactableData.data.type === 'sofa') {
+                            else if (interactableData.type === 'sofa') { // <--- Merged from caebf...
                                 // Check if this sofa is currently being pushed
-                                const isBeingPushed = this.movingSofa && this.movingSofa.sofa === interactableData.object;
+                                const isBeingPushed = this.movingSofa && this.movingSofa.sofa === data.object; // Corrected: use data.object
 
                                 if (isBeingPushed) {
                                     // Show progress while pushing (handled in updateSofaMovement)
@@ -2411,27 +2759,35 @@ Run.`
                                     return;
                                 } else {
                                     // Moved sofas are handled earlier (isMovedSofa check), so this is only for unmoved sofas
-                                    interactionPrompt = interactionType.prompt;
+                                    interactionPrompt = typeInfo.prompt;
                                 }
                             }
                             // Special handling for wardrobe to show different prompt based on hiding state
-                            else if (interactableData.data.type === 'wardrobe') {
+                            else if (interactableData.type === 'wardrobe') { // <--- Merged from caebf...
                                 interactionPrompt = this.isHiding ?
-                                    interactionType.hidingPrompt :
-                                    interactionType.prompt;
+                                    typeInfo.hidingPrompt :
+                                    typeInfo.prompt;
                             }
                             // Special handling for tic-tac-toe mirror to show different prompt if telephone not answered
-                            else if (interactableData.data.type === 'tic_tac_toe_mirror') {
-                                if (interactableData.data.won) {
-                                    interactionPrompt = interactionType.unlockedPrompt;
+                            else if (interactableData.type === 'tic_tac_toe_mirror') { // <--- Merged from caebf...
+                                if (interactableData.won) {
+                                    interactionPrompt = typeInfo.unlockedPrompt;
                                 } else if (!this.gameManager.telephoneAnswered) {
                                     interactionPrompt = "The mirror is silent...";
                                 } else {
-                                    interactionPrompt = interactionType.prompt;
+                                    interactionPrompt = typeInfo.prompt;
                                 }
                             }
-                            // Special handling for entrance door to show appropriate message based on game state
-                            else if (interactableData.data.type === 'entrance_door') {
+                            else if (type === 'car_driver_door_zone' || type === 'car_engine_zone') {
+                                interactionPrompt = interactableData.prompt || typeInfo.prompt || "Press E"; // Prioritize userData prompt
+                            }
+                            else if (type === 'gas_can_part') {
+                                interactionPrompt = `Press E to pick up ${interactableData.itemName || 'part'}`; // More specific
+                            }
+                            else if (interactableData.locked && typeInfo.lockedPrompt) {
+                                interactionPrompt = typeInfo.lockedPrompt;
+                            }
+                            else if (interactableData.type === 'entrance_door') {
                                 if (this.gameManager.gameStage === 1) {
                                     if (!this.gameManager.allPagesPlaced) {
                                         interactionPrompt = "I am not ready to leave yet...";
@@ -2439,30 +2795,37 @@ Run.`
                                         interactionPrompt = "The door is closed.";
                                     }
                                 } else if (this.gameManager.gameStage === 2) {
-                                    if (interactableData.data.triedToEscape) {
+                                    if (interactableData.triedToEscape) {
                                         interactionPrompt = "The door is locked from the outside.";
                                     } else {
-                                        interactionPrompt = interactionType.prompt;
+                                        interactionPrompt = typeInfo.prompt;
                                     }
                                 } else {
                                     interactionPrompt = "The door is closed.";
                                 }
-                            } else {
-                                interactionPrompt = interactableData.data.locked ?
-                                    (interactionType.lockedPrompt || interactionType.prompt) :
-                                    interactionType.prompt;
                             }
+                            // Default handling from caebf...
+                            else { 
+                                interactionPrompt = interactableData.locked ?
+                                    (typeInfo.lockedPrompt || typeInfo.prompt) :
+                                    typeInfo.prompt;
+                            }
+                        }
+                        else {
+                            // Type exists in userData but not registered in interactionTypes
+                            interactionPrompt = "Interact"; // Generic fallback
                         }
                     }
                 }
             }
         }
 
+        // --- Final UI Update ---
         // Only update UI if state has changed (prevents flashing)
         const currentPromptText = this.interactionPrompt.textContent;
         const currentPromptVisible = this.interactionPrompt.style.display === 'block';
 
-        if (isInteractable && !this.blockInteractionPrompt) {
+        if (isInteractableNow && !this.blockInteractionPrompt) { // Green crosshair only if truly interactable now
             // Only update if prompt text changed or visibility changed
             if (currentPromptText !== interactionPrompt || !currentPromptVisible) {
                 // Get debug info from the last found interactable
@@ -2479,7 +2842,7 @@ Run.`
                 this.interactionPrompt.textContent = interactionPrompt;
                 this.interactionPrompt.style.display = 'block';
             }
-        } else if (blockedMessage && !this.blockInteractionPrompt) {
+        } else if (blockedMessage && !this.blockInteractionPrompt) { // Red crosshair for game state blocks
             // Only update if message changed or visibility changed
             if (currentPromptText !== blockedMessage || !currentPromptVisible) {
                 console.log(`[Prompt] Showing blocked: "${blockedMessage}" (from updateCrosshair - blocked)`);
@@ -2509,7 +2872,14 @@ Run.`
             }
             // If a message is visible, leave it alone - processMessageQueue will handle hiding it
         }
+
+        // Highlight update (if implemented)
+        if (this.highlightedObject !== highlightedObject) {
+            // remove old highlight, add new highlight
+            this.highlightedObject = highlightedObject;
+        }
     }
+
 
     animateItemPickup(item, onComplete) {
         const startPosition = item.position.clone();
@@ -3160,7 +3530,7 @@ Run.`
                     case 0: // Attempt to solve
                         if (Math.random() > 0.6) {
                             this.showMessage("You solve the puzzle through intuition and persistence!");
-                            if (this.gameManager.mansion.solvePuzzle(
+                            if (this.stageManager.currentLoader.solvePuzzle(
                                 this.gameManager.currentRoom.id, 
                                 puzzleData.type, 
                                 'solved'

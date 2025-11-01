@@ -1,7 +1,6 @@
 // src/main.js
 
 import * as THREE from 'https://unpkg.com/three@0.127.0/build/three.module.js';
-// ... (all your other imports are correct)
 import { createScene } from './components/World/scene.js';
 import { Resizer } from './systems/Resizer.js';
 import { Loop } from './systems/Loop.js';
@@ -30,7 +29,10 @@ import { NarrativeManager } from './systems/NarrativeManager.js';
 import logger from './utils/Logger.js';
 import { PerformanceAnalyzer } from './utils/PerformanceAnalyzer.js';
 import RAPIER from 'https://cdn.skypack.dev/@dimforge/rapier3d-compat';
-
+import { QTEManager } from './systems/QTEManager.js';
+import { CarInteraction } from './systems/CarInteraction.js';
+import { GarageSystem } from './systems/GarageSystem.js';
+import { CarRepairSystem } from './systems/CarRepairSystem.js';
 
 async function main() {
     try {
@@ -58,10 +60,8 @@ async function main() {
 
         const colorPuzzle = new ColorPuzzle();
         await colorPuzzle.loadLevels();
-
         const wirePuzzle = new WirePuzzle();
         await wirePuzzle.loadLevels();
-
         const keypadPuzzle = new KeypadPuzzle(uiManager);
 
         const ticTacToePuzzle = new TicTacToePuzzle();
@@ -80,7 +80,7 @@ async function main() {
             const physicsManager = new RapierPhysicsManager(null, camera, null);
 
             // Initialize StageManager with proper multi-scene architecture
-            const stageManager = new StageManager(physicsManager, camera, settings.quality || 'medium', null, audioManager);
+            const stageManager = new StageManager(physicsManager, camera, settings.quality || 'medium', null, audioManager, renderer);
 
             // Load all stages (mansion and office)
             const initResult = await stageManager.initializeAllStages((progress, message) => {
@@ -118,13 +118,15 @@ async function main() {
             monster.visible = false;
 
             uiManager.updateLoadingProgress(85, "Preparing your escape...");
-            const controls = new FirstPersonControls(camera, renderer, physicsManager, { colorPuzzle, wirePuzzle, keypadPuzzle, ticTacToePuzzle }, monsterAI, stageManager.currentLoader);
+            const controls = new FirstPersonControls(camera, renderer, physicsManager, { colorPuzzle, wirePuzzle, keypadPuzzle, ticTacToePuzzle }, monsterAI, stageManager.currentLoader, audioManager);
             uiManager.setControls(controls);
             const flashlight = new ImprovedFlashlight(camera, scene, stageManager);
             // Pass the renderer to PauseMenu
             const pauseMenu = new PauseMenu(renderer, controls, loop);
+            const qteManager = new QTEManager(uiManager, controls);
+            controls.setQTEManager(qteManager);
 
-            const gameManager = new GameManager(stageManager.currentLoader, camera, scene, uiManager, audioManager, controls, stageManager);
+            const gameManager = new GameManager(stageManager.currentLoader, camera, scene, uiManager, audioManager, controls, stageManager, physicsManager);
             const puzzleSystem = new PuzzleSystem(scene, gameManager);
             const interactionSystem = new InteractionSystem(camera, scene, gameManager, uiManager, controls, audioManager, stageManager);
 
@@ -141,6 +143,32 @@ async function main() {
 
             uiManager.updateLoadingText("Creating minimap...");
             const minimap = new Minimap(scene, camera, stageManager, renderer);
+
+            // --- Initialize CarInteraction AFTER mansion is loaded ---
+            uiManager.updateLoadingText("Checking vehicle systems...");
+            const carInteraction = new CarInteraction(scene, interactionSystem, audioManager, gameManager);
+  
+            // car collection
+            carInteraction.initializeCar(stageManager.scenes.mansion, 'car');
+
+            const garageSystem = new GarageSystem(
+                interactionSystem,
+                qteManager,
+                audioManager,
+                gameManager,
+                stageManager
+            );
+
+            // --- Initialize CarRepairSystem AFTER CarInteraction and other dependencies ---
+            const carRepairSystem = new CarRepairSystem(
+                stageManager,
+                interactionSystem,
+                qteManager,
+                audioManager,
+                gameManager,
+                narrativeManager, // Pass NarrativeManager
+                carInteraction    // Pass CarInteraction instance
+            );
 
             new Resizer(camera, renderer);
 
@@ -164,10 +192,12 @@ async function main() {
 
             loop.updatables.push(...updatables);
 
+            // --- Setup gameControls for debugging ---
             window.gameControls = {
                 camera, scene, flashlight, physicsManager, gameManager,
                 interactionSystem, puzzleSystem, atmosphere, colorPuzzle, wirePuzzle, keypadPuzzle, ticTacToePuzzle,
                 audioManager, monsterAI, narrativeManager, uiManager, minimap, stageManager,
+                carInteraction, qteManager, garageSystem, carRepairSystem,
                 // Always get current loader from stageManager, not cached reference
                 get mansionLoader() { return stageManager.currentLoader; },
                 // Stage transition commands
@@ -186,6 +216,9 @@ async function main() {
                 toggleNavMesh: () => stageManager.currentLoader?.toggleNavMeshVisualizer?.(),
                 toggleMansion: () => stageManager.currentLoader?.toggleMansionVisibility?.(),
                 toggleNavMeshNodes: () => stageManager.currentLoader?.toggleNavMeshNodesVisualizer?.(),
+                toggleNavMesh: () => mansionLoader.toggleNavMeshVisualizer(),
+                toggleMansion: () => mansionLoader.toggleMansionVisibility(),
+                toggleNavMeshNodes: () => mansionLoader.toggleNavMeshNodesVisualizer(),
                 toggleMinimap: () => minimap.toggle(),
                 spawnMonster: () => {
                     console.log('👾 DEBUG: Spawning monster...');
@@ -408,3 +441,4 @@ async function main() {
 }
 
 main();
+

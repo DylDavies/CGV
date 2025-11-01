@@ -291,8 +291,8 @@ class MonsterAI {
                 break;
 
             case 3: // Curious - Flee from outer bubble, approach from outside
-                // Inner bubble: Become AGGRESSIVE (hostile)
-                if (distanceToPlayer < currentState.innerBubble) {
+                // Inner bubble: Become AGGRESSIVE (hostile) - unless player is hiding
+                if (distanceToPlayer < currentState.innerBubble && !playerIsHiding) {
                     this.aggressionLevel = 5; // Becomes Hostile
                     this.isFleeing = false;
                     this.fleeTimer = 0;
@@ -340,9 +340,9 @@ class MonsterAI {
                 break;
             case 4: // Bold
                 const boldDistanceToPlayer = distanceToPlayer;
-                if (boldDistanceToPlayer < 1.5) {
+                if (boldDistanceToPlayer < 1.5 && !playerIsHiding) {
                     this.aggressionLevel = 5; // Becomes Hostile
-                    return; 
+                    return;
                 }
                 if (this.isPlayerLookingAtMonster()) {
                     this.path = [];
