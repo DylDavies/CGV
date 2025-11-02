@@ -351,6 +351,10 @@ class InteractionSystem {
         
         this.showPageContent(userData.pageId, () => {
             // noteObject.userData.interactable = false;
+            this.justClosedUI = true;
+            setTimeout(() => {
+                this.justClosedUI = false;
+            }, 100); // 100ms debounce
         });
     }
     
