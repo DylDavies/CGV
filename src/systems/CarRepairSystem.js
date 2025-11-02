@@ -281,6 +281,12 @@ export class CarRepairSystem {
                 this.physicsManager.teleportTo(driverPos);
                 this.repairState.playerInCar = true;
 
+                // Despawn the monster when player enters the car
+                if (window.gameControls && window.gameControls.monsterAI) {
+                    logger.log('👾 Despawning monster - player is now in the car');
+                    window.gameControls.monsterAI.despawn();
+                }
+
                 // Check if player has Annie in inventory and spawn her in the car
                 if (this.gameManager.hasItem('Annie (Doll)')) {
                     this.spawnAnnieInCar();

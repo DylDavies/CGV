@@ -336,6 +336,12 @@ export class GarageSystem {
             // Trigger narrative event for Stage 3 start
             await window.gameControls.narrativeManager.triggerEvent("stage3.barricaded_door");
 
+            // Despawn the monster after barricade is complete (keeps heartbeat playing)
+            if (window.gameControls && window.gameControls.monsterAI) {
+                logger.log('👾 Despawning monster after barricade - player is safe behind the door');
+                window.gameControls.monsterAI.despawn();
+            }
+
             // Activate the garage gate lifting sequence
             this.activateGateLifting();
 
