@@ -4,7 +4,8 @@ import logger from '../utils/Logger.js';
 const QTE_TYPES = {
     BUTTON_MASH: 'buttonMash',
     SKILL_CHECK: 'skillCheck',
-    BOUNCING_RING: 'bouncingRing'
+    BOUNCING_RING: 'bouncingRing',
+    RHYTHM_GAME: 'rhythmGame'
 };
 
 class QTEManager {
@@ -41,10 +42,17 @@ class QTEManager {
             successZoneSize = 40, // For skill check (degrees)
             needleSpeed = 360, // For skill check (degrees per second)
 
-            // Bounding config
+            // Bouncing config
             initialZoneSize = 70, // Start Bouncing Ring zones at 70 degrees
             requiredLoops = 8, // For bouncing ring (complete 8 full back-and-forths)
-            indicatorSpeed = 250 // For bouncing ring (degrees per second)
+            indicatorSpeed = 250, // For bouncing ring (degrees per second)
+
+            // Rhythm game config
+            noteSequence = ['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'], // For rhythm game
+            noteSpeed = 200, // For rhythm game (pixels per second)
+            noteSpeedIncrease = 0, // Speed increase per note (pixels per second)
+            hitZoneStart = 400, // For rhythm game (center of hit zone in pixels from left)
+            hitZoneSize = 80 // For rhythm game (width of hit zone in pixels)
         } = options;
 
         logger.log(`⚡ Starting QTE: ${type}`);
@@ -134,6 +142,29 @@ class QTEManager {
                 this.uiManager.updateBouncingRingTimer(1); // Start timer bar full
                 break;
 
+            case QTE_TYPES.RHYTHM_GAME:
+                this.activeQTE.state = {
+                    noteSequence: noteSequence,
+                    baseNoteSpeed: noteSpeed, // Store base speed
+                    noteSpeed: noteSpeed, // Current speed (will increase)
+                    noteSpeedIncrease: noteSpeedIncrease, // How much to increase per note
+                    hitZoneStart: hitZoneStart,
+                    hitZoneEnd: hitZoneStart + hitZoneSize,
+                    currentNoteIndex: 0,
+                    currentNotePosition: -100, // Start off-screen to the left
+                    screenWidth: 600, // Total width of the rhythm game track
+                    hitSuccess: false,
+                    flashingRed: false,
+                };
+
+                this.uiManager.showRhythmGameQTE();
+                this.uiManager.updateRhythmGameNote(
+                    this.activeQTE.state.currentNotePosition,
+                    this.getArrowKeySymbol(noteSequence[0])
+                );
+                this.uiManager.updateRhythmGameProgress(0, noteSequence.length);
+                break;
+
             default:
                 logger.error(`QTEManager: Unknown QTE type "${type}"`);
                 this.endQTE(false); // End immediately if type is wrong
@@ -194,6 +225,25 @@ class QTEManager {
                 this.uiManager.updateBouncingRingTimer(timeRatio); // Update timer bar
                 // No automatic bouncing logic needed here, only input matters
                 break;
+
+            case QTE_TYPES.RHYTHM_GAME:
+                const stateRG = this.activeQTE.state;
+
+                // Move note from left to right
+                stateRG.currentNotePosition += stateRG.noteSpeed * clampedDelta;
+
+                // Update note position on UI
+                this.uiManager.updateRhythmGameNote(
+                    stateRG.currentNotePosition,
+                    this.getArrowKeySymbol(stateRG.noteSequence[stateRG.currentNoteIndex])
+                );
+
+                // Check if note passed the hit zone without being hit
+                if (stateRG.currentNotePosition > stateRG.hitZoneEnd && !stateRG.hitSuccess) {
+                    logger.log(`❌ Rhythm Game: Missed note ${stateRG.currentNoteIndex + 1}/${stateRG.noteSequence.length}`);
+                    endType = 'failure';
+                }
+                break;
         }
 
        // Check for timeout failure (Only if no other end condition met yet)
@@ -223,8 +273,15 @@ class QTEManager {
     }
 
     handleInput(keyCode) {
-        if (!this.isActive() || keyCode !== this.activeQTE.key) {
-            return; // Ignore if no QTE or wrong key
+        if (!this.isActive()) {
+            return; // Ignore if no QTE active
+        }
+
+        // For rhythm game, accept any arrow key (validation happens in the switch case)
+        // For other QTE types, check if it's the expected key
+        const isRhythmGame = this.activeQTE.type === QTE_TYPES.RHYTHM_GAME;
+        if (!isRhythmGame && keyCode !== this.activeQTE.key) {
+            return; // Ignore if wrong key for non-rhythm QTEs
         }
 
         let endType = null; // null, 'success', 'failure'
@@ -334,11 +391,69 @@ class QTEManager {
                     logger.log(`Bounce Miss: Angle=${angleBR.toFixed(1)}, Target=${stateBR.nextBounceTarget}. Failure.`);
                 }
                 break; // End BOUNCING_RING case
+
+            case QTE_TYPES.RHYTHM_GAME:
+                const stateRG = this.activeQTE.state;
+                const expectedKey = stateRG.noteSequence[stateRG.currentNoteIndex];
+
+                logger.log(`🎮 Rhythm Game Input: Key pressed=${keyCode}, Expected=${expectedKey}, Note pos=${stateRG.currentNotePosition.toFixed(1)}, Hit zone=[${stateRG.hitZoneStart}-${stateRG.hitZoneEnd}]`);
+
+                // Check if correct key was pressed
+                if (keyCode !== expectedKey) {
+                    logger.log(`❌ Rhythm Game: Wrong key! Expected ${expectedKey}, got ${keyCode}`);
+                    endType = 'failure';
+                    break;
+                }
+
+                // Check if note is within hit zone
+                const inHitZone = stateRG.currentNotePosition >= stateRG.hitZoneStart &&
+                                  stateRG.currentNotePosition <= stateRG.hitZoneEnd;
+
+                if (inHitZone) {
+                    logger.log(`✅ Rhythm Game: Hit note ${stateRG.currentNoteIndex + 1}/${stateRG.noteSequence.length} perfectly!`);
+                    stateRG.hitSuccess = true;
+
+                    // Move to next note
+                    stateRG.currentNoteIndex++;
+                    this.uiManager.updateRhythmGameProgress(stateRG.currentNoteIndex, stateRG.noteSequence.length);
+
+                    // Check if all notes completed
+                    if (stateRG.currentNoteIndex >= stateRG.noteSequence.length) {
+                        endType = 'success';
+                    } else {
+                        // Increase speed for next note
+                        stateRG.noteSpeed += stateRG.noteSpeedIncrease;
+                        logger.log(`   Note speed increased to ${stateRG.noteSpeed} px/s`);
+
+                        // Reset for next note
+                        stateRG.currentNotePosition = -100;
+                        stateRG.hitSuccess = false;
+                        this.uiManager.updateRhythmGameNote(
+                            stateRG.currentNotePosition,
+                            this.getArrowKeySymbol(stateRG.noteSequence[stateRG.currentNoteIndex])
+                        );
+                    }
+                } else {
+                    logger.log(`❌ Rhythm Game: Pressed too early or too late! Position=${stateRG.currentNotePosition.toFixed(1)}`);
+                    endType = 'failure';
+                }
+                break;
         }
 
         // If input caused QTE to end (success or failure)
         if (endType !== null) {
             this.endQTE(endType === 'success');
+        }
+    }
+
+    // Helper to convert arrow key codes to display symbols
+    getArrowKeySymbol(keyCode) {
+        switch(keyCode) {
+            case 'ArrowUp': return '↑';
+            case 'ArrowDown': return '↓';
+            case 'ArrowLeft': return '←';
+            case 'ArrowRight': return '→';
+            default: return keyCode;
         }
     }
 
@@ -374,6 +489,9 @@ class QTEManager {
                 break;
             case QTE_TYPES.BOUNCING_RING:
                 this.uiManager.hideBouncingRingQTE();
+                break;
+            case QTE_TYPES.RHYTHM_GAME:
+                this.uiManager.hideRhythmGameQTE();
                 break;
              default:
                   logger.warn(`endQTE: Attempted to hide unknown QTE type "${endedQTEType}"`);

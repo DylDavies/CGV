@@ -169,7 +169,9 @@ async function main() {
                 audioManager,
                 gameManager,
                 narrativeManager, // Pass NarrativeManager
-                carInteraction    // Pass CarInteraction instance
+                carInteraction,   // Pass CarInteraction instance
+                physicsManager,   // Pass PhysicsManager for player teleport
+                camera            // Pass Camera for escape sequence
             );
 
             new Resizer(camera, renderer);

@@ -26,16 +26,37 @@ export class GarageSystem {
 
         // Garage gate lifting system
         this.garageGate = null;
-        this.garageObjects = []; // All objects with "garage" in name or hierarchy
+        this.garageSwitch = null; // The switch object used to lift the gate
         this.isGateLiftActive = false;
         this.isEKeyHeld = false;
         this.gateStartY = null;
-        this.gateMaxLift = 3.0; // How far the gate can lift in units
+        this.gateMaxLift = 2; // How far the gate can lift in units
         this.gateLiftSpeed = 0.8; // Units per second
         this.gateCurrentLift = 0;
         this.gateFullyLifted = false;
         this.wallHider = null;
-        this.wallHiderProxy = null; 
+
+        // Outside boundary detection (line-crossing method)
+        this.outsideBoundaryLine = {
+            pointA: { x: 15.77, z: 10.42 },
+            pointB: { x: 9.74, z: 10.57 }
+        };
+        this.isCurrentlyOutside = false; // Track if player is currently outside
+        this.outsideTimer = 0; // Timer for how long player has been outside
+        this.maxOutsideTime = 6.0; // Max time in seconds before death
+        this.boundaryLineVisual = null; // Visual representation of the boundary line
+        this.vignetteOverlay = null; // Dark vignette overlay for time warning
+        this.vignetteShown = false; // Track if vignette has been shown (for one-time log)
+
+        // Movement speed slowdown settings
+        this.originalWalkSpeed = null; // Store original walk speed
+        this.originalRunSpeed = null; // Store original run speed
+        this.speedSlowdownRate = 0.15; // Speed reduction per second (15% per second)
+
+        // Switch rotation settings
+        this.switchStartRotation = null; // Store initial rotation
+        this.switchTargetRotationX = THREE.MathUtils.degToRad(-45); // Rotate down 45 degrees
+        this.switchMaxRotation = THREE.MathUtils.degToRad(-45); // Max rotation when gate is fully lifted 
 
         // Target positions and rotaions of planks relative to the door pivot
         this.plank1Target = {
@@ -47,6 +68,11 @@ export class GarageSystem {
             position: new THREE.Vector3(-0.47, 1.2, -0.2),
             rotation: new THREE.Euler(0, 0, -Math.PI / 3), 
         };
+
+        // Register the garage gate handler early (will be used when switch becomes active)
+        if (this.interactionSystem.interactionTypes['garage_gate']) {
+            this.interactionSystem.interactionTypes['garage_gate'].handler = this.handleGateInteraction.bind(this);
+        }
 
         logger.log('🚪 GarageSystem initialized');
     }
@@ -319,7 +345,7 @@ export class GarageSystem {
 
     /**
      * Activates the garage gate lifting sequence after barricade is complete.
-     * Player must hold E while looking at the garage gate to lift it.
+     * Player must hold E while looking at the Garage_switch to lift the gate.
      */
     activateGateLifting() {
         if (this.isGateLiftActive) return;
@@ -327,69 +353,46 @@ export class GarageSystem {
         logger.log('🚪 Activating Garage Gate Lifting Sequence...');
         this.isGateLiftActive = true;
 
-        // Find all objects with "garage" in their name and make them interactable
-        this.garageObjects = [];
-        this.stageManager.currentScene.traverse((object) => {
-            if (object.isMesh || object.isGroup || object.isObject3D) {
-                const lowerName = object.name.toLowerCase();
-
-                // Check if this object or any ancestor has "garage" in the name
-                let hasGarageInHierarchy = lowerName.includes('garage');
-
-                if (!hasGarageInHierarchy) {
-                    // Check ancestors
-                    let parent = object.parent;
-                    while (parent) {
-                        if (parent.name.toLowerCase().includes('garage')) {
-                            hasGarageInHierarchy = true;
-                            break;
-                        }
-                        parent = parent.parent;
-                    }
-                }
-
-                if (hasGarageInHierarchy) {
-                    // Make this object interactable
-                    object.userData = {
-                        ...object.userData,
+        // Find the garage switch and make it interactable
+        const garageSwitch = this.stageManager.currentScene.getObjectByName('Garage_switch');
+        if (garageSwitch) {
+            garageSwitch.userData = {
+                ...garageSwitch.userData,
                         interactable: true,
                         type: 'garage_gate',
                     };
-
-                    // Store initial Y position for this object and all children (same pattern as sofa)
-                    object.traverse((child) => {
-                        if (child.isMesh || child.isGroup) {
-                            if (!child.userData) child.userData = {};
-                            child.userData.gateStartY = child.position.y;
-                        }
-                    });
-
-                    this.garageObjects.push(object);
-                    logger.log(`   Made ${object.name} interactable (garage-related)`);
-
-                    // If this looks like the main gate, store it
-                    if (lowerName.includes('gate') || lowerName.includes('lp_garage')) {
-                        this.garageGate = object;
-                        this.gateStartY = object.position.y;
-                        logger.log(`   ✓ Using ${object.name} as main garage gate (Y: ${this.gateStartY})`);
+            this.garageSwitch = garageSwitch;
+            // Store the switch's initial rotation
+            this.switchStartRotation = {
+                x: garageSwitch.rotation.x,
+                y: garageSwitch.rotation.y,
+                z: garageSwitch.rotation.z
+            };
+            logger.log(`   ✓ Found and activated Garage_switch for interaction`);
+        } else {
+            logger.error('   ❌ Garage_switch not found in scene!');
+            this.isGateLiftActive = false;
+            return;
                     }
+
+        // Find the specific garage gate object: gateslp_garage_0
+        this.garageGate = this.stageManager.currentScene.getObjectByName('gateslp_garage_0');
+
+        if (this.garageGate) {
+            // Store initial Y position for the gate and all its children
+            this.garageGate.traverse((child) => {
+                if (child.isMesh || child.isGroup) {
+                    if (!child.userData) child.userData = {};
+                    child.userData.gateStartY = child.position.y;
                 }
-            }
-        });
-
-        logger.log(`   Found ${this.garageObjects.length} garage-related objects`);
-
-        if (!this.garageGate) {
-            logger.warn('   No main garage gate identified, using first garage object');
-            if (this.garageObjects.length > 0) {
-                this.garageGate = this.garageObjects[0];
+            });
                 this.gateStartY = this.garageGate.position.y;
+            logger.log(`   ✓ Found garage gate: ${this.garageGate.name} (Y: ${this.gateStartY})`);
             } else {
-                logger.error('   No garage objects found at all!');
+            logger.error('   ❌ gateslp_garage_0 not found in scene!');
                 this.isGateLiftActive = false;
                 return;
             }
-        }
 
         // Register the interaction handler
         if (!this.interactionSystem.interactionTypes['garage_gate']) {
@@ -402,41 +405,10 @@ export class GarageSystem {
             this.interactionSystem.interactionTypes['garage_gate'].prompt = "Hold E to lift the garage door";
         }
 
-        // Find S_Wall_hider for later removal AND make it interactable too
-        // (S_Wall_hider is in front of the gate and may block raycasts)
+        // Find S_Wall_hider for later physics removal
         this.wallHider = this.stageManager.currentScene.getObjectByName('S_Wall_hider');
         if (this.wallHider) {
             logger.log('   Found S_Wall_hider for physics removal');
-
-            // Keep S_Wall_hider invisible but make it raycastable
-            // by setting it to a special layer that the raycaster can detect
-            this.wallHider.visible = false; // Keep it invisible
-
-            // However, we need the raycaster to hit it, so we'll use a different approach:
-            // Create an invisible box geometry at the same position for raycasting
-            const geometry = new THREE.BoxGeometry(3, 3, 0.1); // Adjust size as needed
-            const material = new THREE.MeshBasicMaterial({
-                transparent: true,
-                opacity: 0,
-                depthWrite: false
-            });
-            this.wallHiderProxy = new THREE.Mesh(geometry, material);
-
-            // Copy position from S_Wall_hider
-            this.wallHiderProxy.position.copy(this.wallHider.position);
-            this.wallHiderProxy.rotation.copy(this.wallHider.rotation);
-
-            // Add to scene
-            this.stageManager.currentScene.add(this.wallHiderProxy);
-
-            // Make the proxy interactable with same prompt as gate
-            // This ensures player can interact even if it blocks the gate
-            this.wallHiderProxy.userData = {
-                interactable: true,
-                type: 'garage_gate',
-                isWallHider: true // Mark it so we know it's the wall hider proxy
-            };
-            logger.log('   Created invisible raycast proxy for S_Wall_hider (same as gate)');
         } else {
             logger.warn('   S_Wall_hider not found');
         }
@@ -532,39 +504,49 @@ export class GarageSystem {
 
     /**
      * Called every frame to update gate lifting if E is held.
-     * Similar to sofa movement system.
+     * Player must look at Garage_switch to lift the gate.
+     * Also checks if player has crossed the boundary line to go outside.
      */
     tick(delta) {
+        // Check if player has crossed the boundary line to go outside (only after gate is fully lifted)
+        // BUT NOT if player is in the car driving
+        if (this.gateFullyLifted) {
+            // Check if player is in car - if so, don't trigger death/slowdown
+            const carRepairSystem = window.gameControls?.carRepairSystem;
+            const playerInCar = carRepairSystem?.repairState?.playerInCar || false;
+
+            if (!playerInCar) {
+                this.checkPlayerCrossedBoundary(delta);
+            }
+        }
+
+        // If gate isn't active yet or is already fully lifted, don't run gate lifting logic
         if (!this.isGateLiftActive || this.gateFullyLifted || !this.garageGate) {
             return;
         }
 
-        // Check if player is looking at any garage-related object
+        // Check if player is looking at the garage switch
         const highlightedObj = this.interactionSystem.highlightedObject;
         if (!highlightedObj) {
-            // Hide progress bar if not looking at target
+            // Hide progress bar if not looking at switch
             if (this.progressBarContainer) {
                 this.progressBarContainer.style.display = 'none';
             }
             return;
         }
 
-        // DEBUG: Log what object we're looking at
-        console.log(`👁️ Looking at: "${highlightedObj.name}" (type: ${highlightedObj.type}, children: ${highlightedObj.children?.length || 0})`);
+        // Check if looking at the garage switch
+        const isLookingAtSwitch = highlightedObj === this.garageSwitch;
 
-        // Accept interaction from any garage object or the wall hider proxy
-        const isLookingAtGarageObject = this.garageObjects.includes(highlightedObj);
-        const isLookingAtWallHiderProxy = highlightedObj === this.wallHiderProxy;
-
-        if (!isLookingAtGarageObject && !isLookingAtWallHiderProxy) {
-            // Hide progress bar if not looking at target
+        if (!isLookingAtSwitch) {
+            // Hide progress bar if not looking at switch
             if (this.progressBarContainer) {
                 this.progressBarContainer.style.display = 'none';
             }
             return;
         }
 
-        // Show progress bar when looking at the gate
+        // Show progress bar when looking at the switch
         if (this.progressBarContainer) {
             this.progressBarContainer.style.display = 'block';
         }
@@ -580,31 +562,41 @@ export class GarageSystem {
         const liftAmount = this.gateLiftSpeed * delta;
         this.gateCurrentLift += liftAmount;
 
+        // Calculate progress (0 to 1)
+        const progress = Math.min(this.gateCurrentLift / this.gateMaxLift, 1);
+
         if (this.gateCurrentLift >= this.gateMaxLift) {
             // Gate is fully lifted
             this.gateCurrentLift = this.gateMaxLift;
             this.gateFullyLifted = true;
 
-            // Move all garage objects to final position (same pattern as sofa)
-            this.garageObjects.forEach(garageObj => {
-                garageObj.traverse((child) => {
-                    if ((child.isMesh || child.isGroup) && child.userData.gateStartY !== undefined) {
-                        child.position.y = child.userData.gateStartY + this.gateMaxLift;
-                    }
-                });
+            // Move the specific garage gate to final position
+            this.garageGate.traverse((child) => {
+                if ((child.isMesh || child.isGroup) && child.userData.gateStartY !== undefined) {
+                    child.position.y = child.userData.gateStartY - this.gateMaxLift;
+                }
             });
 
+            // Set switch to final rotation (rotated down)
+            if (this.garageSwitch && this.switchStartRotation) {
+                this.garageSwitch.rotation.x = this.switchStartRotation.x + this.switchMaxRotation;
+            }
+
             logger.log('🚪✅ Garage gate fully lifted!');
+            logger.log('   🔍 Boundary detection will now run every second');
             this.onGateFullyLifted();
         } else {
-            // Continue lifting - move all children of all garage objects (same pattern as sofa)
-            this.garageObjects.forEach(garageObj => {
-                garageObj.traverse((child) => {
-                    if ((child.isMesh || child.isGroup) && child.userData.gateStartY !== undefined) {
-                        child.position.y = child.userData.gateStartY + this.gateCurrentLift;
-                    }
-                });
+            // Continue lifting - move the specific garage gate
+            this.garageGate.traverse((child) => {
+                if ((child.isMesh || child.isGroup) && child.userData.gateStartY !== undefined) {
+                    child.position.y = child.userData.gateStartY - this.gateCurrentLift;
+                }
             });
+
+            // Rotate the switch down based on progress
+            if (this.garageSwitch && this.switchStartRotation) {
+                this.garageSwitch.rotation.x = this.switchStartRotation.x + (this.switchMaxRotation * progress);
+            }
         }
 
         // Update progress bar
@@ -622,6 +614,302 @@ export class GarageSystem {
     }
 
     /**
+     * Checks if the player has crossed the boundary line to go outside.
+     * Uses line-crossing detection with the boundary from (15.77, 10.42) to (9.74, 10.57).
+     * Player is considered "outside" if they cross to the far side of this line.
+     * If player stays outside for 2 seconds, they die.
+     */
+    checkPlayerCrossedBoundary(delta) {
+        // Check if physicsManager and playerBody exist
+        if (!this.physicsManager || !this.physicsManager.playerBody) {
+            return;
+        }
+
+        // Get player position from playerBody.translation() (Rapier API)
+        const playerPos = this.physicsManager.playerBody.translation();
+        if (!playerPos) {
+            return;
+        }
+
+        // Get boundary line points
+        const A = this.outsideBoundaryLine.pointA;
+        const B = this.outsideBoundaryLine.pointB;
+        const P = { x: playerPos.x, z: playerPos.z };
+
+        // Check if player is within the boundary detection zone (near the visible line)
+        const minX = Math.min(A.x, B.x);
+        const maxX = Math.max(A.x, B.x);
+        const minZ = Math.min(A.z, B.z);
+        const maxZ = Math.max(A.z, B.z);
+
+        // Calculate cross product to determine which side of the line the player is on
+        // Cross product formula: (B - A) × (P - A)
+        // In 2D: cross = (B.x - A.x) * (P.z - A.z) - (B.z - A.z) * (P.x - A.x)
+        const cross = (B.x - A.x) * (P.z - A.z) - (B.z - A.z) * (P.x - A.x);
+
+        // Check if player is outside (negative cross product = z > 11)
+        const isOutside = cross < 0;
+
+        // Detect crossing from inside to outside
+        if ((isOutside && !this.isCurrentlyOutside) && !(P.x < minX || P.x > maxX || P.z < minZ || P.z > maxZ)) {
+            this.isCurrentlyOutside = true;
+            this.outsideTimer = 0;
+
+            // Store original speeds if not already stored
+            if (this.originalWalkSpeed === null && this.physicsManager.maxSpeed) {
+                this.originalWalkSpeed = this.physicsManager.maxSpeed.walk;
+                this.originalRunSpeed = this.physicsManager.maxSpeed.run;
+                logger.log(`   Stored original speeds: walk=${this.originalWalkSpeed}, run=${this.originalRunSpeed}`);
+            }
+
+            logger.log('🚪 Player crossed boundary line to OUTSIDE');
+            logger.log(`   Position: (x: ${P.x.toFixed(2)}, z: ${P.z.toFixed(2)})`);
+        }
+        // Detect crossing from outside to inside
+        else if ((!isOutside && this.isCurrentlyOutside) && !(P.x < minX || P.x > maxX || P.z < minZ || P.z > maxZ)) {
+            logger.log('🏠 Player crossed boundary line back INSIDE');
+            logger.log(`   Position: (x: ${P.x.toFixed(2)}, z: ${P.z.toFixed(2)})`);
+            logger.log(`   Was outside for ${this.outsideTimer.toFixed(2)} seconds`);
+            this.isCurrentlyOutside = false;
+            this.outsideTimer = 0;
+            this.updateVignetteEffect();
+
+            // Restore original movement speeds
+            this.restoreMovementSpeed();
+        }
+
+        // If player is outside, accumulate time, update vignette, and slow down movement
+        if (this.isCurrentlyOutside) {
+            this.outsideTimer += delta;
+            this.updateVignetteEffect();
+            this.slowDownMovementSpeed(delta);
+
+            // Check if player has been outside too long
+            if (this.outsideTimer >= this.maxOutsideTime && this.gateFullyLifted) {
+                logger.log('💀 Player stayed outside too long - triggering death');
+                this.onPlayerStayedOutsideTooLong();
+            }
+        }
+    }
+
+    /**
+     * Creates a vignette overlay that darkens the screen from edges.
+     * Similar to hit border overlay but for outside timer warning.
+     */
+    createVignetteOverlay() {
+        this.vignetteOverlay = document.createElement('div');
+        this.vignetteOverlay.id = 'outside-vignette-overlay';
+        this.vignetteOverlay.style.cssText = `
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            width: 100vw;
+            height: 100vh;
+            pointer-events: none;
+            z-index: 999999;
+            opacity: 0;
+            transition: opacity 0.3s ease;
+        `;
+        document.body.appendChild(this.vignetteOverlay);
+        logger.log('   ✓ Created vignette overlay for outside timer warning');
+    }
+
+    /**
+     * Updates the vignette effect based on how long player has been outside.
+     * Follows the same pattern as hit border overlay.
+     */
+    updateVignetteEffect() {
+        if (!this.vignetteOverlay) {
+            return;
+        }
+
+        // Ensure element is in DOM - re-add if missing
+        if (!document.body.contains(this.vignetteOverlay)) {
+            document.body.appendChild(this.vignetteOverlay);
+        }
+
+        if (this.isCurrentlyOutside && this.outsideTimer > 0) {
+            // Start showing at 2 seconds, increase intensity until 10 seconds
+            const warningStartTime = 2.0;
+
+            if (this.outsideTimer < warningStartTime) {
+                // Too early, hide vignette
+                this.vignetteOverlay.style.display = 'none';
+                this.vignetteOverlay.style.opacity = '0';
+                this.vignetteOverlay.style.boxShadow = 'none';
+                this.vignetteOverlay.style.background = 'transparent';
+                this.vignetteShown = false;
+            } else {
+                // Calculate progress from 2 to 6 seconds
+                const progress = (this.outsideTimer - warningStartTime) / (this.maxOutsideTime - warningStartTime);
+                const intensity = Math.min(progress, 1.0);
+
+                // Calculate border thickness based on intensity (increased for more visibility)
+                const borderThickness = 100 + (intensity * 150); // 100px to 250px
+                const opacity = 0.6 + (intensity * 0.4); // 0.6 to 1.0
+
+                // Log once when vignette first appears
+                if (!this.vignetteShown) {
+                    logger.log(`🌑 Vignette warning started - screen will darken as timer approaches ${this.maxOutsideTime}s`);
+                    this.vignetteShown = true;
+                }
+
+                // Ensure element is visible with explicit display and high z-index
+                this.vignetteOverlay.style.display = 'block';
+                this.vignetteOverlay.style.zIndex = '999999';
+                this.vignetteOverlay.style.opacity = '1';
+                this.vignetteOverlay.style.border = 'none';
+
+                // Use box-shadow inset for proper edge vignette effect (black instead of red)
+                // Creates a black glow that fades from edges toward center
+                this.vignetteOverlay.style.boxShadow = `
+                    inset 0 0 ${borderThickness}px ${borderThickness * 0.4}px rgba(0, 0, 0, ${opacity}),
+                    inset 0 0 ${borderThickness * 2}px ${borderThickness * 0.6}px rgba(0, 0, 0, ${opacity * 0.8}),
+                    inset 0 0 ${borderThickness * 3}px ${borderThickness * 0.8}px rgba(0, 0, 0, ${opacity * 0.6})
+                `;
+
+                // Add a stronger black vignette to entire screen
+                this.vignetteOverlay.style.background = `radial-gradient(circle at center, transparent 30%, rgba(0, 0, 0, ${opacity * 0.6}) 100%)`;
+            }
+        } else {
+            // Player is inside, hide vignette
+            this.vignetteOverlay.style.display = 'none';
+            this.vignetteOverlay.style.opacity = '0';
+            this.vignetteOverlay.style.border = 'none';
+            this.vignetteOverlay.style.boxShadow = 'none';
+            this.vignetteOverlay.style.background = 'transparent';
+            this.vignetteShown = false;
+        }
+    }
+
+    /**
+     * Gradually slows down player movement speed based on time spent outside.
+     * Speed decreases by speedSlowdownRate (15%) per second.
+     * Minimum speed is 30% of original speed.
+     */
+    slowDownMovementSpeed(delta) {
+        if (!this.physicsManager || !this.physicsManager.maxSpeed || this.originalWalkSpeed === null) return;
+
+        // Calculate slowdown multiplier based on time outside
+        // Formula: 1.0 - (speedSlowdownRate * outsideTimer)
+        // Clamp to minimum of 0.3 (30% of original speed)
+        const slowdownMultiplier = Math.max(0.3, 1.0 - (this.speedSlowdownRate * this.outsideTimer));
+
+        // Apply slowdown to both walk and run speeds
+        this.physicsManager.maxSpeed.walk = this.originalWalkSpeed * slowdownMultiplier;
+        this.physicsManager.maxSpeed.run = this.originalRunSpeed * slowdownMultiplier;
+
+        // Log occasionally for debugging (every 1 second)
+        if (Math.floor(this.outsideTimer) !== Math.floor(this.outsideTimer - delta)) {
+            logger.log(`🐌 Movement speed slowed to ${(slowdownMultiplier * 100).toFixed(0)}% (walk: ${this.physicsManager.maxSpeed.walk.toFixed(2)}, run: ${this.physicsManager.maxSpeed.run.toFixed(2)})`);
+        }
+    }
+
+    /**
+     * Restores player movement speed to original values when coming back inside.
+     */
+    restoreMovementSpeed() {
+        if (!this.physicsManager || !this.physicsManager.maxSpeed || this.originalWalkSpeed === null) return;
+
+        this.physicsManager.maxSpeed.walk = this.originalWalkSpeed;
+        this.physicsManager.maxSpeed.run = this.originalRunSpeed;
+
+        logger.log(`✅ Movement speed restored (walk: ${this.physicsManager.maxSpeed.walk.toFixed(2)}, run: ${this.physicsManager.maxSpeed.run.toFixed(2)})`);
+    }
+
+    /**
+     * Called when the player stays outside the boundary for too long.
+     * Plays monster attack sound and triggers death sequence via narrative manager.
+     */
+    async onPlayerStayedOutsideTooLong() {
+        // Prevent multiple death triggers
+        if (this.gateFullyLifted === false) return; // Safety check
+        this.gateFullyLifted = false; // Disable further checks
+
+        logger.log('💀 Death sequence starting - player caught outside too long');
+
+        // Update game state
+        if (this.gameManager) {
+            this.gameManager.gameState = 'lost';
+        }
+
+        // Play monster attack sound
+        if (this.audioManager) {
+            this.audioManager.playSound('monster_attack', 'public/audio/sfx/monster-attack.mp3');
+        }
+
+        // Trigger death event via narrative manager
+        const deathEvent = 'endings.death_garage_escape';
+        logger.log(`💀 Triggering death event: ${deathEvent}`);
+
+        if (window.gameControls && window.gameControls.narrativeManager) {
+            await window.gameControls.narrativeManager.triggerEvent(deathEvent);
+        } else {
+            logger.error('💀 NarrativeManager not found!');
+            // Fallback to direct game lost
+            if (this.gameManager && this.gameManager.onGameLost) {
+                this.gameManager.onGameLost("I knew I wouldn't make it...");
+            }
+        }
+    }
+
+    /**
+     * Creates a visual representation of the boundary line in the game world.
+     * Shows a bright red vertical wall at the boundary to help visualize when player crosses.
+     */
+    createBoundaryLineVisual() {
+        if (!this.stageManager || !this.stageManager.currentScene) {
+            logger.warn('Cannot create boundary line visual - no scene available');
+            return;
+        }
+
+        const A = this.outsideBoundaryLine.pointA;
+        const B = this.outsideBoundaryLine.pointB;
+
+        // Calculate the length and angle of the boundary line
+        const dx = B.x - A.x;
+        const dz = B.z - A.z;
+        const length = Math.sqrt(dx * dx + dz * dz);
+        const angle = Math.atan2(dz, dx);
+
+        // Create a vertical plane geometry (extends from y=0 to y=10)
+        const wallHeight = 10;
+        const geometry = new THREE.PlaneGeometry(length, wallHeight);
+
+        // Create a bright red semi-transparent material (double-sided so visible from both sides)
+        const material = new THREE.MeshBasicMaterial({
+            color: 0xff0000, // Bright red
+            opacity: 0.5,
+            transparent: true,
+            side: THREE.DoubleSide,
+            depthWrite: false // Allows seeing through it
+        });
+
+        // Create the wall mesh
+        this.boundaryLineVisual = new THREE.Mesh(geometry, material);
+        this.boundaryLineVisual.name = 'BoundaryLineVisual';
+
+        // Position at the midpoint between A and B
+        const midX = (A.x + B.x) / 2;
+        const midZ = (A.z + B.z) / 2;
+        this.boundaryLineVisual.position.set(midX, wallHeight / 2, midZ);
+
+        // Rotate to align with the boundary line (plane starts facing Z, rotate around Y axis then tilt to vertical)
+        this.boundaryLineVisual.rotation.y = angle;
+        this.boundaryLineVisual.rotation.x = 0; // Keep it vertical
+
+        // Add to scene
+        this.stageManager.currentScene.add(this.boundaryLineVisual);
+
+        logger.log('   ✓ Created boundary line visualization (red vertical wall)');
+        logger.log(`      From: (${A.x.toFixed(2)}, 0-10, ${A.z.toFixed(2)})`);
+        logger.log(`      To: (${B.x.toFixed(2)}, 0-10, ${B.z.toFixed(2)})`);
+        logger.log(`      Length: ${length.toFixed(2)}, Angle: ${(angle * 180 / Math.PI).toFixed(1)}°`);
+    }
+
+    /**
      * Called when the garage gate is fully lifted.
      * Removes S_Wall_hider physics and triggers dialogue.
      */
@@ -631,15 +919,9 @@ export class GarageSystem {
             this.progressBarContainer.style.display = 'none';
         }
 
-        // Make all garage objects non-interactable
-        this.garageObjects.forEach(obj => {
-            if (obj.userData) {
-                obj.userData.interactable = false;
-            }
-        });
-
-        if (this.wallHiderProxy) {
-            this.wallHiderProxy.userData.interactable = false;
+        // Make the garage switch non-interactable
+        if (this.garageSwitch && this.garageSwitch.userData) {
+            this.garageSwitch.userData.interactable = false;
         }
 
         // Complete the lift objective
@@ -649,6 +931,12 @@ export class GarageSystem {
         if (this.wallHider) {
             this.removeWallHiderPhysics();
         }
+
+        // Create vignette warning overlay
+        this.createVignetteOverlay();
+
+        // Verify boundary detection is active
+        logger.log('   ✓ Boundary line detection active - player has 6 seconds outside before death');
 
         // Show dialogue
         if (window.gameControls && window.gameControls.narrativeManager) {
@@ -716,9 +1004,16 @@ export class GarageSystem {
             this.progressBarContainer.parentNode.removeChild(this.progressBarContainer);
         }
 
-        // Remove wall hider proxy from scene
-        if (this.wallHiderProxy && this.stageManager && this.stageManager.currentScene) {
-            this.stageManager.currentScene.remove(this.wallHiderProxy);
+        // Remove vignette overlay from DOM
+        if (this.vignetteOverlay && this.vignetteOverlay.parentNode) {
+            this.vignetteOverlay.parentNode.removeChild(this.vignetteOverlay);
+        }
+
+        // Remove boundary line visual from scene
+        if (this.boundaryLineVisual && this.stageManager && this.stageManager.currentScene) {
+            this.stageManager.currentScene.remove(this.boundaryLineVisual);
+            this.boundaryLineVisual.geometry.dispose();
+            this.boundaryLineVisual.material.dispose();
         }
 
         // Clean up references
@@ -727,9 +1022,15 @@ export class GarageSystem {
         this.plank1 = null;
         this.plank2 = null;
         this.garageGate = null;
-        this.garageObjects = [];
+        this.garageSwitch = null;
+        this.switchStartRotation = null;
         this.wallHider = null;
-        this.wallHiderProxy = null;
+        this.outsideBoundaryLine = null;
+        this.boundaryLineVisual = null;
+        this.vignetteOverlay = null;
+        this.vignetteShown = false;
+        this.isCurrentlyOutside = false;
+        this.outsideTimer = 0;
         this.progressBarContainer = null;
         this.progressBarFill = null;
     }

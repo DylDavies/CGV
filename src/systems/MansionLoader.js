@@ -357,7 +357,7 @@ class MansionLoader {
 
             // Door leading into the garage
             if (node.name === 'S_Door002') {
-                this.props.set('garage_door', node); 
+                this.props.set('garage_door', node);
                 node.userData = {
                     type: 'garage_door', // Use the type defined in InteractionSystem
                     interactable: true,
@@ -368,6 +368,16 @@ class MansionLoader {
                     barricaded: false
                   };
                 logger.log(`🚪 Found prop: ${node.name} (Garage Door)`); // Log confirmation
+            }
+
+            // Garage gate switch - interact with this to lift the garage gate
+            if (node.name === 'Garage_switch') {
+                this.props.set('garage_switch', node);
+                node.userData = {
+                    type: 'garage_gate', // Use garage_gate type to trigger gate lift
+                    interactable: false // Will be enabled after barricade complete
+                };
+                logger.log(`🔘 Found prop: ${node.name} (Garage Gate Switch)`); // Log confirmation
             }
 
             if (node.name === 'Annie') {

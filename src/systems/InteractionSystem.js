@@ -305,6 +305,10 @@ class InteractionSystem {
                 prompt: "Press E to use plank to barricade door",
                 handler: null // Will be set by GarageSystem when activated
             },
+            garage_gate: {
+                prompt: "Hold E to lift the garage door",
+                handler: null // Will be set by GarageSystem when activated
+            },
             'car_hood': {
                  prompt: "Press E to open hood", // Default prompt
                  // Handler is now managed by CarInteraction calling CarRepairSystem
@@ -317,6 +321,10 @@ class InteractionSystem {
             'car_engine_zone': { // Invisible zone near engine
                 prompt: "Press E", // CarRepairSystem will update this
                 handler: null // CarRepairSystem will set this
+            },
+            'steering_wheel': { // Steering wheel for car ignition
+                prompt: "Press E to start engine", // CarRepairSystem will update this
+                handler: null // CarRepairSystem will set this in its initialize
             },
             'crowbar': { // The crowbar object
                 prompt: "Press E to pick up crowbar",
