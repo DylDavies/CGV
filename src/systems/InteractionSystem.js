@@ -1297,10 +1297,10 @@ I don't look at that mirror anymore. I can't stand to see what I've done to him.
     
     async handleDoorInteraction(door, userData) {
         if (userData.locked) {
-            if (this.gameManager.hasItem('Key Behind Fire')) {
+            if (this.gameManager.hasItem('S_KeyBehindFire')) {
                 this.showConfirmation("Unlock the master bedroom door?", async () => {
                     userData.locked = false;
-                    this.gameManager.removeFromInventory('Key Behind Fire');
+                    this.gameManager.removeFromInventory('S_KeyBehindFire');
                     this.showMessage("The door unlocks with a loud click.");
 
                     // Animate the door opening right after unlocking

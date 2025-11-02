@@ -168,7 +168,9 @@ async function main() {
                 narrativeManager, // Pass NarrativeManager
                 carInteraction,   // Pass CarInteraction instance
                 physicsManager,   // Pass PhysicsManager for player teleport
-                camera            // Pass Camera for escape sequence
+                camera,           // Pass Camera for escape sequence
+                controls,         // Pass PlayerControls for freezing during drive
+                garageSystem      // Pass GarageSystem to check door state
             );
 
             new Resizer(camera, renderer);
