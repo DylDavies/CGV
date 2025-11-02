@@ -74,7 +74,7 @@ export class GarageSystem {
             this.interactionSystem.interactionTypes['garage_gate'].handler = this.handleGateInteraction.bind(this);
         }
 
-        logger.log('🚪 GarageSystem initialized');
+        logger.log('GarageSystem initialized');
     }
 
     /**
@@ -84,7 +84,7 @@ export class GarageSystem {
     activateBarricadeSequence() {
         if (this.barricadeSequenceActive) return;
 
-        logger.log('🚪 Activating Barricade Sequence...');
+        logger.log('Activating Barricade Sequence...');
         this.barricadeSequenceActive = true;
 
         // Find the door and pivot objects (ensure they exist)
@@ -197,7 +197,7 @@ export class GarageSystem {
 
     // Plank pickup Successfull QTE
     async onPlankQteSuccess(plankObject, plankId) {
-        logger.log(`✅ QTE Success for plank ${plankId}!`);
+        logger.log(`QTE Success for plank ${plankId}!`);
         this.isAnimatingPlank = true; 
 
         if (plankId === 1) {
@@ -225,7 +225,7 @@ export class GarageSystem {
 
     // plank pickup fail QTE
     async onPlankQteFailure(plankObject) { 
-        logger.log(`❌ QTE Failure for plank ${plankObject.userData.plankId}. Triggering death sequence.`);
+        logger.log(`QTE Failure for plank ${plankObject.userData.plankId}. Triggering death sequence.`);
 
         if (window.gameControls && window.gameControls.narrativeManager) {
             await window.gameControls.narrativeManager.triggerEvent("stage3.barricaded_door_fail"); // failure screen, player dies
@@ -316,7 +316,7 @@ export class GarageSystem {
     // Check both plaks are placed for barricade sequence completion
     async checkBarricadeCompletion() {
         if (this.plank1Placed && this.plank2Placed) {
-            logger.log('🚪✅ Barricade Complete!');
+            logger.log('Barricade Complete!');
             this.barricadeSequenceActive = false;
 
             // Update the door's state
@@ -338,7 +338,7 @@ export class GarageSystem {
 
             // Despawn the monster after barricade is complete (keeps heartbeat playing)
             if (window.gameControls && window.gameControls.monsterAI) {
-                logger.log('👾 Despawning monster after barricade - player is safe behind the door');
+                logger.log('Despawning monster after barricade - player is safe behind the door');
                 window.gameControls.monsterAI.despawn();
             }
 
@@ -356,7 +356,7 @@ export class GarageSystem {
     activateGateLifting() {
         if (this.isGateLiftActive) return;
 
-        logger.log('🚪 Activating Garage Gate Lifting Sequence...');
+        logger.log('Activating Garage Gate Lifting Sequence...');
         this.isGateLiftActive = true;
 
         // Find the garage switch and make it interactable
@@ -376,7 +376,7 @@ export class GarageSystem {
             };
             logger.log(`   ✓ Found and activated Garage_switch for interaction`);
         } else {
-            logger.error('   ❌ Garage_switch not found in scene!');
+            logger.error('   Garage_switch not found in scene!');
             this.isGateLiftActive = false;
             return;
                     }
@@ -395,7 +395,7 @@ export class GarageSystem {
                 this.gateStartY = this.garageGate.position.y;
             logger.log(`   ✓ Found garage gate: ${this.garageGate.name} (Y: ${this.gateStartY})`);
             } else {
-            logger.error('   ❌ gateslp_garage_0 not found in scene!');
+            logger.error('   gateslp_garage_0 not found in scene!');
                 this.isGateLiftActive = false;
                 return;
             }
@@ -503,7 +503,7 @@ export class GarageSystem {
         // The actual lifting happens in the tick() method when E is held
         // This is just to acknowledge the first interaction
         if (this.gateCurrentLift === 0) {
-            logger.log('🚪 Starting to lift garage gate...');
+            logger.log('Starting to lift garage gate...');
             this.interactionSystem.showMessage("Hold E to lift the door...", 2000);
         }
     }
@@ -588,8 +588,8 @@ export class GarageSystem {
                 this.garageSwitch.rotation.x = this.switchStartRotation.x + this.switchMaxRotation;
             }
 
-            logger.log('🚪✅ Garage gate fully lifted!');
-            logger.log('   🔍 Boundary detection will now run every second');
+            logger.log('Garage gate fully lifted!');
+            logger.log('   Boundary detection will now run every second');
             this.onGateFullyLifted();
         } else {
             // Continue lifting - move the specific garage gate
@@ -668,12 +668,12 @@ export class GarageSystem {
                 logger.log(`   Stored original speeds: walk=${this.originalWalkSpeed}, run=${this.originalRunSpeed}`);
             }
 
-            logger.log('🚪 Player crossed boundary line to OUTSIDE');
+            logger.log('Player crossed boundary line to OUTSIDE');
             logger.log(`   Position: (x: ${P.x.toFixed(2)}, z: ${P.z.toFixed(2)})`);
         }
         // Detect crossing from outside to inside
         else if ((!isOutside && this.isCurrentlyOutside) && !(P.x < minX || P.x > maxX || P.z < minZ || P.z > maxZ)) {
-            logger.log('🏠 Player crossed boundary line back INSIDE');
+            logger.log('Player crossed boundary line back INSIDE');
             logger.log(`   Position: (x: ${P.x.toFixed(2)}, z: ${P.z.toFixed(2)})`);
             logger.log(`   Was outside for ${this.outsideTimer.toFixed(2)} seconds`);
             this.isCurrentlyOutside = false;
@@ -822,7 +822,7 @@ export class GarageSystem {
         this.physicsManager.maxSpeed.walk = this.originalWalkSpeed;
         this.physicsManager.maxSpeed.run = this.originalRunSpeed;
 
-        logger.log(`✅ Movement speed restored (walk: ${this.physicsManager.maxSpeed.walk.toFixed(2)}, run: ${this.physicsManager.maxSpeed.run.toFixed(2)})`);
+        logger.log(`Movement speed restored (walk: ${this.physicsManager.maxSpeed.walk.toFixed(2)}, run: ${this.physicsManager.maxSpeed.run.toFixed(2)})`);
     }
 
     /**
@@ -996,9 +996,9 @@ export class GarageSystem {
         });
 
         if (removedCount > 0) {
-            logger.log(`✅ Removed physics from ${removedCount} S_Wall_hider mesh(es) - player can now pass through`);
+            logger.log(`Removed physics from ${removedCount} S_Wall_hider mesh(es) - player can now pass through`);
         } else {
-            logger.warn('⚠️ No child meshes found in S_Wall_hider');
+            logger.warn('No child meshes found in S_Wall_hider');
         }
     }
 

@@ -17,10 +17,10 @@ class MansionLoader {
         this.physicsBodies = [];
         this.pages = [];
         this.pageSlots = []; // Array to store the puzzle slot objects
-        this.glowingSymbols = []; // NEW: An array to hold symbols that need to animate.
+        this.glowingSymbols = []; 
         this.pageSpawnPoints = new Map(); // Map to store page spawn points: pageNum -> [spawn points]
 
-        // --- NEW: Pathfinding Properties ---
+
         this.pathfinding = new Pathfinding();
         this.navMesh = null;
         this.navMeshVisualizer = null;
@@ -46,7 +46,6 @@ class MansionLoader {
         this.fireplacesEnabled = true;
         this.navMeshNodesVisualizer = null;
 
-        // NEW: Page glow control
         this.pageGlowEnabled = false;
 
         // Material caching for performance
@@ -61,7 +60,7 @@ class MansionLoader {
             this.recreateFireplaces();
         });
 
-        logger.log(`🏠 MansionLoader initialized (${qualityPreset} quality)`);
+        logger.log(`MansionLoader initialized (${qualityPreset} quality)`);
     }
 
     /**
@@ -70,7 +69,7 @@ class MansionLoader {
      */
     setPhysicsExclusions(exclusions) {
         this.physicsExclusions = exclusions || [];
-        logger.log(`🔒 Physics exclusions set: ${this.physicsExclusions.join(', ')}`);
+        logger.log(`Physics exclusions set: ${this.physicsExclusions.join(', ')}`);
     }
 
     /**
@@ -82,7 +81,7 @@ class MansionLoader {
             return;
         }
 
-        logger.log(`🚫 Deactivating physics for ${this.physicsBodies.length} bodies`);
+        logger.log(`Deactivating physics for ${this.physicsBodies.length} bodies`);
 
         // Remove all physics bodies from the world
         for (const entry of this.physicsBodies) {
@@ -101,7 +100,7 @@ class MansionLoader {
             return;
         }
 
-        logger.log(`✅ Activating physics for ${this.physicsBodies.length} bodies`);
+        logger.log(`Activating physics for ${this.physicsBodies.length} bodies`);
 
         // Re-add all physics bodies to the world
         for (const entry of this.physicsBodies) {
@@ -130,10 +129,10 @@ class MansionLoader {
                 this.physicsManager.removeBody(entry.body);
                 // Remove from tracking array
                 this.physicsBodies.splice(index, 1);
-                logger.log(`🚪 Removed collision body for object: ${objectName}`);
+                logger.log(`Removed collision body for object: ${objectName}`);
             }
         } else {
-            logger.warn(`⚠️ Could not find physics body for object: ${objectName}`);
+            logger.warn(`Could not find physics body for object: ${objectName}`);
         }
     }
 
@@ -196,7 +195,7 @@ class MansionLoader {
         this.maxShadowCasters = settings.maxShadowCasters;
         this.shadowMapSize = settings.shadowMapSize;
 
-        logger.log(`🎨 Quality preset "${preset}" applied to MansionLoader (lamp shadows: ${this.lampShadows}, fireplace shadows: ${this.fireplaceShadows}, max shadow casters: ${this.maxShadowCasters})`);
+        logger.log(`Quality preset "${preset}" applied to MansionLoader (lamp shadows: ${this.lampShadows}, fireplace shadows: ${this.fireplaceShadows}, max shadow casters: ${this.maxShadowCasters})`);
 
         // Update existing lamps if they exist
         if (this.lamps && this.lamps.length > 0) {
@@ -210,7 +209,7 @@ class MansionLoader {
     }
 
     async loadMansion(modelPath) {
-        logger.log('📦 Loading mansion model:', modelPath);
+        logger.log('Loading mansion model:', modelPath);
 
         return new Promise((resolve, reject) => {
             const loader = new GLTFLoader();
@@ -218,7 +217,7 @@ class MansionLoader {
             loader.load(
                 modelPath,
                 (gltf) => {
-                    logger.log('✅ Mansion model loaded successfully');
+                    logger.log('Mansion model loaded successfully');
                     this.model = gltf.scene;
 
                     this.processModel();
@@ -235,7 +234,7 @@ class MansionLoader {
                     // CRITICAL: Update matrix world after positioning so physics uses correct positions
                     this.model.updateMatrixWorld(true);
 
-                    logger.log(`✅ Added mansion model to scene. Model visible: ${this.model.visible}, Scene children count: ${this.scene.children.length}`);
+                    logger.log(`Added mansion model to scene. Model visible: ${this.model.visible}, Scene children count: ${this.scene.children.length}`);
                     this.hideDebugObjects();
 
                     if (this.physicsManager) {
@@ -248,15 +247,15 @@ class MansionLoader {
                     // Pre-warm car shaders to prevent lag spike on first visibility
                     this.preWarmCarShaders();
 
-                    logger.log(`🏠 Mansion ready with ${this.rooms.size} rooms and ${this.lamps.length} lamps`);
+                    logger.log(`Mansion ready with ${this.rooms.size} rooms and ${this.lamps.length} lamps`);
                     resolve(this.model);
                 },
                 (progress) => {
                     const percent = (progress.loaded / progress.total) * 100;
-                    logger.log(`⏳ Loading: ${percent.toFixed(1)}%`);
+                    logger.log(`Loading: ${percent.toFixed(1)}%`);
                 },
                 (error) => {
-                    logger.error('❌ Error loading mansion:', error);
+                    logger.error('Error loading mansion:', error);
                     reject(error);
                 }
             );
@@ -268,7 +267,7 @@ class MansionLoader {
     }
 
     processModel() {
-        logger.log('🔍 Processing mansion model - optimizing Blender materials...');
+        logger.log('Processing mansion model - optimizing Blender materials...');
         let totalMeshes = 0;
         const materialMap = new Map(); // Track materials by their properties
 
@@ -294,43 +293,43 @@ class MansionLoader {
             if (node.name === 'S_Telephone001') {
                 this.props.set('telephone', node);
                 node.userData = { type: 'telephone', interactable: 'true' };
-                console.log(`📞 Found prop: ${node.name}`);
+                console.log(`Found prop: ${node.name}`);
             }
             if (node.name === 'S_Laptop001') {
                 this.props.set('laptop', node);
                 node.userData = { type: 'laptop', interactable: true };
-                console.log(`💻 Found prop: ${node.name}`);
+                console.log(`Found prop: ${node.name}`);
             }
             if (node.name === 'S_ElectricalCabinet001') {
                 this.props.set('fuse_box', node);
                 node.userData = { type: 'fuse_box', interactable: true };
-                console.log(`⚡ Found prop: ${node.name} (Fuse Box)`);
+                console.log(`Found prop: ${node.name} (Fuse Box)`);
             }
             if (node.name === 'S_Entrance001') {
                 this.props.set('entrance_door', node);
                 node.userData = { type: 'entrance_door', interactable: true };
-                console.log(`🚪 Found prop: ${node.name} (Entrance Door)`);
+                console.log(`Found prop: ${node.name} (Entrance Door)`);
             }
             if (node.name === 'S_Book017') {
                 this.props.set('diary', node);
                 node.userData = { type: 'diary', interactable: false }; // Not interactable until laptop puzzle is solved
-                console.log(`📖 Found prop: ${node.name} (Diary)`);
+                console.log(`Found prop: ${node.name} (Diary)`);
             }
             if (node.name === 'S_Fire001') {
                 this.props.set('fireplace_fire', node);
                 node.userData = { type: 'fireplace', interactable: false }; // Not interactable until diary is read
-                console.log(`🔥 Found prop: ${node.name} (Fireplace Fire)`);
+                console.log(`Found prop: ${node.name} (Fireplace Fire)`);
             }
             if (node.name === 'S_Fireplace001') {
                 this.props.set('fireplace', node);
                 node.userData = { type: 'fireplace', interactable: false }; // Not interactable until diary is read
-                console.log(`🔥 Found prop: ${node.name} (Fireplace)`);
+                console.log(`Found prop: ${node.name} (Fireplace)`);
             }
             
             if (node.name === 'S_Bucket001') {
                 this.props.set('bucket', node);
                 node.userData = { type: 'bucket', interactable: false }; // Not interactable until fireplace is inspected
-                console.log(`🪣 Found prop: ${node.name} (Bucket)`);
+                console.log(`Found prop: ${node.name} (Bucket)`);
             }
 
             if(node.name === 'S_Door001'){
@@ -340,19 +339,19 @@ class MansionLoader {
                     interactable: true,
                     locked: true // Start the door in a locked state
                 };
-                console.log(`🚪 Found prop: ${node.name} (Master Bedroom Door)`);
+                console.log(`Found prop: ${node.name} (Master Bedroom Door)`);
             }
             if (node.name === 'S_KeyBehindFire') {
                 this.props.set('key_behind_fire', node);
                 node.userData = { type: 'key', interactable: false }; // Hidden until fire is out
                 node.visible = false; // Start hidden
-                console.log(`🔑 Found prop: ${node.name} (Key Behind Fire)`);
+                console.log(`Found prop: ${node.name} (Key Behind Fire)`);
             }
             
             if (node.name === 'S_Safe') {
                 this.props.set('safe', node);
                 node.userData = { type: 'safe', interactable: true };
-                console.log(`🔒 Found prop: ${node.name} (Safe)`);
+                console.log(`Found prop: ${node.name} (Safe)`);
             }
 
             if (node.name === 'SafeHint') {
@@ -363,7 +362,7 @@ class MansionLoader {
                     interactable: true,
                     pageId: 'SafeHint' 
                 };
-                console.log(`📜 Found prop: ${node.name} (Safe Hint)`);
+                console.log(`Found prop: ${node.name} (Safe Hint)`);
 
                 // Ensure all child meshes of the hint are also interactable
                 node.traverse((child) => {
@@ -385,7 +384,7 @@ class MansionLoader {
                     isBarricading: false, // Add barricade states
                     barricaded: false
                   };
-                logger.log(`🚪 Found prop: ${node.name} (Garage Door)`); // Log confirmation
+                logger.log(`Found prop: ${node.name} (Garage Door)`); // Log confirmation
             }
 
             // Garage gate switch - interact with this to lift the garage gate
@@ -395,13 +394,13 @@ class MansionLoader {
                     type: 'garage_gate', // Use garage_gate type to trigger gate lift
                     interactable: false // Will be enabled after barricade complete
                 };
-                logger.log(`🔘 Found prop: ${node.name} (Garage Gate Switch)`); // Log confirmation
+                logger.log(`Found prop: ${node.name} (Garage Gate Switch)`); // Log confirmation
             }
 
             if (node.name === 'Annie') {
                 this.props.set('annie', node);
                 node.userData = { type: 'annie', interactable: false }; // Not directly interactable
-                console.log(`🎎 Found prop: ${node.name} (Annie Doll)`);
+                console.log(`Found prop: ${node.name} (Annie Doll)`);
             }
 
             // Mirror detection - check by name or by custom property type
@@ -425,13 +424,13 @@ class MansionLoader {
                     }
                 });
 
-                console.log(`✅ Mirror ready for interaction:`, node.userData);
+                console.log(`Mirror ready for interaction:`, node.userData);
             }
 
             // DEBUG: Log any object with "mirror" or "tic" in name to help find the mirror
             const nodeLower = node.name.toLowerCase();
             if (nodeLower.includes('mirror') || nodeLower.includes('tic')) {
-                console.log(`🔍 DEBUG: Found ${node.type} named "${node.name}", userData.type: "${node.userData?.type}"`);
+                console.log(`DEBUG: Found ${node.type} named "${node.name}", userData.type: "${node.userData?.type}"`);
             }
 
             // Note: Sofas are now detected in setupSofaEffects() method (like pages)
@@ -450,12 +449,12 @@ class MansionLoader {
 
                     // Add spawn point to the array for this page
                     this.pageSpawnPoints.get(pageNum).push(node);
-                    console.log(`📍 Found page spawn point: ${node.name} for S_Page${pageNum} (has ${node.children.length} children)`);
+                    console.log(`Found page spawn point: ${node.name} for S_Page${pageNum} (has ${node.children.length} children)`);
 
                     // DIAGNOSTIC: List children of spawn points
                     if (node.children.length > 0) {
                         node.children.forEach(child => {
-                            console.log(`   ⚠️ SPAWN POINT HAS CHILD: ${child.name} - This could cause hierarchy issues!`);
+                            console.log(`   SPAWN POINT HAS CHILD: ${child.name} - This could cause hierarchy issues!`);
                         });
                     }
                 }
@@ -474,7 +473,7 @@ class MansionLoader {
             if (node.name === 'S_Notepad' || node.name === 'Notepad' || node.name.toLowerCase().includes('notepad')) {
                 this.props.set('notepad', node);
                 node.userData = { type: 'notepad', interactable: false, loginAttempted: false, notepadRead: false };
-                console.log(`📝 Found prop: ${node.name} (Notepad)`);
+                console.log(`Found prop: ${node.name} (Notepad)`);
             }
 
             // Newspaper
@@ -569,7 +568,7 @@ class MansionLoader {
             }
         });
 
-        logger.log(`♻️ Material optimization complete:`);
+        logger.log(`Material optimization complete:`);
         logger.log(`   Total meshes: ${totalMeshes}`);
 
         this.materialCache = materialMap;
@@ -630,14 +629,14 @@ class MansionLoader {
     }
 
     setupPageEffects() {
-        console.log('✨ Searching for pages to apply glow effect...');
+        console.log('Searching for pages to apply glow effect...');
         this.model.traverse((node) => {
             // Check if it's a page by custom property OR by name pattern
             const isPageByType = node.isMesh && node.userData.type === 'page';
             const isPageByName = node.name.startsWith('S_Page') && node.name.match(/^S_Page\d+$/);
 
             if (isPageByType || (isPageByName && node.isMesh)) {
-                console.log(`✨ Found page: ${node.name}. Applying glow effect.`);
+                console.log(`Found page: ${node.name}. Applying glow effect.`);
 
                 // Ensure it's marked as a page type
                 if (!node.userData.type) {
@@ -743,7 +742,7 @@ class MansionLoader {
                 // Store in props for easy access
                 this.props.set(`sofa_${node.name}`, node);
 
-                console.log(`🛋️ Found interactive sofa: ${node.name} (moved: ${node.userData.moved}, distance: ${node.userData.distanceMoved})`);
+                console.log(`Found interactive sofa: ${node.name} (moved: ${node.userData.moved}, distance: ${node.userData.distanceMoved})`);
             }
         });
     }
@@ -761,16 +760,16 @@ class MansionLoader {
                 // Store in props for easy access
                 this.props.set(`wardrobe_${node.name}`, node);
 
-                console.log(`🚪 Found interactive wardrobe: ${node.name}`);
+                console.log(`Found interactive wardrobe: ${node.name}`);
             }
         });
     }
 
     randomizePageSpawns() {
-        logger.log('🎲 Randomizing page spawn locations...');
+        logger.log('Randomizing page spawn locations...');
 
         // DIAGNOSTIC: Show spawn points map status
-        console.log(`🗺️ Spawn points map has ${this.pageSpawnPoints.size} entries:`);
+        console.log(`Spawn points map has ${this.pageSpawnPoints.size} entries:`);
         this.pageSpawnPoints.forEach((spawnPoints, pageNum) => {
             console.log(`   Page ${pageNum}: ${spawnPoints.length} spawn point(s)`);
         });
@@ -783,7 +782,7 @@ class MansionLoader {
             const spawnPoints = this.pageSpawnPoints.get(pageNum);
 
             if (!spawnPoints || spawnPoints.length === 0) {
-                logger.warn(`⚠️ No spawn points found for S_Page${pageNum}`);
+                logger.warn(`No spawn points found for S_Page${pageNum}`);
                 continue;
             }
 
@@ -792,19 +791,19 @@ class MansionLoader {
             const pageObject = this.pages.find(page => page.name === pageName);
 
             if (!pageObject) {
-                logger.warn(`⚠️ ${pageName} not found in pages array`);
+                logger.warn(`${pageName} not found in pages array`);
                 continue;
             }
 
             // DIAGNOSTIC: Check children before randomization
-            console.log(`🎲 BEFORE randomization: ${pageName} has ${pageObject.children.length} children`);
+            console.log(`BEFORE randomization: ${pageName} has ${pageObject.children.length} children`);
 
             // Randomly choose one spawn point
             const randomIndex = Math.floor(Math.random() * spawnPoints.length);
             const chosenSpawnPoint = spawnPoints[randomIndex];
 
             // DIAGNOSTIC: Check what children the spawn point has
-            console.log(`🎯 Spawn point ${chosenSpawnPoint.name} has ${chosenSpawnPoint.children.length} children:`);
+            console.log(`Spawn point ${chosenSpawnPoint.name} has ${chosenSpawnPoint.children.length} children:`);
             chosenSpawnPoint.children.forEach(child => {
                 console.log(`   - ${child.name} (type: ${child.type})`);
             });
@@ -822,12 +821,12 @@ class MansionLoader {
             pageObject.quaternion.copy(worldQuaternion);
 
             // DIAGNOSTIC: Check children after randomization
-            console.log(`🎲 AFTER randomization: ${pageName} has ${pageObject.children.length} children`);
+            console.log(`AFTER randomization: ${pageName} has ${pageObject.children.length} children`);
 
-            logger.log(`✅ ${pageName} spawned at ${chosenSpawnPoint.name} - Position: (${worldPosition.x.toFixed(2)}, ${worldPosition.y.toFixed(2)}, ${worldPosition.z.toFixed(2)})`);
+            logger.log(`${pageName} spawned at ${chosenSpawnPoint.name} - Position: (${worldPosition.x.toFixed(2)}, ${worldPosition.y.toFixed(2)}, ${worldPosition.z.toFixed(2)})`);
         }
 
-        logger.log(`✅ Randomized spawn locations for pages 1, 2, 3, and 5`);
+        logger.log(`Randomized spawn locations for pages 1, 2, 3, and 5`);
     }
 
     setupPuzzleSlots() {
@@ -846,7 +845,6 @@ class MansionLoader {
                 node.material = slotMaterial;
                 this.pageSlots[node.userData.slotIndex] = node;
 
-                // --- FIX FOR ALL SUNKEN SLOTS ---
                 // 1. Get the direction the slot is "facing"
                 const forward = new THREE.Vector3(0, 0, 1);
                 forward.applyQuaternion(node.quaternion);
@@ -854,7 +852,7 @@ class MansionLoader {
                 // 2. Move the slot slightly forward in that direction
                 // You can adjust the 0.02 value if it needs to be more or less
                 node.position.add(forward.multiplyScalar(0.02)); 
-                // --- END FIX ---
+
             }
         });
         // The console.log was here, but it's better to log inside the loop
@@ -869,7 +867,6 @@ class MansionLoader {
             return;
         }
 
-        // CRITICAL FIX: Check if page is already placed on a different slot
         // If so, remove it from that slot first (allow re-placing)
         let pageObject = null;
         let currentSlotIndex = -1;
@@ -990,8 +987,8 @@ class MansionLoader {
         const normal = new THREE.Vector3(0, 0, 1).applyQuaternion(pageObject.quaternion);
         pageObject.position.add(normal.multiplyScalar(0.015));
 
-        console.log(`  ✅ Page positioned at (${worldPosition.x.toFixed(2)}, ${worldPosition.y.toFixed(2)}, ${worldPosition.z.toFixed(2)})`);
-        console.log(`  ✅ Children should have moved with parent`);
+        console.log(`  Page positioned at (${worldPosition.x.toFixed(2)}, ${worldPosition.y.toFixed(2)}, ${worldPosition.z.toFixed(2)})`);
+        console.log(`  Children should have moved with parent`);
 
         // Make the page visible and turn off the red pulsing glow
         pageObject.visible = true;
@@ -1004,12 +1001,10 @@ class MansionLoader {
             this.pages.splice(pageIndex, 1);
         }
 
-         // NEW: Add this line to create a reference between the slot and the page object.
         slotObject.userData.placedPage = pageObject;
     }
 
     activatePageSymbolGlow(pageId) {
-        // CRITICAL FIX: Search in slot objects where placed pages are stored
         // When pages are placed on slots, they're removed from this.pages array
         // and stored on the slot object as slotObject.userData.placedPage
 
@@ -1038,12 +1033,12 @@ class MansionLoader {
         const symbolMeshes = pageObject.userData.symbolMeshes;
 
         if (symbolMeshes && symbolMeshes.length > 0) {
-            console.log(`✨ Activating glow for ${symbolMeshes.length} symbol(s) on ${pageId}`);
+            console.log(`Activating glow for ${symbolMeshes.length} symbol(s) on ${pageId}`);
 
             symbolMeshes.forEach((symbolMesh, index) => {
                 // Verify the symbol mesh is still valid
                 if (!symbolMesh || !symbolMesh.material) {
-                    console.error(`  ❌ Symbol ${index} is invalid or has no material!`);
+                    console.error(`  Symbol ${index} is invalid or has no material!`);
                     return;
                 }
 
@@ -1077,21 +1072,21 @@ class MansionLoader {
                 }
             });
             if (!diary) {
-                console.error('❌ Could not find S_Book017 in the scene!');
+                console.error('Could not find S_Book017 in the scene!');
                 return;
             }
-            console.log('✅ Found S_Book017 directly in scene');
+            console.log('Found S_Book017 directly in scene');
         }
 
         const bookToGlow = diary;
-        console.log('✨ Enabling diary glow (using same method as pages)');
-        console.log('✨ Diary object:', bookToGlow.name, 'Type:', bookToGlow.type);
+        console.log('Enabling diary glow (using same method as pages)');
+        console.log('Diary object:', bookToGlow.name, 'Type:', bookToGlow.type);
 
         // Apply glow effect to all meshes in the diary - SAME AS PAGES
         let glowCount = 0;
         bookToGlow.traverse((node) => {
             if (node.isMesh && node.material) {
-                console.log(`✨ Found mesh in diary: ${node.name}. Applying glow effect.`);
+                console.log(`Found mesh in diary: ${node.name}. Applying glow effect.`);
 
                 // Use the EXACT same approach as pages
                 node.material = node.material.clone();
@@ -1102,7 +1097,7 @@ class MansionLoader {
                 glowCount++;
             }
         });
-        console.log(`✨ Applied glow to ${glowCount} meshes in diary (S_Book017)`);
+        console.log(`Applied glow to ${glowCount} meshes in diary (S_Book017)`);
     }
 
     disableDiaryGlow() {
@@ -1111,7 +1106,7 @@ class MansionLoader {
             return;
         }
 
-        console.log('✨ Disabling diary glow');
+        console.log('Disabling diary glow');
 
         // Remove glow effect from all meshes in the diary
         diary.traverse((node) => {
@@ -1150,7 +1145,6 @@ class MansionLoader {
         if (this.fireplacesEnabled) this.updateFireplaces(delta);
         this.updatePageGlow();
 
-        // NEW: Add this loop to animate the glowing symbols.
         // This creates a pulsing effect.
         if (this.glowingSymbols.length > 0) {
             const time = Date.now() * 0.005;
@@ -1259,11 +1253,11 @@ class MansionLoader {
             });
 
             if (carMeshes.length === 0) {
-                logger.warn('⚠️ No car meshes found for pre-warming');
+                logger.warn('No car meshes found for pre-warming');
                 return; // No car to warm
             }
 
-            logger.log(`🔥 Pre-warming ${carMeshes.length} car shader(s)...`);
+            logger.log(`Pre-warming ${carMeshes.length} car shader(s)...`);
 
             // Hide all non-car geometry to reduce first-render GPU load during pre-warming
             const hiddenObjects = [];
@@ -1285,13 +1279,13 @@ class MansionLoader {
             });
 
             if (compiled) {
-                logger.log('✅ Car shaders pre-warmed successfully');
+                logger.log('Car shaders pre-warmed successfully');
             } else {
-                logger.warn('⚠️ Car shader pre-warming failed - will compile during first render');
+                logger.warn('Car shader pre-warming failed - will compile during first render');
             }
 
         } catch (error) {
-            logger.warn('⚠️ Car shader pre-warming error (non-critical):', error);
+            logger.warn('Car shader pre-warming error (non-critical):', error);
         }
     }
 
@@ -1304,13 +1298,13 @@ class MansionLoader {
         const camera = this.camera || (window.gameControls && window.gameControls.camera);
 
         if (!renderer || !camera) {
-            logger.warn('⚠️ No renderer/camera available for shader pre-warming');
+            logger.warn('No renderer/camera available for shader pre-warming');
             return false;
         }
 
         try {
             // Method 1: Use Three.js WebGLRenderer.compile() - most direct
-            logger.log('🔥 Attempting renderer.compile() for car shaders...');
+            logger.log('Attempting renderer.compile() for car shaders...');
             let compileSuccess = 0;
             carMeshes.forEach(mesh => {
                 try {
@@ -1318,21 +1312,21 @@ class MansionLoader {
                     renderer.compile(mesh, camera);
                     compileSuccess++;
                 } catch (e) {
-                    logger.warn(`⚠️ compile() failed for ${mesh.name}: ${e.message}`);
+                    logger.warn(`compile() failed for ${mesh.name}: ${e.message}`);
                 }
             });
 
             if (compileSuccess > 0) {
-                logger.log(`✅ renderer.compile() succeeded for ${compileSuccess}/${carMeshes.length} meshes`);
+                logger.log(`renderer.compile() succeeded for ${compileSuccess}/${carMeshes.length} meshes`);
                 return true;
             }
         } catch (error) {
-            logger.warn('⚠️ renderer.compile() error:', error.message);
+            logger.warn('renderer.compile() error:', error.message);
         }
 
         try {
             // Method 2: Force full scene render - guarantees shader compilation
-            logger.log('🔥 Attempting full scene render for car shader pre-warming...');
+            logger.log('Attempting full scene render for car shader pre-warming...');
 
             // Store original state
             const originalVisibility = new Map();
@@ -1356,10 +1350,10 @@ class MansionLoader {
                 node.visible = originalVisibility.get(node) ?? true;
             });
 
-            logger.log('✅ Full scene render completed for car shader pre-warming');
+            logger.log('Full scene render completed for car shader pre-warming');
             return true;
         } catch (error) {
-            logger.warn('⚠️ Full scene render pre-warming failed:', error.message);
+            logger.warn('Full scene render pre-warming failed:', error.message);
             return false;
         }
     }
@@ -1408,13 +1402,12 @@ class MansionLoader {
             }
         });
 
-        logger.log(`✅ Hidden ${hiddenCount} debug/helper objects and portraits`);
+        logger.log(`Hidden ${hiddenCount} debug/helper objects and portraits`);
     }
 
     generatePhysics() {
-        logger.log('⚙️ Generating physics bodies with integrated visual exclusion logic...');
+        logger.log('Generating physics bodies with integrated visual exclusion logic...');
 
-        // CRITICAL FIX: Update all world matrices BEFORE creating physics bodies
         this.model.updateMatrixWorld(true);
 
         let collisionCount = 0;
@@ -1427,7 +1420,6 @@ class MansionLoader {
                 return;
             }
 
-            // --- START: Integrated Exclusion Logic from hideDebugObjects() ---
             const nodeName = node.name.toLowerCase();
 
             // Check if it's a special S_Door object (these should be included in physics)
@@ -1495,7 +1487,6 @@ class MansionLoader {
                 skippedCount++;
                 return; // Skip to the next node
             }
-            // --- END: Integrated Exclusion Logic ---
 
             // If the mesh passes all checks, create its physics body.
             const body = this.createPhysicsBodyFromMesh(node);
@@ -1510,10 +1501,10 @@ class MansionLoader {
             }
         });
 
-        logger.log(`✅ Generated ${collisionCount} physics bodies.`);
-        logger.log(`🚪 Skipped ${skippedCount} objects based on integrated exclusion rules.`);
+        logger.log(`Generated ${collisionCount} physics bodies.`);
+        logger.log(`Skipped ${skippedCount} objects based on integrated exclusion rules.`);
         if (invalidBodies > 0) {
-            logger.log(`⚠️ ${invalidBodies} objects failed physics body creation (invalid geometry or transforms).`);
+            logger.log(`${invalidBodies} objects failed physics body creation (invalid geometry or transforms).`);
         }
     }
 
@@ -1557,18 +1548,16 @@ class MansionLoader {
         const size = new THREE.Vector3();
         localAABB.getSize(size);
 
-        // --- START: The Final Filter ---
         // This is the definitive check for invalid, zero-volume meshes.
         // It will catch any leftover helper objects or empty nodes at the origin.
         const minValidSize = 0.01; // A reasonable threshold to consider a mesh "real"
         if (size.x < minValidSize || size.y < minValidSize || size.z < minValidSize) {
             return null; // Silently skip creating a body for this object.
         }
-        // --- END: The Final Filter ---
 
         // DEBUG: Log bodies that are spawning near the origin
         if (Math.abs(center.x) < 0.1 && Math.abs(center.y) < 0.1 && Math.abs(center.z) < 0.1) {
-            logger.log(`⚠️ Physics body near origin detected: "${mesh.name}" at (${center.x.toFixed(2)}, ${center.y.toFixed(2)}, ${center.z.toFixed(2)})`);
+            logger.log(`Physics body near origin detected: "${mesh.name}" at (${center.x.toFixed(2)}, ${center.y.toFixed(2)}, ${center.z.toFixed(2)})`);
         }
 
         // Step 6: Send the perfect, calculated data to Rapier.
@@ -1652,13 +1641,13 @@ class MansionLoader {
                 logger.log('🧠 Building navigation zone...');
                 const zone = Pathfinding.createZone(navMeshNode.geometry);
                 this.pathfinding.setZoneData(this.ZONE, zone);
-                logger.log('✅ Navigation mesh created successfully');
+                logger.log('Navigation mesh created successfully');
 
                 this.createNavMeshVisualizer();
                 this.createNavMeshNodesVisualizer();
                 resolve();
             }, undefined, (error) => {
-                logger.error(`❌ Error loading navigation mesh from ${path}:`, error);
+                logger.error(`Error loading navigation mesh from ${path}:`, error);
                 reject(error);
             });
         });
@@ -1677,7 +1666,7 @@ class MansionLoader {
         this.navMeshVisualizer.visible = false;
 
         this.scene.add(this.navMeshVisualizer);
-        logger.log("✅ Navigation mesh visualizer created. Toggle with gameControls.toggleNavMeshVisualizer()");
+        logger.log("Navigation mesh visualizer created. Toggle with gameControls.toggleNavMeshVisualizer()");
     }
 
     createNavMeshNodesVisualizer() {
@@ -1705,7 +1694,7 @@ class MansionLoader {
     this.navMeshNodesVisualizer = group;
     this.navMeshNodesVisualizer.visible = false; // Initially hidden
     this.scene.add(this.navMeshNodesVisualizer);
-    logger.log(`✅ Navigation mesh node visualizer created with ${navMeshNodes.length} nodes.`);
+    logger.log(`Navigation mesh node visualizer created with ${navMeshNodes.length} nodes.`);
 }
 
 toggleNavMeshNodesVisualizer() {
@@ -1715,7 +1704,6 @@ toggleNavMeshNodesVisualizer() {
     }
 }
     
-    // --- NEW: Helper to toggle the visualizer ---
     toggleNavMeshVisualizer() {
         if (this.navMeshVisualizer) {
             this.navMeshVisualizer.visible = !this.navMeshVisualizer.visible;
@@ -1732,7 +1720,7 @@ toggleNavMeshNodesVisualizer() {
 
 
     setupLamps() {
-        logger.log('💡 Setting up automatic lamp lighting...');
+        logger.log('Setting up automatic lamp lighting...');
 
         let lampCount = 0;
         this.model.traverse((node) => {
@@ -1833,7 +1821,7 @@ toggleNavMeshNodesVisualizer() {
                         forward.normalize();
 
                         if (isNaN(forward.x) || isNaN(forward.y) || isNaN(forward.z)) {
-                            console.error("❌ Failed to calculate spawn point direction. Using fallback.");
+                            console.error("Failed to calculate spawn point direction. Using fallback.");
                             return null; // Return null to indicate failure
                         }
 
@@ -1860,11 +1848,10 @@ toggleNavMeshNodesVisualizer() {
                         lampLight.shadow.radius = 0.5;
                     }
 
-                    // CRITICAL FIX: Start with light visible!
                     lampLight.visible = true;
                     this.scene.add(lampLight);
                     if (lampCount < 3) {
-                        console.log(`💡 ${node.name}: pos=${lampLight.position.x.toFixed(1)},${lampLight.position.y.toFixed(1)},${lampLight.position.z.toFixed(1)}`);
+                        console.log(`${node.name}: pos=${lampLight.position.x.toFixed(1)},${lampLight.position.y.toFixed(1)},${lampLight.position.z.toFixed(1)}`);
                     }
                     const lampData = {
                         mesh: node,
@@ -1883,8 +1870,8 @@ toggleNavMeshNodesVisualizer() {
             }
         });
 
-        logger.log(`💡 Added ${lampCount} automatic lights to lamps`);
-        logger.log(`🔥 Found ${this.fireplaces.length} fireplaces`);
+        logger.log(`Added ${lampCount} automatic lights to lamps`);
+        logger.log(`Found ${this.fireplaces.length} fireplaces`);
     }
 
     recreateFireplaces() {
@@ -1902,7 +1889,7 @@ toggleNavMeshNodesVisualizer() {
             this.setupFireplace(fireNode);
         }
 
-        logger.log(`✅ Recreated ${this.fireplaces.length} fireplaces`);
+        logger.log(`Recreated ${this.fireplaces.length} fireplaces`);
     }
 
     setupFireplace(fireNode) {
@@ -1966,7 +1953,7 @@ toggleNavMeshNodesVisualizer() {
     }
 
     setupOcclusionCulling() {
-        logger.log('👁️ Setting up occlusion culling system...');
+        logger.log('Setting up occlusion culling system...');
 
         let meshCount = 0;
         this.model.traverse((node) => {
@@ -1983,7 +1970,7 @@ toggleNavMeshNodesVisualizer() {
             }
         });
 
-        logger.log(`👁️ Frustum culling enabled on ${meshCount} meshes`);
+        logger.log(`Frustum culling enabled on ${meshCount} meshes`);
 
         for (const roomData of this.rooms.values()) {
             this.visibleRooms.add(roomData.name);
@@ -2002,23 +1989,18 @@ toggleNavMeshNodesVisualizer() {
             if (node === this.model) return; // Skip the root model node
             if (node.userData.lockVisibility) return; // Don't cull locked objects
 
-            // CRITICAL FIX 1: NEVER cull lights
             // Lights affect the entire scene, culling them causes sudden darkness/brightness changes
             if (node.isLight) {
                 node.visible = true;
                 return;
             }
 
-            // CRITICAL FIX 2: Don't cull non-leaf nodes (groups/containers)
-            // In Three.js, if parent is hidden, all children are hidden too
             // Only cull leaf meshes that actually render geometry
             if (!node.isMesh) {
                 node.visible = true;
                 return;
             }
 
-            // CRITICAL FIX 5: NEVER cull interactive or puzzle objects
-            // Interactive objects need to be visible for raycasting to work
             // Also preserve objects that might become interactive later
             const nodeName = node.name.toLowerCase();
             const isCar = nodeName.includes('murphy92'); // Car shaders are pre-compiled, keep visible
@@ -2032,7 +2014,6 @@ toggleNavMeshNodesVisualizer() {
                 return;
             }
 
-            // CRITICAL FIX 6: NEVER cull emissive objects (glowing items like pages/symbols)
             // If emissive object is culled, its glow disappears
             const hasEmissive = node.material && (node.material.emissive || (Array.isArray(node.material) && node.material.some(m => m && m.emissive)));
             const isEmissiveActive = hasEmissive &&
@@ -2044,7 +2025,6 @@ toggleNavMeshNodesVisualizer() {
                 return;
             }
 
-            // CRITICAL FIX 7: NEVER cull particle systems
             // Particle effects must always be visible
             if (node.isPoints || node.type === 'Points' || node.userData.isParticles) {
                 node.visible = true;
@@ -2068,11 +2048,9 @@ toggleNavMeshNodesVisualizer() {
                 // Distance from camera to closest point on bounding box
                 const distance = cameraPosition.distanceTo(closestPoint);
 
-                // CRITICAL FIX 3: Add culling buffer for shadow casting
                 // Keep geometry visible slightly beyond hard distance to maintain shadow continuity
                 const shouldBeVisible = distance <= hardDistance;
 
-                // CRITICAL FIX 4: Add hysteresis to prevent flickering at boundaries
                 // If object was visible before, keep it visible slightly longer (prevents frame-to-frame jitter)
                 if (!node._occlusionState) {
                     node._occlusionState = { visible: true, distance: distance };
@@ -2180,19 +2158,17 @@ toggleNavMeshNodesVisualizer() {
             }
         }
 
-        logger.log(`👁️ Occlusion culling: ${enabled ? 'ON' : 'OFF'}`);
+        logger.log(`Occlusion culling: ${enabled ? 'ON' : 'OFF'}`);
     }
 
     setMaxVisibleDistance(distance) {
         this.maxVisibleDistance = distance;
-        logger.log(`👁️ Max visible distance set to: ${distance}`);
+        logger.log(`Max visible distance set to: ${distance}`);
     }
 
-
-    // NEW: Enable page glow (called when phone is answered)
     enablePageGlow() {
         this.pageGlowEnabled = true;
-        console.log('✨ Page glow enabled');
+        console.log('Page glow enabled');
     }
 
     updatePageGlow() {
@@ -2304,17 +2280,16 @@ toggleNavMeshNodesVisualizer() {
             // Note: light.visible stays true to prevent shader recompilation
         }
 
-        logger.log(`💡 Lamps ${enabled ? 'enabled' : 'disabled'} (${this.lamps.length} total)`);
+        logger.log(`Lamps ${enabled ? 'enabled' : 'disabled'} (${this.lamps.length} total)`);
     }
 
-    // NEW: Control all lights (lamps and fireplaces)
     setAllLightsEnabled(enabled) {
         this.setLampsEnabled(enabled);
         this.setFireplacesEnabled(enabled);
-        console.log(`💡 All lights ${enabled ? 'ON' : 'OFF'}`);
+        console.log(`All lights ${enabled ? 'ON' : 'OFF'}`);
     }
     showLightHelpers() {
-        logger.log('💡 Adding light helpers...');
+        logger.log('Adding light helpers...');
 
         for (const lamp of this.lamps) {
             if (!lamp.helper) {
@@ -2326,7 +2301,7 @@ toggleNavMeshNodesVisualizer() {
             }
         }
 
-        logger.log(`✅ Showing helpers for ${this.lamps.length} lights`);
+        logger.log(`Showing helpers for ${this.lamps.length} lights`);
     }
     hideLightHelpers() {
         for (const lamp of this.lamps) {
@@ -2334,7 +2309,7 @@ toggleNavMeshNodesVisualizer() {
                 lamp.helper.visible = false;
             }
         }
-        logger.log('💡 Light helpers hidden');
+        logger.log('Light helpers hidden');
     }
     toggleLamps() {
         this.setLampsEnabled(!this.lampsEnabled);
@@ -2345,11 +2320,11 @@ toggleNavMeshNodesVisualizer() {
         for (const lamp of this.lamps) {
             lamp.baseIntensity = intensity;
         }
-        logger.log(`💡 Lamp intensity set to: ${intensity}`);
+        logger.log(`Lamp intensity set to: ${intensity}`);
     }
     setLampFlickerSpeed(speed) {
         this.lampFlickerSpeed = speed;
-        logger.log(`💡 Lamp flicker speed set to: ${speed}`);
+        logger.log(`Lamp flicker speed set to: ${speed}`);
     }
     getLampsByType(type) {
         return this.lamps.filter(lamp => lamp.type === type);
@@ -2376,26 +2351,26 @@ toggleNavMeshNodesVisualizer() {
             }
         }
 
-        logger.log(`🔥 Fireplaces ${enabled ? 'enabled' : 'disabled'} (${this.fireplaces.length} total)`);
+        logger.log(`Fireplaces ${enabled ? 'enabled' : 'disabled'} (${this.fireplaces.length} total)`);
     }
 
     extinguishFireplace(fireplaceNode) {
-        console.log('🔥 extinguishFireplace called with node:', fireplaceNode?.name);
-        console.log('🔥 Total fireplaces:', this.fireplaces.length);
+        console.log('extinguishFireplace called with node:', fireplaceNode?.name);
+        console.log('Total fireplaces:', this.fireplaces.length);
 
         // Find the fireplace data that matches this node
         for (const fireplace of this.fireplaces) {
-            console.log('🔥 Checking fireplace mesh:', fireplace.mesh?.name);
+            console.log('Checking fireplace mesh:', fireplace.mesh?.name);
             if (fireplace.mesh === fireplaceNode || fireplace.mesh.name === fireplaceNode?.name) {
                 // Hide particles and light
                 fireplace.particles.visible = false;
                 fireplace.light.visible = false;
                 fireplace.extinguished = true;
-                console.log('🔥 Fireplace extinguished successfully!');
+                console.log('Fireplace extinguished successfully!');
                 return;
             }
         }
-        console.warn('🔥 Could not find matching fireplace to extinguish');
+        console.warn('Could not find matching fireplace to extinguish');
     }
     toggleFireplaces() {
         this.setFireplacesEnabled(!this.fireplacesEnabled);
@@ -2403,7 +2378,7 @@ toggleNavMeshNodesVisualizer() {
     }
 
     updateLampShadows() {
-        //logger.log(`💡 Updating lamp shadows (lampShadows: ${this.lampShadows}, maxShadowCasters: ${this.maxShadowCasters}, shadowMapSize: ${this.shadowMapSize})`);
+        //logger.log(`Updating lamp shadows (lampShadows: ${this.lampShadows}, maxShadowCasters: ${this.maxShadowCasters}, shadowMapSize: ${this.shadowMapSize})`);
 
         // Count shadow casters (reserve some for fireplaces)
         let shadowCasterCount = 0;
@@ -2457,11 +2432,11 @@ toggleNavMeshNodesVisualizer() {
                 }
             }
         }
-        //logger.log(`✅ Updated lamp shadows: ${shadowCasterCount} shadow casters enabled out of ${this.lamps.length} lamps`);
+        //logger.log(`Updated lamp shadows: ${shadowCasterCount} shadow casters enabled out of ${this.lamps.length} lamps`);
     }
 
     updateFireplaceShadows() {
-        logger.log(`🔥 Updating fireplace shadows (fireplaceShadows: ${this.fireplaceShadows}, shadowMapSize: ${this.shadowMapSize})`);
+        logger.log(`Updating fireplace shadows (fireplaceShadows: ${this.fireplaceShadows}, shadowMapSize: ${this.shadowMapSize})`);
 
         let shadowCasterCount = 0;
         const maxFireplaceShadows = Math.min(2, this.maxShadowCasters); // Max 2 fireplace shadows
@@ -2503,7 +2478,7 @@ toggleNavMeshNodesVisualizer() {
                 }
             }
         }
-        logger.log(`✅ Updated fireplace shadows: ${shadowCasterCount} shadow casters enabled out of ${this.fireplaces.length} fireplaces`);
+        logger.log(`Updated fireplace shadows: ${shadowCasterCount} shadow casters enabled out of ${this.fireplaces.length} fireplaces`);
     }
     getDebugInfo() {
         const activeLamps = this.lamps.filter(l => l.light.visible).length;
@@ -2567,7 +2542,7 @@ toggleNavMeshNodesVisualizer() {
                     item.name.toLowerCase().includes('door')
                 );
 
-                logger.log(`Has "door" in parent hierarchy: ${hassDoorParent ? '✅ YES' : '❌ NO'}`);
+                logger.log(`Has "door" in parent hierarchy: ${hassDoorParent ? 'YES' : 'NO'}`);
             }
         });
     }
@@ -2610,7 +2585,7 @@ toggleNavMeshNodesVisualizer() {
 
     validateStageLoaded() {
         if (!this.model) {
-            logger.error('❌ VALIDATION FAILED: No model in loader');
+            logger.error('VALIDATION FAILED: No model in loader');
             return false;
         }
 
@@ -2641,11 +2616,11 @@ toggleNavMeshNodesVisualizer() {
         }
 
         if (issues.length > 0) {
-            logger.error('❌ VALIDATION FAILED:', issues.join(', '));
+            logger.error('VALIDATION FAILED:', issues.join(', '));
             return false;
         }
 
-        logger.log(`✅ VALIDATION PASSED: ${visibleMeshes}/${totalMeshes} meshes visible, ${opaqueCount} opaque materials`);
+        logger.log(`VALIDATION PASSED: ${visibleMeshes}/${totalMeshes} meshes visible, ${opaqueCount} opaque materials`);
         return true;
     }
 
@@ -2655,11 +2630,11 @@ toggleNavMeshNodesVisualizer() {
      */
     visualizeOcclusionCulling(enabled) {
         if (!this.model) {
-            logger.warn('⚠️ Model not loaded yet');
+            logger.warn('Model not loaded yet');
             return;
         }
 
-        console.log(`👁️ Occlusion Culling Visualization (per-object): ${enabled ? 'ON' : 'OFF'}`);
+        console.log(`Occlusion Culling Visualization (per-object): ${enabled ? 'ON' : 'OFF'}`);
         this.occlusionVizEnabled = enabled;
 
         // Force an update of visible objects before visualization
@@ -2710,13 +2685,13 @@ toggleNavMeshNodesVisualizer() {
             }
         });
 
-        console.log(`👁️ Visualization Updated - Visible: ${visibleMeshes}, Culled: ${culledMeshes}, Total: ${totalMeshes}`);
+        console.log(`Visualization Updated - Visible: ${visibleMeshes}, Culled: ${culledMeshes}, Total: ${totalMeshes}`);
 
         // Debug info
         if (enabled && window.gameControls && window.gameControls.camera) {
             const camPos = window.gameControls.camera.position;
-            console.log(`👁️ Camera position (world): x=${camPos.x.toFixed(2)}, y=${camPos.y.toFixed(2)}, z=${camPos.z.toFixed(2)}`);
-            console.log(`👁️ Max visible distance: ${this.maxVisibleDistance}`);
+            console.log(`Camera position (world): x=${camPos.x.toFixed(2)}, y=${camPos.y.toFixed(2)}, z=${camPos.z.toFixed(2)}`);
+            console.log(`Max visible distance: ${this.maxVisibleDistance}`);
         }
     }
 
@@ -2789,9 +2764,9 @@ toggleNavMeshNodesVisualizer() {
 
         // Clean up model and its materials/geometries
         if (this.model) {
-            logger.log(`🗑️ Removing model from scene. Model name: ${this.model.name}, Children count before: ${this.scene.children.length}`);
+            logger.log(`Removing model from scene. Model name: ${this.model.name}, Children count before: ${this.scene.children.length}`);
             this.scene.remove(this.model);
-            logger.log(`✅ Model removed. Children count after: ${this.scene.children.length}`);
+            logger.log(`Model removed. Children count after: ${this.scene.children.length}`);
             this.model.traverse((node) => {
                 if (node.isMesh) {
                     // Dispose geometry
@@ -2824,7 +2799,7 @@ toggleNavMeshNodesVisualizer() {
         this.rooms.clear();
         this.visibleRooms.clear();
 
-        logger.log('✅ Mansion loader disposed');
+        logger.log('Mansion loader disposed');
     }
 }
 

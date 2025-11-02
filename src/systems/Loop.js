@@ -18,7 +18,7 @@ class Loop {
   start() {
     this.isRunning = true;
     if (!this.renderer) {
-      console.error('❌ No renderer available');
+      console.error('No renderer available');
       return;
     }
 
@@ -41,7 +41,7 @@ class Loop {
           // Only log details once per lag spike to avoid spam
           if (frameCount - lastLagFrame > 10) {
             lastLagFrame = frameCount;
-            console.warn(`⚠️ Large delta detected (${delta.toFixed(3)}s), capping to ${maxDelta}s to prevent physics issues`);
+            console.warn(`Large delta detected (${delta.toFixed(3)}s), capping to ${maxDelta}s to prevent physics issues`);
             shouldProfile = true;
           }
           delta = maxDelta;
@@ -59,7 +59,7 @@ class Loop {
             }
             const updatableTime = performance.now() - updatableStart;
             if (updatableTime > 10) {
-              console.warn(`⚠️ Slow updatable: ${object.constructor.name || 'Unknown'} took ${updatableTime.toFixed(1)}ms`);
+              console.warn(`Slow updatable: ${object.constructor.name || 'Unknown'} took ${updatableTime.toFixed(1)}ms`);
             }
           }
         } else {
@@ -94,7 +94,7 @@ class Loop {
 
           // Get renderer stats
           const info = this.renderer.info;
-          console.warn(`📊 Render time: ${renderTime.toFixed(1)}ms | Visible meshes: ${visibleMeshes} | Draw calls: ${info.render.calls} | Triangles: ${info.render.triangles}`);
+          console.warn(`Render time: ${renderTime.toFixed(1)}ms | Visible meshes: ${visibleMeshes} | Draw calls: ${info.render.calls} | Triangles: ${info.render.triangles}`);
         } else {
           this.renderer.render(sceneToRender, this.camera);
         }
@@ -103,7 +103,7 @@ class Loop {
           this.labelRenderer.render(sceneToRender, this.camera);
         }
       } catch (error) {
-        console.error("❌ Rendering error detected. This is often caused by an invalid camera or object position (NaN).", error);
+        console.error("Rendering error detected. This is often caused by an invalid camera or object position (NaN).", error);
         // We stop the loop here to prevent a flood of errors.
         this.stop();
       }
@@ -123,14 +123,14 @@ class Loop {
 
   pause() {
     this.paused = true;
-    console.log('⏸️ Game loop paused');
+    console.log('Game loop paused');
   }
 
   resume() {
     this.paused = false;
     // Reset clock to prevent large delta on resume
     clock.getDelta();
-    console.log('▶️ Game loop resumed');
+    console.log('Game loop resumed');
   }
 
   isPaused() {
