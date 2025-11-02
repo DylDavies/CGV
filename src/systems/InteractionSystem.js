@@ -3904,10 +3904,7 @@ I don't look at that mirror anymore. I can't stand to see what I've done to him.
 
         switch (fileType) {
             case 'interview':
-                if (this.gameManager.audioManager) {
-                    this.gameManager.audioManager.play('interview_audio');
-                }
-                this.showDesktopNotification('Playing interview audio...');
+                this.showDesktopNotification('File corrupted...');
                 break;
 
             case 'mansion_layout':
