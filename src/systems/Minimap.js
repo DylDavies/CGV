@@ -16,6 +16,18 @@ class Minimap {
         this.lastRenderTime = 0;
         this.renderInterval = 100; // Render every 100ms (10 FPS for minimap)
 
+        // Zoom settings - will be adjusted based on stage
+        this.zoomLevel = 0.25; // Default: 4x zoom (1.0 = full view, 0.25 = 4x zoom)
+        this.minZoom = 0.15; // Maximum zoom level (shows less area)
+        this.maxZoom = 1.0; // Minimum zoom level (shows entire mansion)
+        this.mansionSize = null; // Will be set in createMinimapGeometry
+
+        // Stage-specific zoom settings
+        this.stageZoomSettings = {
+            office: 1.0,    // Office (stage 1): No zoom, full view
+            mansion: 0.25   // Mansion (stages 2-3): 4x zoom
+        };
+
         const frustumSize = 40;
         const aspect = 1;
         this.minimapCamera = new THREE.OrthographicCamera(
@@ -49,6 +61,36 @@ class Minimap {
             if (e.code === 'Tab') {
                 e.preventDefault();
                 this.toggle();
+            }
+            // Zoom in with '+'
+            if (e.code === 'Equal' || e.code === 'NumpadAdd') {
+                e.preventDefault();
+                this.zoomIn();
+            }
+            // Zoom out with '-'
+            if (e.code === 'Minus' || e.code === 'NumpadSubtract') {
+                e.preventDefault();
+                this.zoomOut();
+            }
+        });
+
+        // Scroll wheel zoom
+        document.addEventListener('wheel', (e) => {
+            // Only zoom if minimap is visible and cursor is over it
+            if (!this.enabled) return;
+
+            const rect = this.minimapCanvas.getBoundingClientRect();
+            const x = e.clientX;
+            const y = e.clientY;
+            const isOverMinimap = x >= rect.left && x <= rect.right && y >= rect.top && y <= rect.bottom;
+
+            if (isOverMinimap) {
+                e.preventDefault();
+                if (e.deltaY < 0) {
+                    this.zoomIn();
+                } else {
+                    this.zoomOut();
+                }
             }
         });
     }
@@ -104,17 +146,20 @@ class Minimap {
         const mansionCenter = new THREE.Vector3();
         totalBounds.getCenter(mansionCenter);
 
+        // Store mansion size for zoom calculations
+        this.mansionSize = mansionSize;
+        this.mansionCenter = mansionCenter;
+
         // Set up orthographic camera to view from above with padding
         const frustumSize = Math.max(mansionSize.x, mansionSize.z) * 1.1;
-        this.minimapCamera.left = frustumSize / -2;
-        this.minimapCamera.right = frustumSize / 2;
-        this.minimapCamera.top = frustumSize / 2;
-        this.minimapCamera.bottom = frustumSize / -2;
+        this.baseFrustumSize = frustumSize; // Store base frustum for zoom calculations
         this.minimapCamera.position.set(mansionCenter.x, 50, mansionCenter.z);
         this.minimapCamera.lookAt(mansionCenter.x, 0, mansionCenter.z);
-        this.minimapCamera.updateProjectionMatrix();
 
-        console.log(`🗺️ Minimap camera setup: frustum=${frustumSize.toFixed(2)}, center=(${mansionCenter.x.toFixed(2)}, ${mansionCenter.z.toFixed(2)})`);
+        // Apply stage-specific zoom level
+        this.applyStageZoom();
+
+        console.log(`🗺️ Minimap camera setup: frustum=${frustumSize.toFixed(2)}, center=(${mansionCenter.x.toFixed(2)}, ${mansionCenter.z.toFixed(2)}), stage=${this.stageManager.currentStage}, zoom=${(1 / this.zoomLevel).toFixed(1)}x`);
 
         // Traverse entire model and create minimap meshes for walls and floors
         let wallCount = 0;
@@ -269,6 +314,79 @@ class Minimap {
         this.minimapContext = this.minimapCanvas.getContext('2d');
     }
 
+    /**
+     * Zoom in on the minimap (shows less area, more detail)
+     */
+    zoomIn() {
+        this.zoomLevel = Math.max(this.minZoom, this.zoomLevel * 0.8);
+        this.updateCameraFrustum();
+        console.log(`🔍 Minimap zoom: ${(1 / this.zoomLevel).toFixed(1)}x (zoom level: ${this.zoomLevel.toFixed(2)})`);
+    }
+
+    /**
+     * Zoom out on the minimap (shows more area, less detail)
+     */
+    zoomOut() {
+        this.zoomLevel = Math.min(this.maxZoom, this.zoomLevel * 1.25);
+        this.updateCameraFrustum();
+        console.log(`🔍 Minimap zoom: ${(1 / this.zoomLevel).toFixed(1)}x (zoom level: ${this.zoomLevel.toFixed(2)})`);
+    }
+
+    /**
+     * Set zoom to a specific level
+     * @param {number} level - Zoom level (1.0 = full view, 0.5 = 2x zoom, etc.)
+     */
+    setZoom(level) {
+        this.zoomLevel = Math.max(this.minZoom, Math.min(this.maxZoom, level));
+        this.updateCameraFrustum();
+        console.log(`🔍 Minimap zoom set to: ${(1 / this.zoomLevel).toFixed(1)}x`);
+    }
+
+    /**
+     * Update camera frustum based on current zoom level
+     */
+    updateCameraFrustum() {
+        if (!this.baseFrustumSize) return;
+
+        const frustumSize = this.baseFrustumSize * this.zoomLevel;
+        this.minimapCamera.left = frustumSize / -2;
+        this.minimapCamera.right = frustumSize / 2;
+        this.minimapCamera.top = frustumSize / 2;
+        this.minimapCamera.bottom = frustumSize / -2;
+        this.minimapCamera.updateProjectionMatrix();
+    }
+
+    /**
+     * Apply stage-specific zoom settings
+     * Office stage (stage 1): No zoom (1.0)
+     * Mansion stage (stages 2-3): 4x zoom (0.25)
+     */
+    applyStageZoom() {
+        const currentStage = this.stageManager.currentStage;
+        const stageZoom = this.stageZoomSettings[currentStage];
+
+        if (stageZoom !== undefined) {
+            this.zoomLevel = stageZoom;
+            this.updateCameraFrustum();
+            const zoomMultiplier = stageZoom === 1.0 ? 1.0 : (1 / stageZoom);
+            console.log(`🗺️ Applied stage-specific zoom for '${currentStage}': ${zoomMultiplier.toFixed(1)}x`);
+        } else {
+            console.warn(`⚠️ No zoom settings defined for stage '${currentStage}'`);
+        }
+    }
+
+    /**
+     * Center camera on player position
+     * @param {THREE.Vector3} playerPosition - The player's world position
+     */
+    centerCameraOnPlayer(playerPosition) {
+        if (!this.minimapCamera) return;
+
+        this.minimapCamera.position.x = playerPosition.x;
+        this.minimapCamera.position.z = playerPosition.z;
+        this.minimapCamera.lookAt(playerPosition.x, 0, playerPosition.z);
+    }
+
 
     updatePlayerIndicator(playerPosition) {
         this.playerIndicator.position.x = playerPosition.x;
@@ -311,8 +429,13 @@ class Minimap {
     tick() {
         if (!this.enabled) return;
 
+        const playerPos = this.mainCamera.position;
+
         // Always update player indicator (lightweight operation)
-        this.updatePlayerIndicator(this.mainCamera.position);
+        this.updatePlayerIndicator(playerPos);
+
+        // Center minimap camera on player
+        this.centerCameraOnPlayer(playerPos);
 
         // Performance: Only render minimap every 100ms instead of every frame
         const now = performance.now();
@@ -331,9 +454,10 @@ class Minimap {
     /**
      * Reinitialize minimap when stage changes
      * Called when transitioning between office and mansion
+     * Automatically applies the correct zoom for the new stage
      */
     reinitialize() {
-        console.log('🗺️ Reinitializing minimap for new stage');
+        console.log(`🗺️ Reinitializing minimap for stage: ${this.stageManager.currentStage}`);
 
         // Clear previous room meshes
         this.roomMeshes.forEach((mesh) => {
@@ -341,10 +465,10 @@ class Minimap {
         });
         this.roomMeshes.clear();
 
-        // Recreate geometry for the new stage
+        // Recreate geometry for the new stage (will auto-apply stage zoom)
         this.createMinimapGeometry();
 
-        console.log('🗺️ Minimap reinitialized');
+        console.log(`🗺️ Minimap reinitialized with stage-specific zoom`);
     }
 
     dispose() {
