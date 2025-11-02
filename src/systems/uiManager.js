@@ -734,7 +734,7 @@ export class UIManager {
 
     updateRhythmGameProgress(current, total) {
         if (this.rhythmProgressElement) {
-            this.rhythmProgressElement.textContent = `Notes: ${current} / ${total}`;
+            this.rhythmProgressElement.textContent = `Gears: ${current} / ${total}`;
         }
     }
 
@@ -813,7 +813,7 @@ export class UIManager {
             font-size: 16px;
             margin-top: 10px;
         `;
-        this.rhythmProgressElement.textContent = 'Notes: 0 / 0';
+        this.rhythmProgressElement.textContent = 'Gears: 0 / 0';
         this.rhythmGameContainer.appendChild(this.rhythmProgressElement);
 
         // Add to body

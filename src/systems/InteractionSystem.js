@@ -3900,7 +3900,7 @@ I don't look at that mirror anymore. I can't stand to see what I've done to him.
                 break;
 
             case 'mansion_layout':
-                this.showImageOverlay('Mansion Layout', '/assets/mansion_blueprint.jpg');
+                this.showImageOverlay('Mansion Layout', '/sbyteme/assets/mansion_blueprint.png');
                 break;
 
             case 'note':
