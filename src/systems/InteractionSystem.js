@@ -3846,19 +3846,19 @@ I don't look at that mirror anymore. I can't stand to see what I've done to him.
                     </div>
                     <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
                         <div class="office-file-icon" data-file="interview" style="cursor: pointer; text-align: center; padding: 20px; border: 1px solid #00ff00; border-radius: 3px;">
-                            <div style="font-size: 40px; margin-bottom: 10px;">[AUDIO]</div>
+                            <div style="font-size: 40px; margin-bottom: 10px;">🔉</div>
                             <div>Interview.wav</div>
                         </div>
                         <div class="office-file-icon" data-file="mansion_layout" style="cursor: pointer; text-align: center; padding: 20px; border: 1px solid #00ff00; border-radius: 3px;">
-                            <div style="font-size: 40px; margin-bottom: 10px;">[MAP]</div>
+                            <div style="font-size: 40px; margin-bottom: 10px;">🗺️</div>
                             <div>Mansion_Layout.jpg</div>
                         </div>
                         <div class="office-file-icon" data-file="note" style="cursor: pointer; text-align: center; padding: 20px; border: 1px solid #00ff00; border-radius: 3px;">
-                            <div style="font-size: 40px; margin-bottom: 10px;">[NOTE]</div>
+                            <div style="font-size: 40px; margin-bottom: 10px;">📝</div>
                             <div>NOTE.txt</div>
                         </div>
                         <div class="office-file-icon" data-file="evidence" style="cursor: pointer; text-align: center; padding: 20px; border: 1px solid #00ff00; border-radius: 3px;">
-                            <div style="font-size: 40px; margin-bottom: 10px;"></div>
+                            <div style="font-size: 40px; margin-bottom: 10px;">📁</div>
                             <div>Evidence.zip</div>
                         </div>
                     </div>
@@ -4262,13 +4262,34 @@ I don't look at that mirror anymore. I can't stand to see what I've done to him.
         blackoutOverlay.style.transition = 'opacity 1.5s ease-out';
         blackoutOverlay.style.opacity = '0';
 
-        // Remove the blackout after fade completes
+                // Remove the blackout after fade completes
         await new Promise(resolve => setTimeout(resolve, 1500));
         if (blackoutOverlay.parentNode) {
             blackoutOverlay.remove();
         }
 
-        console.log(' Transition sequence complete - blackout removed');
+        // Spin camera in place to load all mansion assets while screen fades from black
+        const spinStartTime = Date.now();
+        const spinDuration = 2000; // 2 seconds to fully load assets during fade
+        const initialQuaternion = this.camera.quaternion.clone();
+        const spinAxis = new THREE.Vector3(0, 1, 0); // Y-axis for vertical spin
+
+        const cameraSpin = () => {
+            const elapsed = Date.now() - spinStartTime;
+            const progress = Math.min(elapsed / spinDuration, 1);
+
+            if (progress < 1) {
+                // Rotate camera quaternion around Y-axis (full 360-degree spin)
+                const spinAngle = (Math.PI * 2) * progress;
+                const spinQuaternion = new THREE.Quaternion();
+                spinQuaternion.setFromAxisAngle(spinAxis, spinAngle);
+                this.camera.quaternion.copy(initialQuaternion).multiplyQuaternions(spinQuaternion, initialQuaternion);
+                requestAnimationFrame(cameraSpin);
+            }
+        };
+        cameraSpin();
+
+        console.log('Transition sequence complete - blackout removed');
     }
 
     /**

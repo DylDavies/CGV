@@ -675,17 +675,17 @@ class GameManager {
 
     getItemIcon(itemType) {
         const icons = {
-            'key': '[KEY]',
-            'page': '[PAGE]',
-            'scroll': '[SCROLL]',
-            'tool': '[TOOL]',
-            'weight_object': '[WEIGHT]',
-            'symbol': '[SYMBOL]',
-            'potion': '[POTION]',
-            'book': '[BOOK]',
-            'companion': '[DOLL]'  // Evil eye/voodoo doll icon for Annie (creepy look)
+            'key': '🔑',
+            'page': '📜',
+            'scroll': '📜',
+            'tool': '🪛',
+            'weight_object': '⚖️',
+            'symbol': '💢',
+            'potion': '🧪',
+            'book': '📙',
+            'companion': '👧🏻'  // Evil eye/voodoo doll icon for Annie (creepy look)
         };
-        return icons[itemType] || '[ITEM]';
+        return icons[itemType] || '📦';
     }
      
     removePageFromSlot(slotIndex) {
