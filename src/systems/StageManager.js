@@ -63,7 +63,7 @@ export class StageManager {
             }
         };
 
-        logger.log('🎬 StageManager initialized (multi-scene architecture)');
+        logger.log('StageManager initialized (multi-scene architecture)');
     }
 
     /**
@@ -71,7 +71,7 @@ export class StageManager {
      * Each stage gets its own independent scene
      */
     async initializeAllStages(onProgress = null) {
-        logger.log('🎬 Initializing all stages with separate scenes...');
+        logger.log('Initializing all stages with separate scenes...');
 
         // Load mansion stage first
         if (onProgress) onProgress(20, 'Loading mansion...');
@@ -87,7 +87,7 @@ export class StageManager {
         this.currentLoader = this.loaders.office;
         if (onProgress) onProgress(95, 'Preparing spawn point...');
 
-        logger.log('✅ All stages loaded with independent scenes');
+        logger.log('All stages loaded with independent scenes');
         return {
             scene: this.scenes.office,
             spawnPosition: this._getSpawnPosition('office')
@@ -138,7 +138,7 @@ export class StageManager {
             throw new Error(`Stage "${stageName}" not found`);
         }
 
-        logger.log(`🎬 Loading stage model: ${stageConfig.name}`);
+        logger.log(`Loading stage model: ${stageConfig.name}`);
 
         // Create a fresh scene for this stage
         const stageScene = this._createStageScene(stageConfig);
@@ -172,11 +172,11 @@ export class StageManager {
         // Validate load
         const isValid = loader.validateStageLoaded();
         if (!isValid) {
-            logger.error(`❌ Stage validation failed for ${stageName}`);
+            logger.error(`Stage validation failed for ${stageName}`);
         }
 
         this.loaders[stageName] = loader;
-        logger.log(`✅ ${stageConfig.name} loaded in independent scene`);
+        logger.log(`${stageConfig.name} loaded in independent scene`);
     }
 
     /**
@@ -223,7 +223,7 @@ export class StageManager {
             throw new Error(`Stage "${newStageName}" not found`);
         }
 
-        logger.log(`🎬 Switching to stage: ${stageConfig.name}`);
+        logger.log(`Switching to stage: ${stageConfig.name}`);
 
         // Deactivate physics for the current stage (remove from world)
         if (this.currentLoader && this.currentLoader.deactivatePhysics) {
@@ -250,16 +250,16 @@ export class StageManager {
             this.currentLoader.lamps.forEach(lamp => {
                 lamp.light.castShadow = false;
             });
-            logger.log(`💡 Lamp shadows disabled for ${newStageName} scene (performance)`);
+            logger.log(`Lamp shadows disabled for ${newStageName} scene (performance)`);
         }
 
         // Re-warm car shaders in the new scene context
         if (this.currentLoader && this.currentLoader.preWarmCarShaders) {
-            logger.log(`🔄 Re-warming car shaders for ${newStageName} scene...`);
+            logger.log(`Re-warming car shaders for ${newStageName} scene...`);
             this.currentLoader.preWarmCarShaders();
         }
 
-        logger.log(`🎨 Switched rendering to ${newStageName} scene`);
+        logger.log(`Switched rendering to ${newStageName} scene`);
 
         // Teleport player to new stage spawn
         const spawnPosition = this._getSpawnPosition(newStageName);
@@ -270,7 +270,7 @@ export class StageManager {
         // Update camera position
         this.camera.position.set(spawnPosition.x, spawnPosition.y, spawnPosition.z);
 
-        logger.log(`✅ Switched to ${stageConfig.name} at position ${JSON.stringify(spawnPosition)}`);
+        logger.log(`Switched to ${stageConfig.name} at position ${JSON.stringify(spawnPosition)}`);
 
         return {
             loader: this.currentLoader,

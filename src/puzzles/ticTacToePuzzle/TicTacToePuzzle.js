@@ -38,7 +38,7 @@ export class TicTacToePuzzle {
         this.container = null;
         this.result = null;
 
-        console.log('🎮 TicTacToe Puzzle constructed');
+        console.log('TicTacToe Puzzle constructed');
     }
 
     /**
@@ -49,13 +49,13 @@ export class TicTacToePuzzle {
 
         this.container = document.getElementById('tictactoe-puzzle-container');
         if (!this.container) {
-            console.error('❌ TicTacToe container not found');
+            console.error('TicTacToe container not found');
             return;
         }
 
         const canvas = document.getElementById('tictactoe-puzzle-canvas');
         if (!canvas) {
-            console.error('❌ TicTacToe canvas not found');
+            console.error('TicTacToe canvas not found');
             return;
         }
 
@@ -87,7 +87,7 @@ export class TicTacToePuzzle {
         });
 
         this.isInitialized = true;
-        console.log('🎮 TicTacToe Puzzle DOM initialized');
+        console.log('TicTacToe Puzzle DOM initialized');
     }
 
     /**
@@ -101,13 +101,13 @@ export class TicTacToePuzzle {
      * Show the puzzle UI and start a new game
      */
     show() {
-        console.log('🎮 TicTacToePuzzle.show() called');
+        console.log('TicTacToePuzzle.show() called');
 
         // Ensure DOM elements are initialized first
         this._ensureInitialized();
 
         if (!this.container) {
-            console.error('❌ Container not found! Looking for tictactoe-puzzle-container');
+            console.error('Container not found! Looking for tictactoe-puzzle-container');
             return;
         }
 
@@ -117,7 +117,7 @@ export class TicTacToePuzzle {
             console.log('  Freezing controls...');
             this.controls.freeze();
         } else {
-            console.warn('  ⚠️ Controls not set!');
+            console.warn('  Controls not set!');
         }
 
         this.container.style.display = 'flex';
@@ -150,7 +150,7 @@ export class TicTacToePuzzle {
         const resultSubtitle = document.getElementById('tictactoe-result-subtitle');
 
         if (!resultOverlay || !resultTitle || !resultSubtitle) {
-            console.error('❌ Result elements not found');
+            console.error('Result elements not found');
             return;
         }
 
@@ -159,7 +159,7 @@ export class TicTacToePuzzle {
             try {
                 window.gameControls.audioManager.playSound('mirror_scream', 'public/audio/sfx/mirror-scream.mp3');
             } catch (error) {
-                console.warn('⚠️ Could not play mirror scream sound:', error.message);
+                console.warn('Could not play mirror scream sound:', error.message);
             }
         }
 
@@ -281,7 +281,7 @@ export class TicTacToePuzzle {
         const ghostDialogue = document.getElementById('tictactoe-ghost-dialogue');
 
         if (!resultOverlay || !resultTitle || !resultSubtitle || !ghostDialogue) {
-            console.error('❌ Result elements not found');
+            console.error('Result elements not found');
             return;
         }
 
@@ -308,7 +308,7 @@ export class TicTacToePuzzle {
         const resultSubtitle = document.getElementById('tictactoe-result-subtitle');
 
         if (!resultOverlay || !resultTitle || !resultSubtitle) {
-            console.error('❌ Result elements not found');
+            console.error('Result elements not found');
             return;
         }
 
@@ -317,7 +317,7 @@ export class TicTacToePuzzle {
             try {
                 window.gameControls.audioManager.playSound('mirror_scream', 'public/audio/sfx/mirror-scream.mp3');
             } catch (error) {
-                console.warn('⚠️ Could not play mirror scream sound:', error.message);
+                console.warn('Could not play mirror scream sound:', error.message);
             }
         }
 
@@ -348,7 +348,7 @@ export class TicTacToePuzzle {
         const resultSubtitle = document.getElementById('tictactoe-result-subtitle');
 
         if (!resultOverlay || !resultTitle || !resultSubtitle) {
-            console.error('❌ Result elements not found');
+            console.error('Result elements not found');
             return;
         }
 

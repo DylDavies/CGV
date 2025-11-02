@@ -21,6 +21,7 @@ class AudioManager {
             hitSound: 'public/audio/sfx/hit_sound.mp3',
             phone_ringing: 'public/audio/sfx/phone_ringing.mp3',
             voicemail_editor: 'public/audio/sfx/voicemail_editor.m4a',
+            voice_mail: 'public/audio/sfx/voice-mail.mp3',
             door_unlock_click: 'public/audio/sfx/door_unlock_click.mp3',
             door_bang_1: 'public/audio/sfx/door_bang_1.mp3',
             door_bang_2_loud: 'public/audio/sfx/door_bang_2_loud.mp3',
@@ -32,6 +33,7 @@ class AudioManager {
             car_hood_open: 'public/audio/sfx/hood-open.mp3',
             car_hood_close: 'public/audio/sfx/hood-close.mp3',
             car_starting: 'public/audio/sfx/car-starting.mp3',
+            couch_sliding: 'public/audio/sfx/couch-sliding.mp3',
             annie_heal: 'public/audio/sfx/annie-heal.m4a',
 
             //ambient sound effects - to be used for random sound generation
@@ -66,11 +68,11 @@ class AudioManager {
                 // Update currently playing sounds
                 this._updateActiveSoundsVolume();
 
-                console.log('🔊 Audio settings applied from UI:', this.globalVolume);
+                console.log('Audio settings applied from UI:', this.globalVolume);
             }
         });
 
-        console.log('🔊 AudioManager initialized');
+        console.log('AudioManager initialized');
     }
 
     _loadAudioSettings() {
@@ -83,7 +85,7 @@ class AudioManager {
                     this.globalVolume.music = (settings.audio.music !== undefined ? settings.audio.music : 0.9) * master;
                     this.globalVolume.sfx = (settings.audio.sfx !== undefined ? settings.audio.sfx : 0.95) * master;
                     this.globalVolume.ambience = (settings.audio.ambience !== undefined ? settings.audio.ambience : 0.5) * master;
-                    console.log('🔊 Audio settings loaded from storage:', this.globalVolume);
+                    console.log('Audio settings loaded from storage:', this.globalVolume);
                 }
             } catch (e) {
                 console.error('Failed to load audio settings:', e);
@@ -132,7 +134,7 @@ class AudioManager {
 
                     // Cache the buffer for future use
                     this.soundCache.set(path, { buffer: buffer });
-                    console.log(`🔊 Loaded sound: ${path}`);
+                    console.log(`Loaded sound: ${path}`);
                     resolve(sound);
                 },
                 () => {}, // onProgress
@@ -143,8 +145,6 @@ class AudioManager {
             );
         });
     }
-
-    // --- Music ---
 
     async playMainMenuMusic(fadeDuration = 1000) {
         if (this.activeSounds.has('mainMenuMusic')) return;
@@ -159,7 +159,6 @@ class AudioManager {
         this.stopSound('mainMenuMusic', fadeDuration);
     }
 
-    // --- Sound Effects ---
 /**
      * Plays a looping sound attached to a specific 3D object in the scene.
      * @param {string} soundId - A unique name for this sound instance (e.g., 'phone_ringing').
@@ -185,7 +184,7 @@ class AudioManager {
             positionalSound.play();
 
             this.activeSounds.set(soundId, positionalSound);
-            console.log(`🔊 Playing looping positional sound '${soundId}' on object '${mesh.name}'`);
+            console.log(`Playing looping positional sound '${soundId}' on object '${mesh.name}'`);
         } catch (error) {
             console.error(`Could not play positional sound '${soundId}':`, error);
         }
@@ -246,9 +245,6 @@ class AudioManager {
         sound.play();
     }
 
-
-    // --- Generic Playback ---
-
     /**
      * Quick play method that uses soundPaths configuration
      * @param {string} soundKey - Key from soundPaths (e.g., 'phone_ringing')
@@ -298,7 +294,7 @@ class AudioManager {
     }
 
     stopAll(fadeDuration = 0) {
-        console.log(`🔇 Stopping all active sounds (${this.activeSounds.size} sounds)`);
+        console.log(`Stopping all active sounds (${this.activeSounds.size} sounds)`);
 
         const soundIds = Array.from(this.activeSounds.keys());
         soundIds.forEach(soundId => {
@@ -308,9 +304,6 @@ class AudioManager {
         // Clear the active sounds map
         this.activeSounds.clear();
     }
-
-
-    // --- Utilities ---
 
     fadeIn(sound, targetVolume, duration) {
         let currentVolume = 0;
@@ -354,7 +347,7 @@ class AudioManager {
 
     setVolume(type, volume) {
         this.globalVolume[type] = Math.max(0, Math.min(1, volume));
-        console.log(`🔊 Set ${type} volume to ${this.globalVolume[type]}`);
+        console.log(`Set ${type} volume to ${this.globalVolume[type]}`);
 
         // Update any currently playing sounds of this type
         for (const [id, sound] of this.activeSounds.entries()) {

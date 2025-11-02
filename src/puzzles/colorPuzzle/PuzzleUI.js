@@ -89,6 +89,16 @@ export class PuzzleUI {
         this.elements.objective.textContent = `Turn all blocks into ${logic.targetColor}`;
     }
 
+    setPalleteLocked(isLocked) {
+        if (this.elements.palette) {
+            if (isLocked) {
+                this.elements.palette.classList.add('locked');
+            } else {
+                this.elements.palette.classList.remove('locked');
+            }
+        }
+    }
+
     async animateTileChanges(steps, newColor) {
         for (const wave of steps) {
             for (const { row, col } of wave) {

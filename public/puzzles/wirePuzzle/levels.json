@@ -2,7 +2,7 @@
   {
     "id": "wire-level-1",
     "difficulty": 1,
-    "timeLimit": 60,
+    "timeLimit": 30,
     "levelData": {
       "gridSize": [6, 6],
       "terminals": [
@@ -18,7 +18,7 @@
   {
     "id": "wire-level-3",
     "difficulty": 1,
-    "timeLimit": 70,
+    "timeLimit": 30,
     "levelData": {
       "gridSize": [6, 6],
       "terminals": [
@@ -34,7 +34,7 @@
   {
     "id": "wire-level-5",
     "difficulty": 2,
-    "timeLimit": 90,
+    "timeLimit": 30,
     "levelData": {
       "gridSize": [7, 7],
       "terminals": [
@@ -50,7 +50,7 @@
   {
     "id": "wire-level-6",
     "difficulty": 2,
-    "timeLimit": 100,
+    "timeLimit": 30,
     "levelData": {
       "gridSize": [8, 6],
       "terminals": [
@@ -66,7 +66,7 @@
   {
     "id": "wire-level-8-fixed",
     "difficulty": 3,
-    "timeLimit": 110,
+    "timeLimit": 30,
     "levelData": {
       "gridSize": [7, 7],
       "terminals": [
@@ -83,7 +83,7 @@
   {
     "id": "wire-level-12",
     "difficulty": 4,
-    "timeLimit": 160,
+    "timeLimit": 30,
     "levelData": {
       "gridSize": [8, 8],
       "terminals": [
@@ -99,7 +99,7 @@
   {
     "id": "wire-level-14",
     "difficulty": 4,
-    "timeLimit": 170,
+    "timeLimit": 30,
     "levelData": {
       "gridSize": [9, 9],
       "terminals": [
@@ -116,7 +116,7 @@
   {
     "id": "wire-level-16",
     "difficulty": 5,
-    "timeLimit": 220,
+    "timeLimit": 30,
     "levelData": {
       "gridSize": [9, 9],
       "terminals": [
@@ -134,7 +134,7 @@
   {
     "id": "wire-level-18",
     "difficulty": 5,
-    "timeLimit": 250,
+    "timeLimit": 30,
     "levelData": {
       "gridSize": [12, 10],
       "terminals": [
@@ -152,7 +152,7 @@
   {
     "id": "wire-level-20",
     "difficulty": 5,
-    "timeLimit": 300,
+    "timeLimit": 30,
     "levelData": {
       "gridSize": [12, 12],
       "terminals": [

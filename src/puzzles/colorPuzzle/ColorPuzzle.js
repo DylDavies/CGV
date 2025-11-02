@@ -69,13 +69,9 @@ export class ColorPuzzle {
             .map(index => this.logic.colorMap[index])
             .filter(Boolean);
 
-        // --- DEBUG LOG ---
-        //console.log("   - Available Colors (Palette):", availableColors);
+
 
         this.logic.selectedColor = availableColors[0];
-
-        //console.log(`   - Initially Selected Color: ${this.logic.selectedColor}`);
-        // --- END DEBUG LOG ---
 
         this.ui.render(this.logic);
         
@@ -96,6 +92,7 @@ export class ColorPuzzle {
         const animationSteps = this.logic.getAnimatedFloodFillSteps(row, col);
 
         if (animationSteps) {
+            this.ui.setPalleteLocked(true);
             this.isAnimating = true;
             await this.ui.animateTileChanges(animationSteps, this.logic.selectedColor);
             
@@ -118,6 +115,7 @@ export class ColorPuzzle {
                 this.successMessage);
             }
             this.isAnimating = false;
+            this.ui.setPalleteLocked(false);
         }
     }
 

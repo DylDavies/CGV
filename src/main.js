@@ -34,6 +34,7 @@ import { CarInteraction } from './systems/CarInteraction.js';
 import { GarageSystem } from './systems/GarageSystem.js';
 import { CarRepairSystem } from './systems/CarRepairSystem.js';
 
+console.log = (...args) => {}
 async function main() {
     try {
         logger.log(' Initializing Project HER...');
@@ -42,7 +43,6 @@ async function main() {
         
         const canvas = document.querySelector('#game-canvas');
 
-        // --- Initialize Core Systems that EXIST OUTSIDE the loading screen ---
         const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 50);
 
         const renderer = createRenderer(canvas);
@@ -66,8 +66,6 @@ async function main() {
 
         const ticTacToePuzzle = new TicTacToePuzzle();
 
-
-        // --- UI Manager loading ---
         uiManager.showWelcomeScreen(async () => {
 
             const savedSettings = localStorage.getItem('gameSettings');
@@ -144,7 +142,6 @@ async function main() {
             uiManager.updateLoadingText("Creating minimap...");
             const minimap = new Minimap(scene, camera, stageManager, renderer);
 
-            // --- Initialize CarInteraction AFTER mansion is loaded ---
             uiManager.updateLoadingText("Checking vehicle systems...");
             const carInteraction = new CarInteraction(scene, interactionSystem, audioManager, gameManager);
   
@@ -161,7 +158,7 @@ async function main() {
                 physicsManager // physicsManager for removing bodies
             );
 
-            // --- Initialize CarRepairSystem AFTER CarInteraction and other dependencies ---
+            
             const carRepairSystem = new CarRepairSystem(
                 stageManager,
                 interactionSystem,
@@ -171,7 +168,9 @@ async function main() {
                 narrativeManager, // Pass NarrativeManager
                 carInteraction,   // Pass CarInteraction instance
                 physicsManager,   // Pass PhysicsManager for player teleport
-                camera            // Pass Camera for escape sequence
+                camera,           // Pass Camera for escape sequence
+                controls,         // Pass PlayerControls for freezing during drive
+                garageSystem      // Pass GarageSystem to check door state
             );
 
             new Resizer(camera, renderer);
@@ -197,7 +196,6 @@ async function main() {
 
             loop.updatables.push(...updatables);
 
-            // --- Setup gameControls for debugging ---
             window.gameControls = {
                 camera, scene, flashlight, physicsManager, gameManager,
                 interactionSystem, puzzleSystem, atmosphere, colorPuzzle, wirePuzzle, keypadPuzzle, ticTacToePuzzle,
@@ -210,13 +208,13 @@ async function main() {
                     console.log('🚀 Transitioning to mansion...');
                     await stageManager.switchToStage('mansion');
                     await uiManager.reloadResultScreen();
-                    console.log('✅ Arrived at mansion');
+                    console.log('Arrived at mansion');
                 },
                 toOffice: async () => {
                     console.log('🚀 Transitioning to office...');
                     await stageManager.switchToStage('office');
                     await uiManager.reloadResultScreen();
-                    console.log('✅ Arrived at office');
+                    console.log('Arrived at office');
                 },
                 toggleNavMesh: () => stageManager.currentLoader?.toggleNavMeshVisualizer?.(),
                 toggleMansion: () => stageManager.currentLoader?.toggleMansionVisibility?.(),
@@ -247,14 +245,14 @@ async function main() {
                         console.log(`   Position: (${monsterAI.monster.position.x.toFixed(2)}, ${monsterAI.monster.position.y.toFixed(2)}, ${monsterAI.monster.position.z.toFixed(2)})`);
                         console.log(`   Aggression level: ${monsterAI.aggressionLevel}`);
                     } else {
-                        console.error('❌ Monster AI not available');
+                        console.error('Monster AI not available');
                     }
                 },
                 spawnMonsterAtRandomNode: () => {
                     if (gameManager) {
                         gameManager.spawnMonsterAtRandomNode();
                     } else {
-                        console.error('❌ Game Manager not available');
+                        console.error('Game Manager not available');
                     }
                 },
                 listPhysics: () => stageManager.currentLoader?.listPhysicsBodies?.(),
@@ -262,7 +260,7 @@ async function main() {
                     // Toggle occlusion culling visualization on ALL stages
                     const state = enabled !== undefined ? enabled : !window._occlusionVizEnabled;
                     window._occlusionVizEnabled = state;
-                    console.log(`👁️ Occlusion Culling Visualization: ${state ? 'ON (all stages)' : 'OFF'}`);
+                    console.log(`Occlusion Culling Visualization: ${state ? 'ON (all stages)' : 'OFF'}`);
                     if (stageManager.loaders.office) {
                         stageManager.loaders.office.visualizeOcclusionCulling(state);
                     }
@@ -273,7 +271,7 @@ async function main() {
                 debugOcclusionStats: () => {
                     const loader = stageManager.currentLoader;
                     if (!loader || !loader.model) {
-                        console.log('❌ No active loader');
+                        console.log('No active loader');
                         return;
                     }
 
@@ -294,16 +292,16 @@ async function main() {
                         }
                     });
 
-                    console.log(`👁️ Occlusion Stats - Visible: ${visibleMeshes}, Culled: ${culledMeshes}, Total: ${totalMeshes}`);
-                    console.log(`👁️ Max distance: ${loader.maxVisibleDistance}`);
+                    console.log(`Occlusion Stats - Visible: ${visibleMeshes}, Culled: ${culledMeshes}, Total: ${totalMeshes}`);
+                    console.log(`Max distance: ${loader.maxVisibleDistance}`);
                     if (culledObjects.length > 0 && culledObjects.length < 20) {
-                        console.log(`👁️ Culled objects: ${culledObjects.join(', ')}`);
+                        console.log(`Culled objects: ${culledObjects.join(', ')}`);
                     }
                 },
                 debugOcclusionDetail: (objectName) => {
                     const loader = stageManager.currentLoader;
                     if (!loader || !loader.model) {
-                        console.log('❌ No active loader');
+                        console.log('No active loader');
                         return;
                     }
 
@@ -336,7 +334,7 @@ async function main() {
                             parent = parent.parent;
                         }
 
-                        console.log(`👁️ Object: ${node.name}`);
+                        console.log(`Object: ${node.name}`);
                         console.log(`  Visible: ${node.visible}`);
                         console.log(`  Distance: ${distance.toFixed(2)} (max: ${loader.maxVisibleDistance})`);
                         console.log(`  Should be visible: ${distance <= loader.maxVisibleDistance}`);
@@ -346,12 +344,12 @@ async function main() {
                     });
 
                     if (!found) {
-                        console.log(`❌ Object "${objectName}" not found`);
+                        console.log(`Object "${objectName}" not found`);
                     }
                 },
                 debugValidateStage: () => {
                     if (!stageManager.currentLoader) {
-                        console.log('❌ No active stage loader');
+                        console.log('No active stage loader');
                         return;
                     }
                     stageManager.currentLoader.validateStageLoaded();
@@ -418,7 +416,10 @@ async function main() {
                                 if (gameManager.audioManager) {
                                     gameManager.audioManager.stopSound('phone_ringing');
                                     // Play voicemail audio after phone is answered
-                                    await gameManager.audioManager.play('voicemail_editor');
+
+                                    // this.audioManager.playSound('couch_sliding', this.audioManager.soundPaths.couch_sliding, true, 0.4);
+                                    //await gameManager.audioManager.playSound('voice_mail', this.audioManager.soundPaths.voice_mail, true, 0.9);
+                                    await gameManager.audioManager.play('voice_mail');
                                 }
                                 // Trigger voicemail narrative
                                 await window.gameControls.narrativeManager.triggerEvent('office.phone_answered');
@@ -429,7 +430,7 @@ async function main() {
                             // Play intro narrative sequence on mansion stage
                             await narrativeManager.playIntroSequence();
                         }
-                        console.log('✅ Game ready! Click to begin.');
+                        console.log('Game ready! Click to begin.');
                     }, 500);
                 }, 100);
             }, 50);

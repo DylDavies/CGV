@@ -220,7 +220,7 @@ class RapierPhysicsManager {
         if (this.devModeLight) {
             if (this.devMode) {
                 this.devModeLight.intensity = 1.0; // Daylight brightness
-                console.log('☀️ Dev mode lighting: ON');
+                console.log('Dev mode lighting: ON');
             } else {
                 this.devModeLight.intensity = 0; // Back to horror lighting
                 console.log('🌙 Dev mode lighting: OFF');
@@ -238,7 +238,7 @@ class RapierPhysicsManager {
                     this.verticalVelocity = 0;
                     console.log('🔒 SPAWN FROZEN - Position locked for debugging');
                     console.log(`📍 Current position: X=${this.camera.position.x.toFixed(2)}, Y=${this.camera.position.y.toFixed(2)}, Z=${this.camera.position.z.toFixed(2)}`);
-                    console.log('💡 Press F8 again to unfreeze');
+                    console.log('Press F8 again to unfreeze');
                 } else {
                     console.log('🔓 SPAWN UNFROZEN - Physics enabled');
                 }
@@ -271,7 +271,7 @@ class RapierPhysicsManager {
 
             if (this.stabilizationTimer <= 0) {
                 this.physicsStabilizing = false;
-                console.log('✅ Physics stabilization complete, physics enabled');
+                console.log('Physics stabilization complete, physics enabled');
             } else {
                 // Skip physics entirely during stabilization
                 return;
@@ -295,11 +295,11 @@ class RapierPhysicsManager {
             if (this.fixedYMode && !wasInFixedY) {
                 this.fixedYHeight = Math.max(0, this.camera.position.y);
                 this.verticalVelocity = 0;
-                console.log(`✈️ Fixed Y Mode: ON (height locked at Y=${this.fixedYHeight.toFixed(2)})`);
-                console.log(`💡 Use SPACE or Q to go up, E to go down`);
+                console.log(`Fixed Y Mode: ON (height locked at Y=${this.fixedYHeight.toFixed(2)})`);
+                console.log(`Use SPACE or Q to go up, E to go down`);
                 console.log(`🔍 DevMode=${this.devMode}, FixedYMode=${this.fixedYMode}`);
             } else if (!this.fixedYMode && wasInFixedY) {
-                console.log('✈️ Fixed Y Mode: OFF');
+                console.log('Fixed Y Mode: OFF');
             }
         }
 
@@ -313,7 +313,7 @@ class RapierPhysicsManager {
         } else {
             // Debug: log why fly mode isn't activating
             if (this.fixedYMode && !this.devMode) {
-                console.warn(`⚠️ fixedYMode is ON but devMode is OFF - cannot enter fly mode`);
+                console.warn(`fixedYMode is ON but devMode is OFF - cannot enter fly mode`);
             }
             this.handleNormalMovement(safeInputs, delta);
         }
@@ -635,7 +635,7 @@ class RapierPhysicsManager {
 
         // Basic validation
         if (!position || isNaN(position.x) || !size || isNaN(size.x) || size.x <= 0 || !quaternion || isNaN(quaternion.x)) {
-            console.error('❌ [Rapier] Received invalid transform data. Aborting body creation.');
+            console.error('[Rapier] Received invalid transform data. Aborting body creation.');
             return null;
         }
 
@@ -656,7 +656,7 @@ class RapierPhysicsManager {
     teleportTo(position) {
         // Validate input position
         if (isNaN(position.x) || isNaN(position.y) || isNaN(position.z)) {
-            console.error('❌ Cannot teleport: Invalid position (NaN)');
+            console.error('Cannot teleport: Invalid position (NaN)');
             return;
         }
 
@@ -675,7 +675,7 @@ class RapierPhysicsManager {
         this.stabilizationTimer = 0.05; // 50ms
 
         console.log(`📍 Teleported to: ${position.x.toFixed(1)}, ${position.y.toFixed(1)}, ${position.z.toFixed(1)}`);
-        console.log(`⏸️ Physics stabilizing for 50ms...`);
+        console.log(`Physics stabilizing for 50ms...`);
     }
 
     // Emergency recovery function if player falls through floor
@@ -700,9 +700,9 @@ class RapierPhysicsManager {
 
         this.camera.position.y = this.fixedYHeight;
 
-        console.log(`✅ Rescued! Now at Y=${this.fixedYHeight.toFixed(2)}`);
-        console.log('✈️ Fixed Y Mode enabled - use SPACE/SHIFT to adjust height');
-        console.log('💡 Press F10 to disable Fixed Y Mode when ready');
+        console.log(`Rescued! Now at Y=${this.fixedYHeight.toFixed(2)}`);
+        console.log('Fixed Y Mode enabled - use SPACE/SHIFT to adjust height');
+        console.log('Press F10 to disable Fixed Y Mode when ready');
     }
 
     // Fear system methods
@@ -767,7 +767,7 @@ class RapierPhysicsManager {
 
     setNoclip(enabled) {
         this.noclipMode = enabled;
-        console.log(`🚪 Noclip mode: ${enabled ? 'ON' : 'OFF'}`);
+        console.log(`Noclip mode: ${enabled ? 'ON' : 'OFF'}`);
     }
 
     togglePhysicsDebug() {
@@ -776,7 +776,7 @@ class RapierPhysicsManager {
         if (this.debugEnabled) {
             // Create debug renderer
             if (!this.debugRenderer) {
-                console.log('💡 Creating Rapier debug renderer...');
+                console.log('Creating Rapier debug renderer...');
                 this.createDebugRenderer();
             } else {
                 // Show existing renderer
@@ -856,7 +856,7 @@ class RapierPhysicsManager {
             console.log('🔍 Rapier Debug Renderer created');
             console.log(`📊 Total physics bodies to visualize: ${this.physicsBodies.length}`);
         } catch (error) {
-            console.error('❌ Failed to create debug renderer:', error);
+            console.error('Failed to create debug renderer:', error);
         }
     }
 

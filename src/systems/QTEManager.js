@@ -16,7 +16,7 @@ class QTEManager {
         this.rafId = null; // For requestAnimationFrame
         this.lastTimestamp = null; // Initialize timestamp tracking
 
-        logger.log('⚡ QTEManager Initialized');
+        logger.log('QTEManager Initialized');
     }
 
     isActive() {
@@ -55,7 +55,7 @@ class QTEManager {
             hitZoneSize = 80 // For rhythm game (width of hit zone in pixels)
         } = options;
 
-        logger.log(`⚡ Starting QTE: ${type}`);
+        logger.log(`Starting QTE: ${type}`);
         this.controls?.freeze(); // Freeze player movement
         this.lastTimestamp = null; // Reset timestamp for the new QTE
 
@@ -240,7 +240,7 @@ class QTEManager {
 
                 // Check if note passed the hit zone without being hit
                 if (stateRG.currentNotePosition > stateRG.hitZoneEnd && !stateRG.hitSuccess) {
-                    logger.log(`❌ Rhythm Game: Missed note ${stateRG.currentNoteIndex + 1}/${stateRG.noteSequence.length}`);
+                    logger.log(`Rhythm Game: Missed note ${stateRG.currentNoteIndex + 1}/${stateRG.noteSequence.length}`);
                     endType = 'failure';
                 }
                 break;
@@ -360,7 +360,6 @@ class QTEManager {
 
 
                 if (inCorrectZoneBR) {
-                    // --- SUCCESSFUL BOUNCE ---
                     stateBR.direction *= -1; // Reverse direction
 
                     // If we just successfully hit the LEFT zone, a full loop is completed
@@ -386,7 +385,6 @@ class QTEManager {
 
                 } 
                 else {
-                    // --- MISSED BOUNCE ---
                     endType = 'failure';
                     logger.log(`Bounce Miss: Angle=${angleBR.toFixed(1)}, Target=${stateBR.nextBounceTarget}. Failure.`);
                 }
@@ -396,11 +394,11 @@ class QTEManager {
                 const stateRG = this.activeQTE.state;
                 const expectedKey = stateRG.noteSequence[stateRG.currentNoteIndex];
 
-                logger.log(`🎮 Rhythm Game Input: Key pressed=${keyCode}, Expected=${expectedKey}, Note pos=${stateRG.currentNotePosition.toFixed(1)}, Hit zone=[${stateRG.hitZoneStart}-${stateRG.hitZoneEnd}]`);
+                logger.log(`Rhythm Game Input: Key pressed=${keyCode}, Expected=${expectedKey}, Note pos=${stateRG.currentNotePosition.toFixed(1)}, Hit zone=[${stateRG.hitZoneStart}-${stateRG.hitZoneEnd}]`);
 
                 // Check if correct key was pressed
                 if (keyCode !== expectedKey) {
-                    logger.log(`❌ Rhythm Game: Wrong key! Expected ${expectedKey}, got ${keyCode}`);
+                    logger.log(`Rhythm Game: Wrong key! Expected ${expectedKey}, got ${keyCode}`);
                     endType = 'failure';
                     break;
                 }
@@ -410,7 +408,7 @@ class QTEManager {
                                   stateRG.currentNotePosition <= stateRG.hitZoneEnd;
 
                 if (inHitZone) {
-                    logger.log(`✅ Rhythm Game: Hit note ${stateRG.currentNoteIndex + 1}/${stateRG.noteSequence.length} perfectly!`);
+                    logger.log(`Rhythm Game: Hit note ${stateRG.currentNoteIndex + 1}/${stateRG.noteSequence.length} perfectly!`);
                     stateRG.hitSuccess = true;
 
                     // Move to next note
@@ -434,7 +432,7 @@ class QTEManager {
                         );
                     }
                 } else {
-                    logger.log(`❌ Rhythm Game: Pressed too early or too late! Position=${stateRG.currentNotePosition.toFixed(1)}`);
+                    logger.log(`Rhythm Game: Pressed too early or too late! Position=${stateRG.currentNotePosition.toFixed(1)}`);
                     endType = 'failure';
                 }
                 break;
@@ -463,7 +461,7 @@ class QTEManager {
             return;
         }
 
-        logger.log(`⚡ QTE Ended: ${this.activeQTE.type} - ${success ? 'Success' : 'Failure'}`);
+        logger.log(`QTE Ended: ${this.activeQTE.type} - ${success ? 'Success' : 'Failure'}`);
 
         // cancel animation frame before clearing state
         if (this.rafId !== null) {

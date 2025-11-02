@@ -19,21 +19,21 @@ class GameManager {
         this.uiManager = uiManager;
         this.audioManager = audioManager;
         this.physicsManager = physicsManager;
-        this.controls = controls;   // NEW: Store the controls object
+        this.controls = controls;   
         this.stageManager = stageManager;   // Stage manager for stage-aware gameplay
         this.inventory = [];
         this.collectedPages = [];
         this.placedPages = new Array(6).fill(null); // Tracks pages placed on the wall
         this.pageSolution = ['S_Page1', 'S_Page2', 'S_Page3', 'S_Page4', 'S_Page5', 'S_Page6'];
-        this.pagesPuzzleCompleted = false; // NEW: Track if pages puzzle is solved
+        this.pagesPuzzleCompleted = false; 
         this.currentRoom = null;
         this.previousRoom = null;
         this.gameState = 'playing'; // 'playing', 'won', 'lost', 'paused'
-        this.gameStage = 1; // NEW: Track game stage (1 or 2)
-        this.lightsOn = true; // NEW: Track light state
-        this.fuseBoxFixed = false; // NEW: Track if fuse box puzzle is complete
-        this.telephoneAnswered = false; // NEW: Track if phone has been answered
-        this.laptopPuzzleCompleted = false; // NEW: Track if laptop puzzle is complete
+        this.gameStage = 1; 
+        this.lightsOn = true; 
+        this.fuseBoxFixed = false; 
+        this.telephoneAnswered = false; 
+        this.laptopPuzzleCompleted = false; 
         this.masterBedroomKey = false;
         this.safePuzzleSolved = false;
 
@@ -47,8 +47,8 @@ class GameManager {
             hintsUsed: 0
         };
 
-        this.hintQueue = []; // NEW: A queue to hold pending hints.
-        this.isHintVisible = false; // NEW: A flag to check if a hint is on screen.
+        this.hintQueue = [];
+        this.isHintVisible = false; 
         this.allPagesPlaced = false;
         this.puzzleFailureCount = 0; // Track wrong puzzle attempts
         this.maxPuzzleFailures = 3; // Die after 3 failures
@@ -71,7 +71,7 @@ class GameManager {
     }
 
     initializeGame() {
-        console.log("🎮 Initializing game...");
+        console.log("Initializing game...");
 
         // Only initialize mansion-specific gameplay on mansion stage
         const currentStage = this.stageManager ? this.stageManager.currentStage : 'mansion';
@@ -96,11 +96,6 @@ class GameManager {
         });
         this.showHint("You found a key inside the safe!");
 
-        // TRIGGER THE MONSTER GETTING ANGRY SEQUENCE - THIS STILL NEEDS TO BE ADDED, consists of:
-        // - Teleport Monster to on suite bathroom
-        // - Play the crashing noises
-        // - Change the aggression level of the monster
-
         await window.gameControls.narrativeManager.triggerEvent("stage2.escape_front_door");
     }
 
@@ -110,12 +105,11 @@ class GameManager {
     }
 
     startPhoneRingEvent() {
-        console.log("☎️ Starting phone ring event...");
+        console.log("Starting phone ring event...");
 
-        // CRITICAL FIX: Only trigger mansion phone events on mansion stage, NOT office stage
         const currentStage = this.stageManager ? this.stageManager.currentStage : 'mansion';
         if (currentStage !== 'mansion') {
-            logger.log('⚠️ Phone ring event called on non-mansion stage, ignoring');
+            logger.log('Phone ring event called on non-mansion stage, ignoring');
             return;
         }
 
@@ -130,15 +124,15 @@ class GameManager {
         if (soundSourceMesh) {
             this.audioManager.playLoopingPositionalSound('phone_ringing', this.audioManager.soundPaths.rotaryPhone, soundSourceMesh, 10);
         } else {
-            console.warn('⚠️ Telephone prop not found in current loader');
+            console.warn('Telephone prop not found in current loader');
         }
     }
     
     async answerTelephone() {
-        console.log("📞 Answering the telephone...");
+        console.log("Answering the telephone...");
 
         this.audioManager.stopSound('phone_ringing', 500);
-        this.telephoneAnswered = true; // NEW: Mark phone as answered
+        this.telephoneAnswered = true;
         this.completeObjective('answer_telephone');
 
         await window.gameControls.narrativeManager.triggerEvent('stage1.phone_ring_speech');
@@ -209,7 +203,6 @@ class GameManager {
         this.updateUI();
     }
 
-    // NEW: Handles placing a page on a wall slot
     placePage(slotIndex, pageItem) {
         // Remove the page from inventory
         this.removeFromInventory(pageItem.name);
@@ -226,7 +219,6 @@ class GameManager {
         this.checkPageOrder();
     }
 
-    // NEW: Checks if the placed pages match the solution
    async checkPageOrder() {
         if (this.placedPages.includes(null)) {
             return; // Exit if not all slots are filled.
@@ -269,7 +261,7 @@ class GameManager {
         } else if (!isCorrect) {
             // Wrong order - increment failure count
             this.puzzleFailureCount++;
-            console.log(`❌ Puzzle failure ${this.puzzleFailureCount}/${this.maxPuzzleFailures}`);
+            console.log(`Puzzle failure ${this.puzzleFailureCount}/${this.maxPuzzleFailures}`);
 
             if (this.puzzleFailureCount >= this.maxPuzzleFailures) {
                 // Player dies after 3 failures
@@ -504,18 +496,18 @@ class GameManager {
             transition: opacity 0.3s ease;
         `;
         document.body.appendChild(this.hitBorderOverlay);
-        console.log('💔 Hit border overlay created and added to body');
+        console.log('Hit border overlay created and added to body');
     }
 
     updateHitBorderOverlay() {
         if (!this.hitBorderOverlay) {
-            console.error('❌ Hit border overlay not found!');
+            console.error('Hit border overlay not found!');
             return;
         }
 
         // Ensure element is in DOM - re-add if missing
         if (!document.body.contains(this.hitBorderOverlay)) {
-            console.log('⚠️ Hit border overlay was removed from DOM - re-adding it');
+            console.log('Hit border overlay was removed from DOM - re-adding it');
             document.body.appendChild(this.hitBorderOverlay);
         }
 
@@ -543,7 +535,7 @@ class GameManager {
             // Add a very subtle red vignette to entire screen
             this.hitBorderOverlay.style.background = `radial-gradient(circle at center, transparent 50%, rgba(139, 0, 0, ${opacity * 0.2}) 100%)`;
 
-            console.log(`💔 Hit border displayed! Hits: ${this.playerHits}, Border: ${borderThickness}px, Opacity: ${opacity}`);
+            console.log(`Hit border displayed! Hits: ${this.playerHits}, Border: ${borderThickness}px, Opacity: ${opacity}`);
             console.log('   Is in DOM:', document.body.contains(this.hitBorderOverlay));
         } else {
             // Hide border when no hits
@@ -552,7 +544,7 @@ class GameManager {
             this.hitBorderOverlay.style.border = 'none';
             this.hitBorderOverlay.style.boxShadow = 'none';
             this.hitBorderOverlay.style.background = 'transparent';
-            console.log('💚 Hit border hidden - no hits');
+            console.log('Hit border hidden - no hits');
         }
     }
 
@@ -581,7 +573,6 @@ class GameManager {
             font-family: 'Courier New', monospace;
         `;
 
-        // NEW: Add this event listener to stop clicks from passing through.
         popup.addEventListener('click', (event) => {
             event.stopPropagation();
         });
@@ -608,7 +599,7 @@ class GameManager {
 
         if (isVisible) {
             this.ui.inventoryPopup.style.display = 'none';
-            if (this.controls) this.controls.unfreeze(); // NEW: Unfreeze controls when closing
+            if (this.controls) this.controls.unfreeze(); 
             // Remove outside click listener
             if (this.inventoryClickOutsideHandler) {
                 document.removeEventListener('click', this.inventoryClickOutsideHandler);
@@ -617,14 +608,14 @@ class GameManager {
         } else {
             this.updateInventoryPopup();
             this.ui.inventoryPopup.style.display = 'block';
-            if (this.controls) this.controls.freeze(); // NEW: Freeze controls when opening
+            if (this.controls) this.controls.freeze(); 
 
             // Add outside click listener after a short delay (to prevent immediate close)
             setTimeout(() => {
                 this.inventoryClickOutsideHandler = (e) => {
                     // Check if click is outside the popup
                     if (!this.ui.inventoryPopup.contains(e.target)) {
-                        console.log('🎒 Closing inventory - clicked outside');
+                        console.log('Closing inventory - clicked outside');
                         this.toggleInventoryPopup();
                     }
                 };
@@ -687,16 +678,16 @@ class GameManager {
             'key': '🔑',
             'page': '📜',
             'scroll': '📜',
-            'tool': '🔧',
+            'tool': '🪛',
             'weight_object': '⚖️',
-            'symbol': '🔮',
+            'symbol': '💢',
             'potion': '🧪',
-            'book': '📖',
-            'companion': '🧿'  // Evil eye/voodoo doll icon for Annie (creepy look)
+            'book': '📙',
+            'companion': '👧🏻'  // Evil eye/voodoo doll icon for Annie (creepy look)
         };
         return icons[itemType] || '📦';
     }
-     // NEW: Add this function to handle removing a page from a slot.
+     
     removePageFromSlot(slotIndex) {
         const pageId = this.placedPages[slotIndex];
         if (!pageId) return;
@@ -726,7 +717,6 @@ class GameManager {
         this.checkPageOrder(); // Re-check the solution.
     }
 
-    // NEW: Add this utility function to get a page's symbol for UI prompts.
     getPageSymbol(pageId) {
         return PAGE_DATA[pageId] ? PAGE_DATA[pageId].symbol : 'unknown';
     }
@@ -902,7 +892,7 @@ class GameManager {
         this.isHintVisible = true;
         const hint = this.hintQueue.shift(); // Get the next hint from the queue
 
-        this.ui.hint.innerHTML = `<p style="margin: 0;">💡 ${hint.text}</p>`;
+        this.ui.hint.innerHTML = `<p style="margin: 0;">${hint.text}</p>`;
         this.ui.hint.style.display = 'block';
         
         // After the duration, hide the hint and process the next one.
@@ -964,7 +954,7 @@ class GameManager {
         this.gameState = 'paused';
         
         this.ui.gameMenu.innerHTML = `
-            <h2 style="color: #ffaa00; margin: 0 0 30px 0;">⚙️ Game Menu</h2>
+            <h2 style="color: #ffaa00; margin: 0 0 30px 0;">Game Menu</h2>
             <button onclick="window.gameManager.resumeGame()" style="
                 display: block;
                 width: 200px;
@@ -1037,7 +1027,7 @@ class GameManager {
 
     showControls() {
         this.ui.gameMenu.innerHTML = `
-            <h2 style="color: #ffaa00; margin: 0 0 20px 0;">🎮 Controls</h2>
+            <h2 style="color: #ffaa00; margin: 0 0 20px 0;">Controls</h2>
             <div style="text-align: left; max-width: 400px; margin: 0 auto;">
                 <h4 style="color: #66aaff;">Movement:</h4>
                 <p><strong>W A S D</strong> - Move around</p>
@@ -1167,7 +1157,7 @@ class GameManager {
     }
 
     async consumePotion(potion, itemIndex) {
-        console.log(`🧪 Consuming potion: ${potion.name}, effect: ${potion.effect}`);
+        console.log(`Consuming potion: ${potion.name}, effect: ${potion.effect}`);
 
         // Remove potion from inventory
         this.inventory.splice(itemIndex, 1);
@@ -1182,12 +1172,12 @@ class GameManager {
         switch (potion.effect) {
             case 'annie_death':
                 // Annie's "freedom" potion kills the player
-                console.log('💀 Annie death potion consumed - triggering death sequence');
+                console.log('Annie death potion consumed - triggering death sequence');
                 this.showHint("The potion tastes sweet... then bitter... then...", 3000);
 
                 // Wait a moment before triggering death
                 setTimeout(async () => {
-                    console.log('💀 Calling onPlayerDeath("annie_potion")');
+                    console.log('Calling onPlayerDeath("annie_potion")');
                     await this.onPlayerDeath('annie_potion');
                 }, 3000);
                 break;
@@ -1288,11 +1278,11 @@ class GameManager {
             
             <div style="margin: 20px 0; padding: 15px; background: rgba(0,0,0,0.5); border-radius: 5px;">
                 <h4 style="color: #ffaa00; margin: 0 0 10px 0;">Final Statistics:</h4>
-                <p style="margin: 5px 0;">⏱️ Time: ${minutes}:${seconds.toString().padStart(2, '0')}</p>
-                <p style="margin: 5px 0;">🏠 Rooms Explored: ${this.gameStats.roomsVisited.size}</p>
-                <p style="margin: 5px 0;">🧩 Puzzles Solved: ${this.gameStats.puzzlesSolved}</p>
-                <p style="margin: 5px 0;">📦 Items Collected: ${this.gameStats.itemsCollected}</p>
-                <p style="margin: 5px 0;">💡 Hints Used: ${this.gameStats.hintsUsed}</p>
+                <p style="margin: 5px 0;">Time: ${minutes}:${seconds.toString().padStart(2, '0')}</p>
+                <p style="margin: 5px 0;">Rooms Explored: ${this.gameStats.roomsVisited.size}</p>
+                <p style="margin: 5px 0;">Puzzles Solved: ${this.gameStats.puzzlesSolved}</p>
+                <p style="margin: 5px 0;">Items Collected: ${this.gameStats.itemsCollected}</p>
+                <p style="margin: 5px 0;">Hints Used: ${this.gameStats.hintsUsed}</p>
                 <hr style="border-color: #444; margin: 10px 0;">
                 <p style="margin: 0; color: #00ff00; font-size: 18px; font-weight: bold;">Final Score: ${score}</p>
             </div>`,
@@ -1345,41 +1335,31 @@ class GameManager {
 
     // Room management
     tick(delta) {
-        if (this.gameState !== 'playing') return;
+        if (this.gameState !== 'playing') return;
 
-        // Get the room the player is currently in
-        const currentLoader = this.stageManager ? this.stageManager.currentLoader : this.mansion;
-        const detectedRoom = currentLoader ? currentLoader.getCurrentRoom(this.camera.position) : null;
+        // Get the room the player is currently in
+                const currentLoader = this.stageManager ? this.stageManager.currentLoader : this.mansion;
+                const detectedRoom = currentLoader ? currentLoader.getCurrentRoom(this.camera.position) : null;
 
-        // Check if the room has changed since the last frame
-        if (detectedRoom !== this.currentRoom) {
-            // A transition has occurred.
-            
-            // 1. Handle exiting the PREVIOUS room (if we were in one)
-            if (this.currentRoom) {
-                this.onRoomExited(this.currentRoom);
-            }
+        // Check if the room has changed since the last frame
+        if (detectedRoom !== this.currentRoom) {
+        // A transition has occurred.
+        
 
-            // 2. Handle entering the NEW room (if we are now in one)
-            if (detectedRoom) {
-                this.onRoomEntered(detectedRoom);
-            }
+        // 3. Update the state variables
+        this.previousRoom = this.currentRoom;
+        this.currentRoom = detectedRoom;
+        
+        // 4. Always update the UI after a transition
+        this.updateUI();
+        }
 
-            // 3. Update the state variables
-            this.previousRoom = this.currentRoom;
-            this.currentRoom = detectedRoom;
-            
-            // 4. Always update the UI after a transition
-            this.updateUI();
-        }
 
-        // --- Objective progress checks ---
-        this.checkTimedObjectives();
+        this.checkTimedObjectives();
 
         // Check for monster collision (player death)
         this.checkMonsterCollision();
 
-        // CRITICAL FIX: Only play ambient sounds on mansion stage, NOT office stage (Stage 1)
         const currentStage = this.stageManager ? this.stageManager.currentStage : 'mansion';
         if (currentStage === 'mansion') {
             this.nextAmbientSoundTime -= delta;
@@ -1391,76 +1371,15 @@ class GameManager {
                 this.nextAmbientSoundTime = this.getRandomAmbientTime();
             }
         }
-    }
+ }
 
-    onRoomEntered(room) {
-        console.log(`🚪 Entered ${room.name}`);
-
-        // Show a hint only on the very first visit
-        if (!this.gameStats.roomsVisited.has(room.name)) {
-            // this.handleFirstRoomEntry(room); // Room hints disabled
-        }
-
-        // Add to visited rooms list (moved here for better logic)
-        this.gameStats.roomsVisited.add(room.name);
-
-        // Trigger any other events that should happen EVERY time you enter
-        this.triggerRoomSpecialEvents(room);
-
-        // Update exploration objective (moved here from tick)
-        if (this.gameStats.roomsVisited.size >= 5) {
-            this.completeObjective('explore_mansion');
-        }
-    }
-
-    /**
-     * NEW METHOD: Handles logic for when a player leaves a room.
-     * @param {object} room - The room object that was just exited.
-     */
-    onRoomExited(room) {
-        console.log(`🚪 Exited ${room.name}`);
-        // This is the place to add logic for when you leave a room, e.g.:
-        // - Stop room-specific ambient sounds
-        // - Hide room-specific UI elements
-    }
-
-    /**
-     * NEW METHOD: Centralizes time-based objective checks.
-     */
+    
     checkTimedObjectives() {
         // Survival time tracking
-        const survivalTime = (Date.now() - this.gameStats.startTime) / 1000;
-        if (survivalTime > 300) { // 5 minutes
-            this.completeObjective('survive_horrors');
-        }
-    }
-
-    /**
-     * RENAMED: This method now specifically handles FIRST-TIME entry events.
-     * @param {object} room - The room being entered for the first time.
-     */
-    handleFirstRoomEntry(room) {
-        const roomType = room.name.toLowerCase();
-
-        if (roomType.includes('entrance')) {
-            this.showHint("You're in the mansion's entrance hall. Look for clues about how to escape.");
-        } else if (roomType.includes('library')) {
-            this.showHint("Ancient books line the walls. Some might contain important information.");
-        } else if (roomType.includes('kitchen')) {
-            this.showHint("The kitchen feels cold and unused. Check the cabinets and drawers.");
-        } else if (roomType.includes('bedroom')) {
-            this.showHint("Someone once slept here. Search under the bed and in the dresser.");
-        } else if (roomType.includes('study')) {
-            this.showHint("This study might contain the mansion owner's personal documents.");
-        } else if (roomType.includes('attic')) {
-            this.showHint("The attic is full of old memories... and perhaps old secrets.");
-        } else {
-            this.showHint(`You've discovered the ${room.name}.`);
-        }
-    }
-
-    triggerRoomSpecialEvents(room) {
-        // Room special events removed - no longer showing hints except for inventory
+        const survivalTime = (Date.now() - this.gameStats.startTime) / 1000;
+        if (survivalTime > 300) { // 5 minutes
+        this.completeObjective('survive_horrors');
+        }
     }
 
     // Save/Load system (basic localStorage implementation)
@@ -1501,7 +1420,6 @@ class GameManager {
         return false;
     }
 
-    // NEW: Stage 2 transition
     async startStage2() {
         console.log('🎭 Starting Stage 2...');
         this.gameStage = 2;
@@ -1510,7 +1428,7 @@ class GameManager {
         this.playerHits = 0;
         this.annieHasHealed = false; // Reset Annie's healing ability for new stage
         this.updateHitBorderOverlay();
-        console.log('💚 Player health reset for Stage 2');
+        console.log('Player health reset for Stage 2');
 
         // Show Stage 2 title screen
         await window.gameControls.narrativeManager.triggerEvent('stage2.stage_2_title');
@@ -1553,7 +1471,7 @@ class GameManager {
             if (studyNode) {
                 monsterAI.monster.position.copy(studyNode.centroid);
                 monsterAI.monster.visible = true; // Make monster visible
-                console.log(`👾 Monster spawned near study at node`);
+                console.log(`Monster spawned near study at node`);
             } else {
                 monsterAI.spawn(); // Fallback to random spawn
                 monsterAI.monster.visible = true; // Make monster visible
@@ -1573,55 +1491,55 @@ class GameManager {
     }
 
     spawnMonsterAtRandomNode() {
-        console.log('👾 Attempting to spawn monster at random node...');
+        console.log('Attempting to spawn monster at random node...');
 
         const monsterAI = window.gameControls.monsterAI;
         if (!monsterAI) {
-            console.error('❌ Monster AI not found!');
+            console.error('Monster AI not found!');
             return;
         }
 
-        console.log('✅ Monster AI found');
+        console.log('Monster AI found');
 
         const pathfinding = monsterAI.pathfinding;
         if (!pathfinding) {
-            console.error('❌ Pathfinding system not available!');
+            console.error('Pathfinding system not available!');
             return;
         }
 
-        console.log('✅ Pathfinding system found');
+        console.log('Pathfinding system found');
         console.log('   ZONE:', monsterAI.ZONE);
         console.log('   Group ID:', monsterAI.groupID);
 
         if (!pathfinding.zones) {
-            console.error('❌ Pathfinding zones not loaded!');
+            console.error('Pathfinding zones not loaded!');
             return;
         }
 
         const zone = pathfinding.zones[monsterAI.ZONE];
         if (!zone) {
-            console.error(`❌ Zone '${monsterAI.ZONE}' not found!`);
+            console.error(`Zone '${monsterAI.ZONE}' not found!`);
             console.log('   Available zones:', Object.keys(pathfinding.zones));
             return;
         }
 
-        console.log('✅ Zone found');
+        console.log('Zone found');
 
         if (!zone.groups) {
-            console.error('❌ Zone has no groups!');
+            console.error('Zone has no groups!');
             return;
         }
 
         const nodes = zone.groups[monsterAI.groupID];
         if (!nodes || nodes.length === 0) {
-            console.error(`❌ No nodes available for group ${monsterAI.groupID}!`);
+            console.error(`No nodes available for group ${monsterAI.groupID}!`);
             console.log('   Available groups:', Object.keys(zone.groups));
             console.log('   Trying group 0 as fallback...');
 
             // Try group 0 as fallback
             const fallbackNodes = zone.groups[0];
             if (!fallbackNodes || fallbackNodes.length === 0) {
-                console.error('❌ Fallback group 0 also has no nodes!');
+                console.error('Fallback group 0 also has no nodes!');
                 return;
             }
 
@@ -1637,11 +1555,11 @@ class GameManager {
                 monsterAI.heartbeatStarted = true;
             }
 
-            console.log(`✅ Monster spawned at random node (group 0): (${randomNode.centroid.x.toFixed(2)}, ${randomNode.centroid.y.toFixed(2)}, ${randomNode.centroid.z.toFixed(2)})`);
+            console.log(`Monster spawned at random node (group 0): (${randomNode.centroid.x.toFixed(2)}, ${randomNode.centroid.y.toFixed(2)}, ${randomNode.centroid.z.toFixed(2)})`);
             return;
         }
 
-        console.log(`✅ Found ${nodes.length} nodes in group ${monsterAI.groupID}`);
+        console.log(`Found ${nodes.length} nodes in group ${monsterAI.groupID}`);
 
         try {
             // Pick a random node
@@ -1657,17 +1575,17 @@ class GameManager {
                 monsterAI.heartbeatStarted = true;
             }
 
-            console.log(`✅ Monster spawned at random node: (${randomNode.centroid.x.toFixed(2)}, ${randomNode.centroid.y.toFixed(2)}, ${randomNode.centroid.z.toFixed(2)})`);
+            console.log(`Monster spawned at random node: (${randomNode.centroid.x.toFixed(2)}, ${randomNode.centroid.y.toFixed(2)}, ${randomNode.centroid.z.toFixed(2)})`);
             console.log(`   Aggression level: ${monsterAI.aggressionLevel}`);
         } catch (error) {
-            console.error("❌ Failed to spawn monster at random node:", error);
+            console.error("Failed to spawn monster at random node:", error);
             console.error("   Error details:", error.message);
             console.error("   Stack:", error.stack);
         }
     }
 
     async fixFuseBox() {
-        console.log('💡 Fuse box fixed!');
+        console.log('Fuse box fixed!');
         this.fuseBoxFixed = true;
         this.lightsOn = true;
 
@@ -1686,7 +1604,7 @@ class GameManager {
         // Set monster to CURIOUS (level 3) after fuse box is fixed
         if (window.gameControls.monsterAI) {
             window.gameControls.monsterAI.setAggressionLevel(3); // CURIOUS
-            console.log('👾 Monster is now CURIOUS');
+            console.log('Monster is now CURIOUS');
         }
 
         // Make the diary glow immediately after fuse box is complete
@@ -1707,7 +1625,7 @@ class GameManager {
     }
 
     async onPlayerDeath(deathType = 'monster_curious') {
-        console.log(`💀 Player died: ${deathType}`);
+        console.log(`Player died: ${deathType}`);
         this.gameState = 'lost';
 
         // Play death sound
@@ -1722,16 +1640,16 @@ class GameManager {
 
         // Show appropriate death screen based on death type
         const deathEvent = `endings.death_${deathType}`;
-        console.log(`💀 Triggering death event: ${deathEvent}`);
+        console.log(`Triggering death event: ${deathEvent}`);
 
         if (window.gameControls && window.gameControls.narrativeManager) {
             await window.gameControls.narrativeManager.triggerEvent(deathEvent);
         } else {
-            console.error('💀 NarrativeManager not found!');
+            console.error('NarrativeManager not found!');
         }
 
         // R key restart is handled by PlayerControls.js onKeyDown handler
-        console.log('💀 Press R to restart the game');
+        console.log('Press R to restart the game');
     }
 
     registerMonsterHit(aggressionLevel) {
@@ -1739,7 +1657,7 @@ class GameManager {
 
         // Increment hit counter
         this.playerHits++;
-        console.log(`💔 Player hit! Hits: ${this.playerHits}/${this.maxPlayerHits + 1}`);
+        console.log(`Player hit! Hits: ${this.playerHits}/${this.maxPlayerHits + 1}`);
 
         // Play hit sound
         if (this.audioManager) {
@@ -1751,11 +1669,11 @@ class GameManager {
 
         // Check if Annie doll can heal (only once, and only on first hit)
         if (this.playerHits === 1 && !this.annieHasHealed && this.hasItem('Annie (Doll)')) {
-            console.log('🎎 Annie doll will heal the player in 2 seconds...');
+            console.log('Annie doll will heal the player in 2 seconds...');
 
             // Wait 2 seconds so player can register the hit first
             setTimeout(() => {
-                console.log('🎎 Annie is healing the player now!');
+                console.log('Annie is healing the player now!');
 
                 // Trigger Annie's healing dialogue
                 if (window.gameControls.narrativeManager) {
