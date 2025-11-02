@@ -330,12 +330,22 @@ class InteractionSystem {
             'gas_can_part': { // For both gas can body and cap
                 prompt: "Press E to pick up", // CarRepairSystem will update prompt more specifically if needed
                 handler: null // CarRepairSystem will set this
+            },
+            'safe_hint': {
+                prompt: "Press E to read the note",
+                handler: this.handleSafeHintInteraction.bind(this)
             }
-            // --- END NEW CAR REPAIR TYPES ---
         };
     }
 
-    // --- NEW PROXY HANDLER for Car Hood ---
+    handleSafeHintInteraction(noteObject, userData) {
+        logger.log(`📜 Player reading safe hint: ${userData.pageId}`);
+        
+        this.showPageContent(userData.pageId, () => {
+            // noteObject.userData.interactable = false;
+        });
+    }
+    
     handleCarHoodProxy(interactedObject, userData) {
         // This proxy simply calls the CarInteraction's handler.
         // CarInteraction's handler will now internally check with CarRepairSystem.
@@ -925,6 +935,10 @@ There is a way out. The ritual in the basement can be reversed, but it requires 
 Whatever you do, don't let the darkness catch you. It knows you're here now.
 
 Run.`
+            },
+            'SafeHint': {
+                title: 'A Torn Note',
+                content: `The hands of time will show you the way.`
             }
         };
 
@@ -1614,6 +1628,7 @@ Run.`
 
         if (this.gameManager.hasItem('Old Key')) {
             await window.gameControls.narrativeManager.triggerEvent('stage2.wrong_key_entrance');
+            await window.gameControls.narrativeManager.triggerEvent('stage2.find_door');
             return; // Stop further interaction logic
         }
 

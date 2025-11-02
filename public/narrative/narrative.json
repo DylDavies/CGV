@@ -2,7 +2,7 @@
   "intro": {
     "stage_1_title": {
       "type": "blackScreen",
-      "text": "STAGE 1: THE TRUTH",
+      "text": "STAGE 2: THE Manor",
       "duration": 3000
     },
     "black_screen_1": {
@@ -333,6 +333,11 @@
         "title": "You",
         "text": "This key... it doesn't fit the front door. Where else could it go?",
         "duration": 4500
+    },
+    "find_door": {
+      "type": "objective",
+      "id": "Escape",
+      "description": "Find the door unlocked by the key."
     },
     "garage_unlocked": {
       "type": "speechBubble",

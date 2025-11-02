@@ -278,16 +278,16 @@ class MansionLoader {
             if(node.name == "S_Wall_hider") node.visible = false;
 
             // finding the empty interactables:
-            if(node.name == "driver_door_interact_zone") {
-                console.log("=============I HAVE FOUND THE DRIVER SIDE INTERACT ZONE!!!!===========");
-                node.visible = true;
-                console.log("NODE DATA FOR DRIVER DOOR: ", node);
-            }
-            if(node.name == "engine_interact_zone") {
-                console.log("=============I HAVE FOUND THE ENGINE INTERACT ZONE!!!!===========")
-                node.visible = true;
-                console.log("NODE DATA FOR ENGINE: ", node);
-            }
+            // if(node.name == "driver_door_interact_zone") {
+            //     console.log("=============I HAVE FOUND THE DRIVER SIDE INTERACT ZONE!!!!===========");
+            //     node.visible = true;
+            //     console.log("NODE DATA FOR DRIVER DOOR: ", node);
+            // }
+            // if(node.name == "engine_interact_zone") {
+            //     console.log("=============I HAVE FOUND THE ENGINE INTERACT ZONE!!!!===========")
+            //     node.visible = true;
+            //     console.log("NODE DATA FOR ENGINE: ", node);
+            // }
 
 
             // Find and store specific, named props
@@ -353,6 +353,24 @@ class MansionLoader {
                 this.props.set('safe', node);
                 node.userData = { type: 'safe', interactable: true };
                 console.log(`🔒 Found prop: ${node.name} (Safe)`);
+            }
+
+            if (node.name === 'SafeHint') {
+                this.props.set('safe_hint', node);
+
+                node.userData = { 
+                    type: 'safe_hint', 
+                    interactable: true,
+                    pageId: 'SafeHint' 
+                };
+                console.log(`📜 Found prop: ${node.name} (Safe Hint)`);
+
+                // Ensure all child meshes of the hint are also interactable
+                node.traverse((child) => {
+                    if (child.isMesh) {
+                        child.userData = node.userData;
+                    }
+                });
             }
 
             // Door leading into the garage
@@ -1547,7 +1565,7 @@ class MansionLoader {
         return this.physicsManager.createBoxBody(center, size, quaternion);
     }
 
-recalculatePhysicsForObject(meshOrName) {
+    recalculatePhysicsForObject(meshOrName) {
         // Support both mesh objects and names for backwards compatibility
         const isMeshObject = typeof meshOrName === 'object' && meshOrName.isMesh;
         const searchName = isMeshObject ? meshOrName.name : meshOrName;
