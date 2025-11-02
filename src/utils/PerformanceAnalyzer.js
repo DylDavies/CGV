@@ -144,18 +144,18 @@ export class PerformanceAnalyzer {
     logReport() {
         const report = this.getReport();
         console.log('%c═══ PERFORMANCE REPORT ═══', 'color: #00ff00; font-weight: bold; font-size: 14px');
-        console.log(`📊 FPS: ${report.fps}`);
-        console.log(`⏱️  Frame Time: ${report.frameTime}`);
-        console.log(`📈 Draw Calls: ${report.drawCalls}`);
-        console.log(`🔺 Triangles: ${report.triangles.toLocaleString()}`);
-        console.log(`🔸 Vertices: ${report.vertices.toLocaleString()}`);
-        console.log(`🎨 Textures: ${report.textures}`);
-        console.log(`💡 Active Lights: ${report.activeLights}`);
-        console.log(`🌑 Shadow Maps: ${report.shadowMaps}`);
-        console.log(`👁️  Visible Meshes: ${report.visibleMeshes}`);
-        console.log(`🚫 Culled Meshes: ${report.culledMeshes}`);
-        console.log(`📦 Total Meshes: ${report.totalMeshes}`);
-        console.log(`💾 Memory: ${report.memory}`);
+        console.log(`FPS: ${report.fps}`);
+        console.log(` Frame Time: ${report.frameTime}`);
+        console.log(`Draw Calls: ${report.drawCalls}`);
+        console.log(`Triangles: ${report.triangles.toLocaleString()}`);
+        console.log(`Vertices: ${report.vertices.toLocaleString()}`);
+        console.log(`Textures: ${report.textures}`);
+        console.log(`Active Lights: ${report.activeLights}`);
+        console.log(`Shadow Maps: ${report.shadowMaps}`);
+        console.log(` Visible Meshes: ${report.visibleMeshes}`);
+        console.log(`Culled Meshes: ${report.culledMeshes}`);
+        console.log(`Total Meshes: ${report.totalMeshes}`);
+        console.log(`Memory: ${report.memory}`);
         console.log('%c═════════════════════════', 'color: #00ff00; font-weight: bold');
     }
 
@@ -166,35 +166,35 @@ export class PerformanceAnalyzer {
         const bottlenecks = [];
 
         if (this.metrics.fps < 30) {
-            bottlenecks.push(`⚠️  Low FPS (${this.metrics.fps}fps) - Consider reducing quality`);
+            bottlenecks.push(`Low FPS (${this.metrics.fps}fps) - Consider reducing quality`);
         }
 
         if (this.metrics.frameTime > 33) {
-            bottlenecks.push(`⚠️  High frame time (${this.metrics.frameTime.toFixed(2)}ms) - Target <16.67ms for 60fps`);
+            bottlenecks.push(`High frame time (${this.metrics.frameTime.toFixed(2)}ms) - Target <16.67ms for 60fps`);
         }
 
         if (this.metrics.drawCalls > 500) {
-            bottlenecks.push(`⚠️  High draw calls (${this.metrics.drawCalls}) - Consider reducing mesh count`);
+            bottlenecks.push(`High draw calls (${this.metrics.drawCalls}) - Consider reducing mesh count`);
         }
 
         if (this.metrics.triangles > 5000000) {
-            bottlenecks.push(`⚠️  High triangle count (${this.metrics.triangles.toLocaleString()}) - Consider LOD or simplification`);
+            bottlenecks.push(`High triangle count (${this.metrics.triangles.toLocaleString()}) - Consider LOD or simplification`);
         }
 
         if (this.metrics.activeLights > 30) {
-            bottlenecks.push(`⚠️  Many active lights (${this.metrics.activeLights}) - Consider light culling`);
+            bottlenecks.push(`Many active lights (${this.metrics.activeLights}) - Consider light culling`);
         }
 
         if (this.metrics.shadowMaps > 10) {
-            bottlenecks.push(`⚠️  Many shadow maps (${this.metrics.shadowMaps}) - Consider selective shadows`);
+            bottlenecks.push(`Many shadow maps (${this.metrics.shadowMaps}) - Consider selective shadows`);
         }
 
         if (this.metrics.culledMeshes === 0 && this.metrics.visibleMeshes > 500) {
-            bottlenecks.push(`⚠️  Occlusion culling not active - ${this.metrics.visibleMeshes} meshes always rendered`);
+            bottlenecks.push(`Occlusion culling not active - ${this.metrics.visibleMeshes} meshes always rendered`);
         }
 
         if (bottlenecks.length === 0) {
-            bottlenecks.push(`✅ Performance looks good!`);
+            bottlenecks.push(`Performance looks good!`);
         }
 
         return bottlenecks;

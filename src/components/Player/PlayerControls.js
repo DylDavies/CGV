@@ -53,7 +53,7 @@ class FirstPersonControls {
         this.devMode = false;
         this.showingStats = false;
 
-        console.log('🎮 FirstPersonControls initialized');
+        console.log('FirstPersonControls initialized');
         console.log('Press F9 for dev mode, F10 for fly mode (in dev), F11 for stats');
     }
 
@@ -139,9 +139,9 @@ class FirstPersonControls {
                     event.preventDefault();
                     if (this.devMode) {
                         this.fixedY = !this.fixedY;
-                        console.log(`🛸 Fixed Y mode (fly) ${this.fixedY ? 'ON' : 'OFF'}`);
+                        console.log(`Fixed Y mode (fly) ${this.fixedY ? 'ON' : 'OFF'}`);
                     } else {
-                        console.log('🔧 Enable dev mode first (F9)');
+                        console.log('Enable dev mode first (F9)');
                     }
                     break;
                 case 'F11':
@@ -191,7 +191,7 @@ class FirstPersonControls {
                         // Spawn Annie in the car if car repair system is available
                         if (window.gameControls.carRepairSystem) {
                             window.gameControls.carRepairSystem.spawnAnnieInCar();
-                            console.log('✅ Annie spawned in car!');
+                            console.log('Annie spawned in car!');
                         } else {
                             console.warn('   Car repair system not available yet');
                         }
@@ -248,14 +248,14 @@ class FirstPersonControls {
                             console.log('   Controls frozen');
                         }
 
-                        console.log('✅ DEBUG: Ready to drive! Press SPACE to escape!');
+                        console.log('DEBUG: Ready to drive! Press SPACE to escape!');
                     }
                     break;
                 case 'KeyR': // Restart game when dead
                     if (window.gameControls && window.gameControls.gameManager) {
                         const gameState = window.gameControls.gameManager.gameState;
                         if (gameState === 'lost') {
-                            console.log('🔄 Restarting game...');
+                            console.log('Restarting game...');
                             location.reload();
                         }
                     }
@@ -305,12 +305,12 @@ class FirstPersonControls {
 
         // Handle pointer lock events
         this.controls.addEventListener('lock', () => {
-            console.log('🔒 Pointer locked - game controls active');
+            console.log('Pointer locked - game controls active');
             this.showControlHint();
         });
 
         this.controls.addEventListener('unlock', () => {
-            console.log('🔓 Pointer unlocked - game controls inactive');
+            console.log('Pointer unlocked - game controls inactive');
             this.hideStats();
         });
 
@@ -345,7 +345,7 @@ class FirstPersonControls {
     toggleStats() {
         this.showingStats = !this.showingStats;
         this.statsDisplay.style.display = this.showingStats ? 'block' : 'none';
-        console.log(`📊 Stats display: ${this.showingStats ? 'ON' : 'OFF'}`);
+        console.log(`Stats display: ${this.showingStats ? 'ON' : 'OFF'}`);
     }
 
     hideStats() {
@@ -394,8 +394,8 @@ class FirstPersonControls {
 
     showControlHint() {
         if (!this.hasShownHint) {
-            console.log('🎮 Controls: WASD to move, Shift to run, Ctrl to crouch, Space to jump, F for flashlight');
-            console.log('🔧 Dev: F9 for dev mode, F10 for fly (in dev), F11 for stats');
+            console.log('Controls: WASD to move, Shift to run, Ctrl to crouch, Space to jump, F for flashlight');
+            console.log('Dev: F9 for dev mode, F10 for fly (in dev), F11 for stats');
             this.hasShownHint = true;
         }
     }
@@ -493,7 +493,7 @@ class FirstPersonControls {
     // Utility methods
     setPhysicsManager(physicsManager) {
         this.physicsManager = physicsManager;
-        console.log('🔧 Physics manager attached to controls');
+        console.log('Physics manager attached to controls');
     }
 
     getInputState() {
@@ -514,7 +514,7 @@ class FirstPersonControls {
     setMouseSensitivity(sensitivity) {
         this.mouseSensitivity = sensitivity;
         this.controls.pointerSpeed = sensitivity;
-        console.log(`🖱️ Mouse sensitivity set to ${sensitivity}`);
+        console.log(`Mouse sensitivity set to ${sensitivity}`);
     }
 
     getMouseSensitivity() {
@@ -584,7 +584,7 @@ class FirstPersonControls {
         this.jump = false;
         this.flyUp = false;
         this.flyDown = false;
-        console.log('🔄 Input states reset');
+        console.log('Input states reset');
     }
 
     // Debug methods
@@ -600,7 +600,7 @@ class FirstPersonControls {
 
     // Cleanup
     dispose() {
-        console.log('🧹 Disposing FirstPersonControls');
+        console.log('Disposing FirstPersonControls');
         
         // Remove event listeners
         if (this.onKeyDown) {

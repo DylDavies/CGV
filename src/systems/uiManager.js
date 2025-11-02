@@ -102,7 +102,7 @@ export class UIManager {
         this._setupSettingsTabs();
         this._setupVideoSettings();
         this._setupAudioSettings();
-        console.log('✅ UI Manager Initialized');
+        console.log('UI Manager Initialized');
         this.isInitialized = true;
 
 
@@ -241,7 +241,7 @@ export class UIManager {
             qualitySelect.addEventListener('change', (e) => {
                 this.settings.quality = e.target.value;
                 this._saveSettings();
-                this._showNotification(`✅ Quality set to ${this.settings.quality}`);
+                this._showNotification(`Quality set to ${this.settings.quality}`);
 
                 // Emit custom event that other systems can listen to
                 window.dispatchEvent(new CustomEvent('qualitychange', {
@@ -257,7 +257,7 @@ export class UIManager {
             aaToggle.addEventListener('change', (e) => {
                 this.settings.antialiasing = e.target.checked;
                 this._saveSettings();
-                this._showNotification('⚠️ Restart required for anti-aliasing change');
+                this._showNotification('Restart required for anti-aliasing change');
             });
         }
     }
@@ -370,12 +370,12 @@ export class UIManager {
         window.dispatchEvent(new CustomEvent('audiochange', {
             detail: { audio: this.settings.audio }
         }));
-        console.log('🔊 Audio settings updated:', this.settings.audio);
+        console.log('Audio settings updated:', this.settings.audio);
     }
 
     _saveSettings() {
         localStorage.setItem('gameSettings', JSON.stringify(this.settings));
-        console.log('💾 Settings saved');
+        console.log('Settings saved');
     }
 
     _showNotification(message) {
@@ -403,7 +403,6 @@ export class UIManager {
         return this.settings;
     }
 
-    // --- Loading and Welcome Screen Methods ---
     showWelcomeScreen(onPlayCallback) {
         if (this.uiElements.welcomeScreen && this.uiElements.playButton) {
             this.uiElements.welcomeScreen.style.display = 'flex';
@@ -715,14 +714,14 @@ export class UIManager {
         }
         if (this.rhythmGameContainer) {
             this.rhythmGameContainer.style.display = 'block';
-            logger.log('✅ Rhythm Game UI shown');
+            logger.log('Rhythm Game UI shown');
         }
     }
 
     hideRhythmGameQTE() {
         if (this.rhythmGameContainer) {
             this.rhythmGameContainer.style.display = 'none';
-            logger.log('✅ Rhythm Game UI hidden');
+            logger.log('Rhythm Game UI hidden');
         }
     }
 
@@ -820,7 +819,7 @@ export class UIManager {
         // Add to body
         document.body.appendChild(this.rhythmGameContainer);
 
-        logger.log('✅ Rhythm Game UI created');
+        logger.log('Rhythm Game UI created');
     }
 }
 

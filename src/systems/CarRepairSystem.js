@@ -73,11 +73,11 @@ export class CarRepairSystem {
         // State for waiting for space key to drive
         this.waitingForSpaceToDrive = false;
 
-        logger.log('🚗 CarRepairSystem initialized');
+        logger.log('CarRepairSystem initialized');
     }
 
     initialize() {
-        logger.log('🚗 Initializing CarRepairSystem components...');
+        logger.log('Initializing CarRepairSystem components...');
 
         this.carObject = this.stageManager.currentScene.getObjectByName('car');
         this.hoodObject = this.carInteraction.hoodObject; 
@@ -202,7 +202,7 @@ export class CarRepairSystem {
         window.addEventListener('keydown', this.boundHandleKeyPress);
         window.addEventListener('keydown', this.boundHandleSpacePress);
 
-        logger.log('✅ CarRepairSystem initialization complete.');
+        logger.log('CarRepairSystem initialization complete.');
     }
 
     registerInteractionHandler(type, handler) {
@@ -217,7 +217,7 @@ export class CarRepairSystem {
     // === Interaction Handlers for everything in the car Repair System ===
 
     async handleDriverDoorInteraction(interactedObject, userData) {
-        logger.log(`🚗 Handling Driver Door Interaction via zone: ${interactedObject.name}. State: ${JSON.stringify(this.repairState)}`);
+        logger.log(`Handling Driver Door Interaction via zone: ${interactedObject.name}. State: ${JSON.stringify(this.repairState)}`);
 
         if (this.qteManager.isActive()) return;
 
@@ -283,7 +283,7 @@ export class CarRepairSystem {
 
                 // Despawn the monster when player enters the car
                 if (window.gameControls && window.gameControls.monsterAI) {
-                    logger.log('👾 Despawning monster - player is now in the car');
+                    logger.log('Despawning monster - player is now in the car');
                     window.gameControls.monsterAI.despawn();
                 }
 
@@ -356,7 +356,7 @@ export class CarRepairSystem {
 
     // Callback for the car Interaction, check states before playing the animation of the hood opening
     handleHoodInteractionRequest(interactedObject, userData) {
-        logger.log(`🚗 Handling Hood Interaction Request on object: ${interactedObject.name}. State: ${JSON.stringify(this.repairState)}`);
+        logger.log(`Handling Hood Interaction Request on object: ${interactedObject.name}. State: ${JSON.stringify(this.repairState)}`);
 
         // Block hood interaction if player is in car
         if (this.repairState.playerInCar) {
@@ -467,7 +467,7 @@ export class CarRepairSystem {
 
     // handler for interactions with the engine when the hood is open
     async handleEngineInteraction(interactedObject, userData){
-        logger.log(`🚗 Handling Engine Interaction via zone: ${interactedObject.name}. State: ${JSON.stringify(this.repairState)}`);
+        logger.log(`Handling Engine Interaction via zone: ${interactedObject.name}. State: ${JSON.stringify(this.repairState)}`);
 
         // We have a QTE or hood is closed so you cant interact
         if (this.qteManager.isActive() || !this.carInteraction.isHoodOpen) return;
@@ -583,7 +583,7 @@ export class CarRepairSystem {
 
         // Picking up any gas can part should pick up all parts
         if (itemId === 'gas_can_body' || itemId === 'gas_can_cap') {
-            logger.log(`🛠️ Picking up gas can parts (triggered by ${itemName})`);
+            logger.log(`Picking up gas can parts (triggered by ${itemName})`);
 
             // Check if inventory has space for *two* items if neither is held, or *one* if one is already held (though ideally they are picked together)
             const neededSlots = (this.repairState.hasGasCanBody || this.repairState.hasGasCanCap) ? 1 : 2;
@@ -636,7 +636,7 @@ export class CarRepairSystem {
         }
         else{
             // All other item pickup logic
-            logger.log(`🛠️ Picking up item: ${itemName} (ID: ${itemId})`);
+            logger.log(`Picking up item: ${itemName} (ID: ${itemId})`);
 
             success = this.gameManager.addToInventory({ 
                 name: itemName,
@@ -671,7 +671,7 @@ export class CarRepairSystem {
 
     // QTE callbacks (SkillCheck success or failure for engine repair)
     async onEngineRepairSuccess(engineZoneUserData) {
-        logger.log('✅ Engine Repair QTE Success!');
+        logger.log('Engine Repair QTE Success!');
 
         this.repairState.engineRepaired = true;
         this.repairState.needsToolbox = false;
@@ -690,7 +690,7 @@ export class CarRepairSystem {
 
     onEngineRepairFailure(engineZoneUserData) {
         // fail so play QTE event gagain
-        logger.log('❌ Engine Repair QTE Failure.');
+        logger.log('Engine Repair QTE Failure.');
 
         this.interactionSystem.showMessage("Repair failed... Try again.", 2000);
 
@@ -701,7 +701,7 @@ export class CarRepairSystem {
 
     // QTE callbacks for car ignition (bouncing ring success or failure)
     async onCarStartSuccess() {
-        logger.log('✅ Car Start QTE Success! Engine started. Now starting drive sequence...');
+        logger.log('Car Start QTE Success! Engine started. Now starting drive sequence...');
 
         this.audioManager.playSound('car_starting', 'public/audio/sfx/car-starting.mp3');
         this.interactionSystem.showMessage("The engine roars! Now drive!", 3000);
@@ -743,7 +743,7 @@ export class CarRepairSystem {
     }
 
     async onGearShiftSuccess() {
-        logger.log('✅ Gear Shift QTE Success! Ready to drive!');
+        logger.log('Gear Shift QTE Success! Ready to drive!');
 
         this.audioManager.playSound('gear_shift', 'public/audio/sfx/car-starting.mp3');
         this.interactionSystem.showMessage("Press SPACE to drive!", 5000);
@@ -753,7 +753,7 @@ export class CarRepairSystem {
     }
 
     async onGearShiftFailure() {
-        logger.log('❌ Gear Shift QTE Failure. Grinding gears...');
+        logger.log('Gear Shift QTE Failure. Grinding gears...');
 
         this.interactionSystem.showMessage("Grinded the gears! Retrying...", 2000);
 
@@ -773,14 +773,14 @@ export class CarRepairSystem {
         if (event.code !== 'Space') return;
         if (!this.waitingForSpaceToDrive) return;
 
-        logger.log('🚗 Space pressed - Starting escape sequence!');
+        logger.log('Space pressed - Starting escape sequence!');
         this.waitingForSpaceToDrive = false;
 
         this.startEscapeSequence();
     }
 
     async startEscapeSequence() {
-        logger.log('✅ Starting escape sequence - driving out!');
+        logger.log('Starting escape sequence - driving out!');
 
         this.audioManager.playSound('car_accelerate', 'public/audio/sfx/car-starting.mp3');
         this.interactionSystem.showMessage("GO GO GO!", 3000);
@@ -881,7 +881,7 @@ export class CarRepairSystem {
     }
 
     triggerEnding() {
-        logger.log('🎬 Triggering ending sequence...');
+        logger.log('Triggering ending sequence...');
 
         // Fade to black
         const fadeOverlay = document.createElement('div');
@@ -909,7 +909,7 @@ export class CarRepairSystem {
             if (this.narrativeManager) {
                 try {
                     await this.narrativeManager.triggerEvent("endings.escape");
-                    logger.log('📖 Narrative escape event triggered');
+                    logger.log('Narrative escape event triggered');
                 } catch (error) {
                     logger.warn('Could not trigger narrative escape event:', error);
                 }
@@ -921,7 +921,7 @@ export class CarRepairSystem {
     }
 
     showThankYouScreen() {
-        logger.log('💚 Showing thank you screen...');
+        logger.log('Showing thank you screen...');
 
         // Create thank you overlay
         const thankYouOverlay = document.createElement('div');
@@ -981,7 +981,7 @@ export class CarRepairSystem {
 
         // Handle any input to proceed to main menu
         const proceedToMainMenu = () => {
-            logger.log('🏠 Returning to main menu...');
+            logger.log('Returning to main menu...');
 
             // Fade out thank you screen
             thankYouOverlay.style.opacity = '0';
@@ -1005,11 +1005,11 @@ export class CarRepairSystem {
         thankYouOverlay.addEventListener('click', proceedToMainMenu);
         document.addEventListener('keydown', proceedToMainMenu);
 
-        logger.log('✅ Thank you screen displayed');
+        logger.log('Thank you screen displayed');
     }
 
     showCreditsScreen() {
-        logger.log('📜 Showing credits screen...');
+        logger.log('Showing credits screen...');
 
         // Get the existing credits screen from UIManager
         const creditsScreen = document.getElementById('credits-screen');
@@ -1043,13 +1043,13 @@ export class CarRepairSystem {
                 closeButton.style.cursor = 'default';
             }
 
-            logger.log('✅ Credits screen displayed');
+            logger.log('Credits screen displayed');
             logger.log(`   Z-index: ${creditsScreen.style.zIndex}`);
             logger.log(`   Display: ${creditsScreen.style.display}`);
 
             // Handle any input to return to main menu
             const returnToMenu = () => {
-                logger.log('🏠 Returning to main menu...');
+                logger.log('Returning to main menu...');
 
                 // Fade out credits
                 creditsScreen.style.opacity = '0';
@@ -1077,12 +1077,12 @@ export class CarRepairSystem {
         // Update game state to won
         if (this.gameManager && this.gameManager.gameState !== 'lost') {
             this.gameManager.gameState = 'won';
-            logger.log('✅ Game won - credits displayed');
+            logger.log('Game won - credits displayed');
         }
     }
 
     async onCarStartFailure() {
-        logger.log('❌ Car Start QTE Failure. Engine won\'t start...');
+        logger.log('Car Start QTE Failure. Engine won\'t start...');
 
         this.interactionSystem.showMessage("The engine sputtered and died... Retrying...", 2000);
 
@@ -1344,7 +1344,7 @@ export class CarRepairSystem {
             this.gasCanCapObject.userData.interactable = false;
         }
 
-        logger.log('   ✅ All interactions disabled except steering wheel');
+        logger.log('   All interactions disabled except steering wheel');
 
         // Update crosshair to reflect changes
         this.interactionSystem.updateCrosshair();

@@ -18,30 +18,29 @@ class ImprovedFlashlight {
         this.createFlashlight();
         this.setupControls();
 
-        console.log('🔦 Improved flashlight initialized');
+        console.log('Improved flashlight initialized');
     }
 
     createFlashlight() {
         // Main spotlight - narrow focused beam like a real flashlight
         this.light = new THREE.SpotLight(
             0xffffff,    // color
-            3,           // intensity - fixed intensity (no dynamic updates to prevent lag)
-            40,          // distance - shorter for more focused beam
-            Math.PI / 8, // angle (22.5 degrees) - much narrower beam
-            0.3,         // penumbra (softer edges at boundary)
-            1            // decay (faster falloff for more focused beam)
+            3,           // intensity 
+            40,          // distance 
+            Math.PI / 8, // angle 
+            0.3,         // penumbra 
+            1            // decay 
         );
 
         // Enable shadow casting (optimized resolution) with dramatic but clean shadows
         this.light.castShadow = true;
         this.light.shadow.mapSize.width = 1024;
         this.light.shadow.mapSize.height = 1024;
-        this.light.shadow.camera.near = 1.4;  // Increased from 0.5 to exclude player shadow at feet
+        this.light.shadow.camera.near = 1.4;  
         this.light.shadow.camera.far = 40;
-        this.light.shadow.bias = -0.0003;     // Less aggressive bias to prevent shadow acne (was -0.00005)
-        this.light.shadow.normalBias = 0.02;  // Add normal bias for flat surfaces like pages
-        this.light.shadow.radius = 1.0;       // Slightly softer shadow edges
-
+        this.light.shadow.bias = -0.0003;     
+        this.light.shadow.normalBias = 0.02;  
+        this.light.shadow.radius = 1.0;      
         // IMPORTANT: Add light to initial scene
         this.scene.add(this.light);
         this.lightCurrentScene = this.scene;
@@ -59,10 +58,10 @@ class ImprovedFlashlight {
         if (false) { // Disabled - flashlight is working properly now
             this.helper = new THREE.SpotLightHelper(this.light);
             this.scene.add(this.helper);
-            console.log('🔦 Flashlight helper enabled for debugging');
+            console.log('Flashlight helper enabled for debugging');
         }
 
-        console.log('🔦 Flashlight created in scene (narrow focused beam)');
+        console.log('Flashlight created in scene (narrow focused beam)');
     }
     
     setupControls() {
@@ -77,7 +76,7 @@ class ImprovedFlashlight {
     toggle() {
         this.isOn = !this.isOn;
         this.updateVisibility();
-        console.log(`🔦 Flashlight ${this.isOn ? 'ON' : 'OFF'}`);
+        console.log(`Flashlight ${this.isOn ? 'ON' : 'OFF'}`);
     }
     
     updateVisibility() {
@@ -115,7 +114,7 @@ class ImprovedFlashlight {
 
             if (this.currentBattery === 0) {
                 this.isOn = false;
-                console.log('🔋 Battery dead!');
+                console.log('Battery dead!');
             }
         }
 
@@ -133,7 +132,7 @@ class ImprovedFlashlight {
                 currentScene.add(this.target);
                 this.lightCurrentScene = currentScene;
                 this.targetCurrentScene = currentScene;
-                console.log(`🔦 Flashlight moved to ${this.stageManager.currentStage} scene`);
+                console.log(`Flashlight moved to ${this.stageManager.currentStage} scene`);
             }
         }
 
@@ -175,7 +174,7 @@ class ImprovedFlashlight {
     
     rechargeBattery(amount) {
         this.currentBattery = Math.min(this.maxBattery, this.currentBattery + amount);
-        console.log(`⚡ Battery recharged: ${Math.round(this.currentBattery)}%`);
+        console.log(`Battery recharged: ${Math.round(this.currentBattery)}%`);
     }
     
     getBatteryStatus() {

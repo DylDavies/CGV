@@ -19,13 +19,13 @@ class PauseMenu {
         // Dispatch initial quality change event to ensure all systems sync with loaded settings
         // This is important because PauseMenu is created after other systems
         setTimeout(() => {
-            console.log(`⏸️ Dispatching initial quality sync event: ${this.settings.quality}`);
+            console.log(`Dispatching initial quality sync event: ${this.settings.quality}`);
             window.dispatchEvent(new CustomEvent('qualitychange', {
                 detail: { quality: this.settings.quality }
             }));
         }, 100); // Small delay to ensure all systems are ready
 
-        console.log('⏸️ Pause menu initialized with quality:', this.settings.quality);
+        console.log('Pause menu initialized with quality:', this.settings.quality);
     }
 
     createMenu() {
@@ -411,7 +411,7 @@ class PauseMenu {
             }
         }, 1000);
 
-        console.log('⏸️ Pause menu shown');
+        console.log('Pause menu shown');
     }
 
     hide() {
