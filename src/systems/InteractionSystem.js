@@ -1297,10 +1297,10 @@ I don't look at that mirror anymore. I can't stand to see what I've done to him.
     
     async handleDoorInteraction(door, userData) {
         if (userData.locked) {
-            if (this.gameManager.hasItem('S_KeyBehindFire')) {
+            if (this.gameManager.hasItem('Key Behind Fire')) {
                 this.showConfirmation("Unlock the master bedroom door?", async () => {
                     userData.locked = false;
-                    this.gameManager.removeFromInventory('S_KeyBehindFire');
+                    this.gameManager.removeFromInventory('Key Behind Fire');
                     this.showMessage("The door unlocks with a loud click.");
 
                     // Animate the door opening right after unlocking
@@ -1908,7 +1908,7 @@ I don't look at that mirror anymore. I can't stand to see what I've done to him.
 
             // Add the key to inventory (S_KeyBehindFire - note: Key not Kay)
             this.gameManager.addToInventory({
-                name: 'S_KeyBehindFire',
+                name: 'Key Behind Fire',
                 type: 'key',
                 description: 'A key found behind the fireplace ashes.'
             });
