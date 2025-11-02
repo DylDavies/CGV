@@ -360,7 +360,7 @@
     },
     "barricaded_door_fail": {
       "type": "blackScreen",
-      "text": "You failed to secure the door, and died LOL skill issue",
+      "text": "You failed to barricade the door. It forced its way in",
       "duration": 5000
     },
     "lift_garage_door": {
