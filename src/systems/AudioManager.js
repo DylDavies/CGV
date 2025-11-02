@@ -33,6 +33,7 @@ class AudioManager {
             car_hood_close: 'public/audio/sfx/hood-close.mp3',
             car_starting: 'public/audio/sfx/car-starting.mp3',
             couch_sliding: 'public/audio/sfx/couch-sliding.mp3',
+            annie_heal: 'public/audio/sfx/annie-heal.m4a',
 
             //ambient sound effects - to be used for random sound generation
             ambientSounds: [

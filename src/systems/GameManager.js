@@ -1677,10 +1677,11 @@ class GameManager {
 
                 // Trigger Annie's healing dialogue
                 if (window.gameControls.narrativeManager) {
-                    window.gameControls.narrativeManager.triggerEvent('stage2.annie_heal');
+                    window.gameControls.narrativeManager.triggerEvent('stage3.annie_heal');
+                    this.audioManager.playSound('annie_heal',this.audioManager.soundPaths.annie_heal);
                 }
 
-                // Reset hit counter (Annie healed you)
+                // Reset hit counter (Annie healed you)1
                 this.playerHits = 0;
                 this.annieHasHealed = true;
 

@@ -45,6 +45,10 @@ export class NarrativeManager {
             case 'deathScreen':
                 return this.showDeathScreen(eventData.text, eventData.duration);
             case 'speechBubble':
+                // Play audio if specified in the event
+                if (eventData.audio && window.gameControls && window.gameControls.audioManager) {
+                    window.gameControls.audioManager.play(eventData.audio);
+                }
                 return this.showSpeechBubble(eventData.title, eventData.text, eventData.duration);
             case 'wakeUp':
                 return this.playWakeUpEffect(eventData.duration);
