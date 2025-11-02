@@ -418,7 +418,10 @@ async function main() {
                                 if (gameManager.audioManager) {
                                     gameManager.audioManager.stopSound('phone_ringing');
                                     // Play voicemail audio after phone is answered
-                                    await gameManager.audioManager.play('voicemail_editor');
+
+                                    // this.audioManager.playSound('couch_sliding', this.audioManager.soundPaths.couch_sliding, true, 0.4);
+                                    //await gameManager.audioManager.playSound('voice_mail', this.audioManager.soundPaths.voice_mail, true, 0.9);
+                                    await gameManager.audioManager.play('voice_mail');
                                 }
                                 // Trigger voicemail narrative
                                 await window.gameControls.narrativeManager.triggerEvent('office.phone_answered');

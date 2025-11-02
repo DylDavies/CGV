@@ -35,6 +35,7 @@ class InteractionSystem {
         this.sofaMovementSpeed = 0.01; // Units per frame (slow movement)
         this.sofaMaxMovement = 1; // Maximum distance to move (0.5 units)
         this.isEKeyHeld = false; // Track if E key is held
+        this.isSofaSoundPlaying = false;
 
         // Hiding system
         this.isHiding = false; // Is player currently hiding
@@ -337,12 +338,22 @@ class InteractionSystem {
             'gas_can_part': { // For both gas can body and cap
                 prompt: "Press E to pick up", // CarRepairSystem will update prompt more specifically if needed
                 handler: null // CarRepairSystem will set this
+            },
+            'safe_hint': {
+                prompt: "Press E to read the note",
+                handler: this.handleSafeHintInteraction.bind(this)
             }
-            // --- END NEW CAR REPAIR TYPES ---
         };
     }
 
-    // --- NEW PROXY HANDLER for Car Hood ---
+    handleSafeHintInteraction(noteObject, userData) {
+        logger.log(`📜 Player reading safe hint: ${userData.pageId}`);
+        
+        this.showPageContent(userData.pageId, () => {
+            // noteObject.userData.interactable = false;
+        });
+    }
+    
     handleCarHoodProxy(interactedObject, userData) {
         // This proxy simply calls the CarInteraction's handler.
         // CarInteraction's handler will now internally check with CarRepairSystem.
@@ -412,6 +423,12 @@ class InteractionSystem {
             case 'KeyE':
                 // Release E key
                 this.isEKeyHeld = false;
+
+                if (this.isSofaSoundPlaying) {
+                    this.audioManager.stopSound('couch_sliding');
+                    this.isSofaSoundPlaying = false;
+                    logger.log("🛋️ Sofa sound stopped (E key up)");
+                }
 
                 // Stop moving sofa if currently moving
                 if (this.movingSofa) {
@@ -961,12 +978,15 @@ I can hear it in there right now. Pacing. Scratching at the walls. Calling for m
 
 Before I attempted the girl in the doll, I tried something else. Something simpler. I found a volunteer. A friend who owed me a favor. He believed in what I was doing. He wanted to help.
 
-
 The mirror. I used the mirror as a window. A doorway between worlds. It worked. Too well. I saw him on the other side, trying to come through. His hands pressed against the glass from the inside. But he couldn't cross over. Something held him there, trapped between life and death.
 
 He's still there. Even now. I see him sometimes, in the reflection. His face pressed against the glass, mouth open in a silent scream. He's been there for weeks now. I can't let him out. I've tried. Every ritual I attempt just traps him deeper. The mirror has him now.
 
 I don't look at that mirror anymore. I can't stand to see what I've done to him. But it was a valuable lesson. I know more now. I know what NOT to do when I finally bring my son back.`
+            },
+            'SafeHint': {
+                title: 'A Torn Note',
+                content: `The hands of time will show you the way.`
             }
         };
 
@@ -1654,6 +1674,12 @@ I don't look at that mirror anymore. I can't stand to see what I've done to him.
             return;
         }
 
+        if (this.gameManager.hasItem('Old Key')) {
+            await window.gameControls.narrativeManager.triggerEvent('stage2.wrong_key_entrance');
+            await window.gameControls.narrativeManager.triggerEvent('stage2.find_door');
+            return; // Stop further interaction logic
+        }
+
         // Check if this is the first time trying the door
         if (!userData.triedToEscape) {
             userData.triedToEscape = true;
@@ -1997,6 +2023,12 @@ I don't look at that mirror anymore. I can't stand to see what I've done to him.
         };
 
         this.currentInteraction = 'sofa_movement';
+
+        if (!this.isSofaSoundPlaying) {
+            this.audioManager.playSound('couch_sliding', this.audioManager.soundPaths.couch_sliding, true, 0.4);
+            this.isSofaSoundPlaying = true;
+            logger.log("🛋️ Sofa sound started (on interaction)");
+        }
 
         console.log(`🛋️ Started pushing ${sofa.name}. Current distance: ${userData.distanceMoved}. Hold E to continue.`);
         console.log(`🛋️ Sofa userData:`, userData);
@@ -3030,15 +3062,38 @@ I don't look at that mirror anymore. I can't stand to see what I've done to him.
         if (this.currentInteraction && this.currentInteraction !== 'sofa_movement') return;
 
         // If E key is not held, don't continue moving
-        if (!this.isEKeyHeld) return;
+        if (!this.isEKeyHeld) {
+            if (this.isSofaSoundPlaying) {
+                this.audioManager.stopSound('couch_sliding');
+                this.isSofaSoundPlaying = false;
+                logger.log("🛋️ Sofa sound stopped (E key no longer held)");
+            }
+            // onKeyUp will handle setting this.movingSofa to null
+            return;
+        }
+
 
         const { sofa, userData, distanceMoved } = this.movingSofa;
 
         // Check if we've reached max movement
         if (distanceMoved >= this.sofaMaxMovement) {
+            if (this.isSofaSoundPlaying) {
+                this.audioManager.stopSound('couch_sliding'); 
+                this.isSofaSoundPlaying = false;
+                logger.log("🛋️ Sofa sound stopped (max distance reached)");
+            }
+
+
             // Mark as fully moved on this specific sofa's userData
             userData.moved = true;
             userData.distanceMoved = distanceMoved;
+
+            // if (!this.isSofaSoundPlaying) {
+            //     // Loop at 40% volume
+            //     this.audioManager.playSound('couch_sliding', this.audioManager.soundPaths.couch_sliding, true, 0.4);
+            //     this.isSofaSoundPlaying = true;
+            //     logger.log("🛋️ Sofa sound started");
+            // }
 
             // Removed message - sofa just stops moving silently
             console.log(`🛋️ ${sofa.name} fully moved. Final position: (${sofa.position.x.toFixed(2)}, ${sofa.position.y.toFixed(2)}, ${sofa.position.z.toFixed(2)})`);

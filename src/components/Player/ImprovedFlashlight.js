@@ -25,11 +25,11 @@ class ImprovedFlashlight {
         // Main spotlight - narrow focused beam like a real flashlight
         this.light = new THREE.SpotLight(
             0xffffff,    // color
-            2,           // intensity - fixed intensity (no dynamic updates to prevent lag)
+            3,           // intensity - fixed intensity (no dynamic updates to prevent lag)
             40,          // distance - shorter for more focused beam
             Math.PI / 8, // angle (22.5 degrees) - much narrower beam
             0.3,         // penumbra (softer edges at boundary)
-            2            // decay (faster falloff for more focused beam)
+            1            // decay (faster falloff for more focused beam)
         );
 
         // Enable shadow casting (optimized resolution) with dramatic but clean shadows

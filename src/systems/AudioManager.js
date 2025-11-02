@@ -21,6 +21,7 @@ class AudioManager {
             hitSound: 'public/audio/sfx/hit_sound.mp3',
             phone_ringing: 'public/audio/sfx/phone_ringing.mp3',
             voicemail_editor: 'public/audio/sfx/voicemail_editor.m4a',
+            voice_mail: 'public/audio/sfx/voice-mail.mp3',
             door_unlock_click: 'public/audio/sfx/door_unlock_click.mp3',
             door_bang_1: 'public/audio/sfx/door_bang_1.mp3',
             door_bang_2_loud: 'public/audio/sfx/door_bang_2_loud.mp3',
@@ -32,6 +33,7 @@ class AudioManager {
             car_hood_open: 'public/audio/sfx/hood-open.mp3',
             car_hood_close: 'public/audio/sfx/hood-close.mp3',
             car_starting: 'public/audio/sfx/car-starting.mp3',
+            couch_sliding: 'public/audio/sfx/couch-sliding.mp3',
 
             //ambient sound effects - to be used for random sound generation
             ambientSounds: [

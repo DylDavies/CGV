@@ -152,6 +152,12 @@
   gap: 15px;
 }
 
+#color-palette.locked {
+  pointer-events: none;
+  opacity: 0.5;
+  transition: opacity 0.3s ease-out;
+}
+
 #reset-puzzle-btn,
 #close-puzzle-btn {
   font-family: 'Courier New', Courier, monospace;

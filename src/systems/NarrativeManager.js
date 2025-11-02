@@ -80,6 +80,10 @@ export class NarrativeManager {
 
         console.log(`🎬 Narrative triggering stage transition to: ${stageName}`);
 
+        // show blackscreen between transitions
+        this.showBlackout();
+        await new Promise(resolve => setTimeout(resolve, 50)); // wait to ensure mansion is rendered
+
         try {
             await this.stageManager.switchToStage(stageName, {
                 fadeOutDuration,
@@ -118,7 +122,6 @@ export class NarrativeManager {
                     setTimeout(async () => {
                         // Show stage 1 title
                         console.log("showing")
-                        await this.triggerEvent('intro.stage_1_title');
 
                         await this.playIntroSequence();
 
@@ -135,9 +138,15 @@ export class NarrativeManager {
     }
     
     async playIntroSequence() {
-        this.showBlackout();
+
+        await this.triggerEvent('intro.stage_1_title');
         await this.triggerEvent('intro.black_screen_1');
-        await this.triggerEvent('intro.wake_up');
+        
+ 
+        this.elements.wakeUpOverlay.style.display = 'block';
+        this.hideBlackout(); 
+        
+        await this.triggerEvent('intro.wake_up'); 
         await this.triggerEvent('intro.speech_bubble_1');
     }
 
@@ -175,9 +184,8 @@ export class NarrativeManager {
     }
 
     playWakeUpEffect(duration = 8000) {
+        this.hideBlackout();
         return new Promise(resolve => {
-            this.hideBlackout();
-            this.elements.wakeUpOverlay.style.display = 'block';
             setTimeout(() => {
                 this.elements.wakeUpOverlay.style.display = 'none';
                 resolve();

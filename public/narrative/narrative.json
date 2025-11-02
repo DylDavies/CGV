@@ -2,7 +2,7 @@
   "intro": {
     "stage_1_title": {
       "type": "blackScreen",
-      "text": "STAGE 1: THE TRUTH",
+      "text": "STAGE 2: THE MANOR",
       "duration": 3000
     },
     "black_screen_1": {
@@ -334,6 +334,11 @@
         "text": "This key... it doesn't fit the front door. Where else could it go?",
         "duration": 4500
     },
+    "find_door": {
+      "type": "objective",
+      "id": "Escape",
+      "description": "Find the door unlocked by the key."
+    },
     "garage_unlocked": {
       "type": "speechBubble",
       "title": "You",
@@ -355,7 +360,7 @@
     },
     "barricaded_door_fail": {
       "type": "blackScreen",
-      "text": "You failed to secure the door, and died LOL skill issue",
+      "text": "You failed to barricade the door. It forced its way in",
       "duration": 5000
     },
     "lift_garage_door": {
