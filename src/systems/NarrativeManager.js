@@ -184,6 +184,7 @@ export class NarrativeManager {
     }
 
     playWakeUpEffect(duration = 8000) {
+        this.hideBlackout();
         return new Promise(resolve => {
             setTimeout(() => {
                 this.elements.wakeUpOverlay.style.display = 'none';
