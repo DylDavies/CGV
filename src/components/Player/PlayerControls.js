@@ -68,12 +68,26 @@ class FirstPersonControls {
             // *** QTE Input Handling Check ***
             if (this.qteManager && this.qteManager.isActive()) {
                 // If a QTE is active, pass the input ONLY to the QTEManager
-                // Check if the pressed key is the one the QTE is waiting for OR Escape
-                 if (event.code === this.qteManager.activeQTE.key || event.code === 'Escape') {
-                      event.preventDefault(); // Prevent default action (like spacebar jump)
-                      this.qteManager.handleInput(event.code); // QTEManager decides what to do
-                 }
-                 // Do not process any other game input while QTE is active
+                const qteType = this.qteManager.activeQTE.type;
+
+                // For rhythm game, prevent ALL arrow keys from game processing
+                if (qteType === 'rhythmGame' && event.code.startsWith('Arrow')) {
+                    event.preventDefault();
+                    event.stopPropagation();
+                    event.stopImmediatePropagation();
+                    this.qteManager.handleInput(event.code);
+                    return;
+                }
+
+                // For other QTE types, check if it's the expected key or escape
+                const isValidQTEKey = event.code === this.qteManager.activeQTE.key || event.code === 'Escape';
+
+                if (isValidQTEKey) {
+                    event.preventDefault();
+                    event.stopPropagation();
+                    this.qteManager.handleInput(event.code);
+                }
+                // Block ALL other inputs during QTE
                 return;
             }
 
@@ -157,6 +171,84 @@ class FirstPersonControls {
                             description: 'A key found in the safe. (DEBUG SPAWNED)'
                         });
                         console.log("Testing: Added Garage Key (S_KeyInSafe) to inventory via K key.");
+                    }
+                    break;
+                case 'Semicolon': // DEBUG: Spawn Annie in the car
+                    if (window.gameControls) {
+                        console.log('🎎 DEBUG: Spawning Annie in car...');
+
+                        // Add Annie to inventory if not already there
+                        if (window.gameControls.gameManager && !window.gameControls.gameManager.hasItem('Annie (Doll)')) {
+                            window.gameControls.gameManager.addToInventory({
+                                name: 'Annie (Doll)',
+                                type: 'companion',
+                                id: 'annie_doll',
+                                description: 'A creepy porcelain doll. It seems to watch you... (DEBUG SPAWNED)'
+                            });
+                            console.log('   Added Annie to inventory');
+                        }
+
+                        // Spawn Annie in the car if car repair system is available
+                        if (window.gameControls.carRepairSystem) {
+                            window.gameControls.carRepairSystem.spawnAnnieInCar();
+                            console.log('✅ Annie spawned in car!');
+                        } else {
+                            console.warn('   Car repair system not available yet');
+                        }
+                    }
+                    break;
+                case 'KeyB': // DEBUG: Skip to ready-to-drive state (all repairs done, rhythm puzzle complete)
+                    if (window.gameControls && window.gameControls.carRepairSystem) {
+                        const crs = window.gameControls.carRepairSystem;
+
+                        console.log('🚗 DEBUG: Skipping to ready-to-drive state...');
+
+                        // Set all repair states to complete
+                        crs.repairState.driverDoorInteractedFirstTime = true;
+                        crs.repairState.carWontStartTriggered = true;
+                        crs.repairState.hoodStuckTriggered = true;
+                        crs.repairState.needsCrowbar = false;
+                        crs.repairState.hasCrowbar = true;
+                        crs.repairState.justUsedCrowbar = false;
+                        crs.repairState.hoodOpenedWithCrowbar = true;
+                        crs.repairState.needsEngineRepairTriggered = true;
+                        crs.repairState.needsToolbox = false;
+                        crs.repairState.hasToolbox = true;
+                        crs.repairState.engineRepaired = true;
+                        crs.repairState.needsGasTriggered = true;
+                        crs.repairState.needsGasCan = false;
+                        crs.repairState.hasGasCanBody = true;
+                        crs.repairState.hasGasCanCap = true;
+                        crs.repairState.carFueled = true;
+                        crs.repairState.carReadyTriggered = true;
+                        crs.repairState.playerInCar = true;
+                        crs.repairState.carStartQTETriggered = true;
+                        crs.repairState.carDriveQTETriggered = true; // Rhythm puzzle complete
+
+                        // Set waiting for space to drive
+                        crs.waitingForSpaceToDrive = true;
+
+                        // Teleport player to driver seat
+                        if (crs.driverPosObject && crs.physicsManager) {
+                            const driverPos = new THREE.Vector3();
+                            crs.driverPosObject.getWorldPosition(driverPos);
+                            crs.physicsManager.teleportTo(driverPos);
+                            console.log(`   Teleported to driver seat: (${driverPos.x.toFixed(2)}, ${driverPos.y.toFixed(2)}, ${driverPos.z.toFixed(2)})`);
+                        }
+
+                        // Check if player has Annie and spawn her in car
+                        if (crs.gameManager && crs.gameManager.hasItem('Annie (Doll)')) {
+                            crs.spawnAnnieInCar();
+                            console.log('   Annie spawned in car');
+                        }
+
+                        // Freeze controls for escape sequence
+                        if (crs.physicsManager && crs.physicsManager.controls) {
+                            crs.physicsManager.controls.freeze();
+                            console.log('   Controls frozen');
+                        }
+
+                        console.log('✅ DEBUG: Ready to drive! Press SPACE to escape!');
                     }
                     break;
                 case 'KeyR': // Restart game when dead

@@ -156,7 +156,9 @@ async function main() {
                 qteManager,
                 audioManager,
                 gameManager,
-                stageManager
+                stageManager,
+                stageManager.loaders.mansion, // mansionLoader for physics bodies access
+                physicsManager // physicsManager for removing bodies
             );
 
             // --- Initialize CarRepairSystem AFTER CarInteraction and other dependencies ---
@@ -167,7 +169,9 @@ async function main() {
                 audioManager,
                 gameManager,
                 narrativeManager, // Pass NarrativeManager
-                carInteraction    // Pass CarInteraction instance
+                carInteraction,   // Pass CarInteraction instance
+                physicsManager,   // Pass PhysicsManager for player teleport
+                camera            // Pass Camera for escape sequence
             );
 
             new Resizer(camera, renderer);
@@ -187,7 +191,8 @@ async function main() {
                 gameManager,
                 atmosphere,
                 monsterAI,
-                minimap
+                minimap,
+                garageSystem // Add garageSystem to call tick() for gate lifting
             ].filter(u => u !== null && u !== undefined);
 
             loop.updatables.push(...updatables);
@@ -413,7 +418,10 @@ async function main() {
                                 if (gameManager.audioManager) {
                                     gameManager.audioManager.stopSound('phone_ringing');
                                     // Play voicemail audio after phone is answered
-                                    await gameManager.audioManager.play('voicemail_editor');
+
+                                    // this.audioManager.playSound('couch_sliding', this.audioManager.soundPaths.couch_sliding, true, 0.4);
+                                    //await gameManager.audioManager.playSound('voice_mail', this.audioManager.soundPaths.voice_mail, true, 0.9);
+                                    await gameManager.audioManager.play('voice_mail');
                                 }
                                 // Trigger voicemail narrative
                                 await window.gameControls.narrativeManager.triggerEvent('office.phone_answered');

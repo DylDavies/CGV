@@ -706,5 +706,121 @@ export class UIManager {
     updateBouncingRingTimer(ratio) { // ratio is 0 to 1
          if (this.uiElements.bounceTimerBar) this.uiElements.bounceTimerBar.style.width = `${ratio * 100}%`;
     }
+
+    // Rhythm Game QTE
+    showRhythmGameQTE() {
+        // Create rhythm game UI dynamically if not exists
+        if (!this.rhythmGameContainer) {
+            this.createRhythmGameUI();
+        }
+        if (this.rhythmGameContainer) {
+            this.rhythmGameContainer.style.display = 'block';
+            logger.log('✅ Rhythm Game UI shown');
+        }
+    }
+
+    hideRhythmGameQTE() {
+        if (this.rhythmGameContainer) {
+            this.rhythmGameContainer.style.display = 'none';
+            logger.log('✅ Rhythm Game UI hidden');
+        }
+    }
+
+    updateRhythmGameNote(position, symbol) {
+        if (this.rhythmNoteElement) {
+            this.rhythmNoteElement.style.left = `${position}px`;
+            this.rhythmNoteElement.textContent = symbol;
+        }
+    }
+
+    updateRhythmGameProgress(current, total) {
+        if (this.rhythmProgressElement) {
+            this.rhythmProgressElement.textContent = `Notes: ${current} / ${total}`;
+        }
+    }
+
+    createRhythmGameUI() {
+        // Create container
+        this.rhythmGameContainer = document.createElement('div');
+        this.rhythmGameContainer.id = 'rhythm-game-qte';
+        this.rhythmGameContainer.style.cssText = `
+            position: fixed;
+            bottom: 25%;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 600px;
+            background: rgba(20, 20, 20, 0.9);
+            border: 2px solid #555;
+            border-radius: 8px;
+            padding: 20px;
+            z-index: 1000;
+        `;
+
+        // Create track (horizontal line)
+        const track = document.createElement('div');
+        track.style.cssText = `
+            width: 100%;
+            height: 80px;
+            background: rgba(30, 30, 30, 0.7);
+            border: 2px solid #444;
+            border-radius: 5px;
+            position: relative;
+            margin-bottom: 15px;
+        `;
+
+        // Create hit zone (target box)
+        const hitZone = document.createElement('div');
+        hitZone.style.cssText = `
+            position: absolute;
+            left: 400px;
+            top: 0;
+            width: 100px;
+            height: 100%;
+            background: rgba(180, 180, 180, 0.25);
+            border: 2px solid #888;
+        `;
+        track.appendChild(hitZone);
+
+        // Create note element
+        this.rhythmNoteElement = document.createElement('div');
+        this.rhythmNoteElement.style.cssText = `
+            position: absolute;
+            left: -100px;
+            top: 50%;
+            transform: translateY(-50%);
+            width: 60px;
+            height: 60px;
+            background: rgba(120, 120, 120, 0.9);
+            border: 2px solid #aaa;
+            border-radius: 6px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 32px;
+            font-weight: bold;
+            color: #fff;
+            transition: left 0.05s linear;
+        `;
+        track.appendChild(this.rhythmNoteElement);
+
+        this.rhythmGameContainer.appendChild(track);
+
+        // Create progress text
+        this.rhythmProgressElement = document.createElement('div');
+        this.rhythmProgressElement.style.cssText = `
+            text-align: center;
+            color: #ccc;
+            font-family: 'Courier New', monospace;
+            font-size: 16px;
+            margin-top: 10px;
+        `;
+        this.rhythmProgressElement.textContent = 'Notes: 0 / 0';
+        this.rhythmGameContainer.appendChild(this.rhythmProgressElement);
+
+        // Add to body
+        document.body.appendChild(this.rhythmGameContainer);
+
+        logger.log('✅ Rhythm Game UI created');
+    }
 }
 

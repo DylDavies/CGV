@@ -306,6 +306,10 @@ class InteractionSystem {
                 prompt: "Press E to use plank to barricade door",
                 handler: null // Will be set by GarageSystem when activated
             },
+            garage_gate: {
+                prompt: "Hold E to lift the garage door",
+                handler: null // Will be set by GarageSystem when activated
+            },
             'car_hood': {
                  prompt: "Press E to open hood", // Default prompt
                  // Handler is now managed by CarInteraction calling CarRepairSystem
@@ -318,6 +322,10 @@ class InteractionSystem {
             'car_engine_zone': { // Invisible zone near engine
                 prompt: "Press E", // CarRepairSystem will update this
                 handler: null // CarRepairSystem will set this
+            },
+            'steering_wheel': { // Steering wheel for car ignition
+                prompt: "Press E to start engine", // CarRepairSystem will update this
+                handler: null // CarRepairSystem will set this in its initialize
             },
             'crowbar': { // The crowbar object
                 prompt: "Press E to pick up crowbar",
@@ -887,54 +895,95 @@ class InteractionSystem {
         // Define unique content for each page
         const pageContents = {
             'S_Page1': {
-                title: 'Page 1: The Beginning',
-                content: `The mansion stands silent tonight, but I can feel it watching me.
+                title: 'Page 1: The Loss',
+                content: `March 12th
 
-Every shadow seems alive, every creak of the floorboards sounds like footsteps. I came here seeking answers about my family's past, but I'm beginning to wonder if some secrets are better left buried.
+The mine collapsed today. They said it was quick. They said he didn't suffer.
 
-The old caretaker warned me not to come after dark. I should have listened.`
+They're lying. I know they're lying. My son... my beautiful boy. Gone. Just like that.
+
+I can't... I can't accept this. There has to be a way. There HAS to be. I won't let him go. Not like this. Not ever.
+
+This house feels so empty now. Every room echoes with his absence. His laughter, his footsteps... all gone.
+
+But I won't give up. I'll find a way to bring him back. I have to.`
             },
             'S_Page2': {
-                title: 'Page 2: Strange Findings',
-                content: `I found something in the library today. Hidden behind a loose panel, a collection of letters dating back decades. They speak of rituals, of something they tried to contain within these walls.
+                title: 'Page 2: Hope',
+                content: `April 3rd
 
-Whatever it was, I don't think they succeeded.
+I found something. In the old library, hidden behind the loose panel in the study. Books. Ancient texts about rituals, about crossing the veil between life and death.
 
-The lights keep flickering, even though I checked all the fuses.`
+The previous owners... they knew something. They were researching this too.
+
+There are instructions here. Methods to call back souls, to reverse death itself. It sounds impossible, insane even. But what do I have to lose?
+
+My son is out there somewhere, in the dark. And I'm going to bring him home.
+
+I know what you'd say if you were here. You'd tell me to stop. To let go. But you don't understand. A father's love doesn't end with death.
+
+I'll make this right. I promise.`
             },
             'S_Page3': {
-                title: 'Page 3: The Basement',
-                content: `There's something in the basement. I can hear it moving down there when I'm trying to sleep. Heavy, deliberate footsteps that start and stop without reason.
+                title: 'Page 3: Preparation',
+                content: `April 15th
 
-I tried to board up the door, but the next morning all the planks were neatly stacked beside it.
+I've set up everything in the bedroom. The circle, the candles, the symbols... exactly as the books described. It took weeks to gather all the materials. Some of them... I'd rather not say where they came from.
 
-It wants me to come down. But I'm not ready. Not yet.`
+The ritual requires practice. The texts warn against attempting it without preparation. One mistake and... well, the consequences are unclear. But they don't sound pleasant.
+
+I need to test it first. Small attempts. Build up to the real thing.
+
+I've been having dreams. Dark dreams. Something watches me while I work. The house feels different now, like it's waiting for something.
+
+Tomorrow I begin. Tomorrow I take the first step toward bringing my son home.
+
+God forgive me for what I'm about to do.`
             },
             'S_Page4': {
                 title: 'Page 4: Annie',
-                content: `I found a doll in one of the bedrooms. The tag says her name is Annie. She has this unnerving smile, and her eyes seem to follow you around the room.
+                content: `May 2nd
 
-I moved her to the attic, but she keeps appearing back in the bedroom. Always sitting in the same chair, always facing the door.
+The doll. I tried using the doll.
 
-I've stopped moving her.`
+I thought if I could anchor a soul to something physical, something small, I could learn how the process works. There was a girl... She had just passed. No one would know.
+
+I performed the ritual. I felt it working. The air grew cold, the candles flared... and then she screamed, I thought I had brought her back. But when it was done... nothing. Just the doll. Just Annie sitting there with that painted smile.
+
+Except... she blinks now. I've seen it. And sometimes I hear laughing coming from the room where I left her. I trapped her. I trapped her soul inside that doll and now she can't get out.
+
+What have I done? This was supposed to bring him back, not... not this.
+
+But I'm close. I know I'm close. I just need to try again. Perfect the method.`
             },
             'S_Page5': {
-                title: 'Page 5: The Truth',
-                content: `I understand now. This isn't just a haunted house. This is a prison. The original owners didn't just die here – they were consumed, absorbed into the very fabric of the building.
+                title: 'Page 5: My Son',
+                content: `May 17th
 
-And now it wants me too.
+I tried to bring him back tonight.
 
-The walls are breathing. I can feel them contract and expand when I press my hand against them. This place is alive.`
+I had everything ready. I called to him, spoke the words, offered everything I had. I felt him respond. I felt his presence reaching back to me from wherever he was.
+
+Something went wrong. The ritual twisted. Changed. The circle broke and the energy... it went wild. I heard him screaming my name, not in joy but in agony. The shadows in the room came alive. They grabbed him, pulled him, shaped him into...
+
+Into something else. Something wrong.
+
+The thing in the bedroom isn't my son. It wears his voice sometimes, calls out to me in the dark. But when I see it... God help me, when I see it...It's massive. Twisted. Hungry. It has his eyes, I think. But everything else is...
+
+I can hear it in there right now. Pacing. Scratching at the walls. Calling for me. What have I created? What have I done to my boy?`
             },
             'S_Page6': {
-                title: 'Page 6: Final Entry',
-                content: `If you're reading this, I'm probably gone. Either I escaped, or I became part of the mansion like the others.
+                title: 'Page 6: The Mirror',
+                content: `April 28th
 
-There is a way out. The ritual in the basement can be reversed, but it requires all six pages to be placed in the correct order. Look for the symbols on the wall near the entrance.
+Before I attempted the girl in the doll, I tried something else. Something simpler. I found a volunteer. A friend who owed me a favor. He believed in what I was doing. He wanted to help.
 
-Whatever you do, don't let the darkness catch you. It knows you're here now.
 
-Run.`
+The mirror. I used the mirror as a window. A doorway between worlds. It worked. Too well. I saw him on the other side, trying to come through. His hands pressed against the glass from the inside. But he couldn't cross over. Something held him there, trapped between life and death.
+
+He's still there. Even now. I see him sometimes, in the reflection. His face pressed against the glass, mouth open in a silent scream. He's been there for weeks now. I can't let him out. I've tried. Every ritual I attempt just traps him deeper. The mirror has him now.
+
+I don't look at that mirror anymore. I can't stand to see what I've done to him. But it was a valuable lesson. I know more now. I know what NOT to do when I finally bring my son back.`
             },
             'SafeHint': {
                 title: 'A Torn Note',
@@ -1269,11 +1318,11 @@ Run.`
                     // Complete the find lock objective
                     this.gameManager.completeObjective('find_lock');
 
-                    // Set monster to curious (level 3)
-                    if (window.gameControls.monsterAI) {
-                        window.gameControls.monsterAI.setAggressionLevel(3);
-                        console.log('👾 Monster set to CURIOUS after door opened');
-                    }
+                    // Set monster to curious (level 3) - DISABLED
+                    // if (window.gameControls.monsterAI) {
+                    //     window.gameControls.monsterAI.setAggressionLevel(3);
+                    //     console.log('👾 Monster set to CURIOUS after door opened');
+                    // }
 
                     // Trigger door opened speech and new objective
                     await window.gameControls.narrativeManager.triggerEvent('stage1.door_opened');

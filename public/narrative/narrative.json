@@ -363,6 +363,11 @@
       "text": "You failed to secure the door, and died LOL skill issue",
       "duration": 5000
     },
+    "lift_garage_door": {
+        "type": "objective",
+        "id": "lift_garage_door",
+        "description": "Find a way to open the garage door"
+    },
     "garage_escape_objective": {
         "type": "objective",
         "id": "escape_garage",
@@ -468,6 +473,11 @@
     "death_annie_refusal": {
       "type": "deathScreen",
       "text": "YOU DIED\n\nAnnie doesn't like being told no. Some games you must play to survive.\n\nPress R to restart",
+      "duration": -1
+    },
+    "death_garage_escape": {
+      "type": "deathScreen",
+      "text": "YOU DIED\n\nThe creature caught you outside. You can't outrun it on foot.\n\nPress R to restart",
       "duration": -1
     }
   }
