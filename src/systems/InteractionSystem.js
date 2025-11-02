@@ -305,6 +305,10 @@ class InteractionSystem {
                 prompt: "Press E to use plank to barricade door",
                 handler: null // Will be set by GarageSystem when activated
             },
+            garage_gate: {
+                prompt: "Hold E to lift the garage door",
+                handler: null // Will be set by GarageSystem when activated
+            },
             'car_hood': {
                  prompt: "Press E to open hood", // Default prompt
                  // Handler is now managed by CarInteraction calling CarRepairSystem
@@ -317,6 +321,10 @@ class InteractionSystem {
             'car_engine_zone': { // Invisible zone near engine
                 prompt: "Press E", // CarRepairSystem will update this
                 handler: null // CarRepairSystem will set this
+            },
+            'steering_wheel': { // Steering wheel for car ignition
+                prompt: "Press E to start engine", // CarRepairSystem will update this
+                handler: null // CarRepairSystem will set this in its initialize
             },
             'crowbar': { // The crowbar object
                 prompt: "Press E to pick up crowbar",
@@ -921,15 +929,11 @@ God forgive me for what I'm about to do.`
 
 The doll. I tried using the doll.
 
-I thought if I could anchor a soul to something physical, something small, I could learn how the process works. There was a girl... a homeless girl. No one would miss her. No one would know.
+I thought if I could anchor a soul to something physical, something small, I could learn how the process works. There was a girl... She had just passed. No one would know.
 
-I performed the ritual. I felt it working. The air grew cold, the candles flared... and then she screamed. God, the screaming.
+I performed the ritual. I felt it working. The air grew cold, the candles flared... and then she screamed, I thought I had brought her back. But when it was done... nothing. Just the doll. Just Annie sitting there with that painted smile.
 
-But when it was done... nothing. Just the doll. Just Annie sitting there with that painted smile.
-
-Except... she blinks now. I've seen it. And sometimes I hear crying coming from the room where I left her. A child's voice, sobbing, begging to be let out.
-
-I trapped her. I trapped her soul inside that doll and now she can't get out. She's conscious. She's aware. She's in hell.
+Except... she blinks now. I've seen it. And sometimes I hear laughing coming from the room where I left her. I trapped her. I trapped her soul inside that doll and now she can't get out.
 
 What have I done? This was supposed to bring him back, not... not this.
 
@@ -943,41 +947,26 @@ I tried to bring him back tonight.
 
 I had everything ready. I called to him, spoke the words, offered everything I had. I felt him respond. I felt his presence reaching back to me from wherever he was.
 
-And then...
-
 Something went wrong. The ritual twisted. Changed. The circle broke and the energy... it went wild. I heard him screaming my name, not in joy but in agony. The shadows in the room came alive. They grabbed him, pulled him, shaped him into...
 
 Into something else. Something wrong.
 
-The thing in the bedroom isn't my son. It wears his voice sometimes, calls out to me in the dark. But when I see it... God help me, when I see it...
+The thing in the bedroom isn't my son. It wears his voice sometimes, calls out to me in the dark. But when I see it... God help me, when I see it...It's massive. Twisted. Hungry. It has his eyes, I think. But everything else is...
 
-It's massive. Twisted. Hungry. It has his eyes, I think. But everything else is...
-
-I can hear it in there right now. Pacing. Scratching at the walls. Calling for me.
-
-What have I created? What have I done to my boy?`
+I can hear it in there right now. Pacing. Scratching at the walls. Calling for me. What have I created? What have I done to my boy?`
             },
             'S_Page6': {
                 title: 'Page 6: The Mirror',
                 content: `April 28th
 
-Before I attempted the girl in the doll, I tried something else. Something simpler.
+Before I attempted the girl in the doll, I tried something else. Something simpler. I found a volunteer. A friend who owed me a favor. He believed in what I was doing. He wanted to help.
 
-I found a volunteer. A friend who owed me a favor. He believed in what I was doing. He wanted to help.
 
-I tried to pull his spirit back after... after he passed. Just his spirit. A test to see if I could reach beyond the veil.
+The mirror. I used the mirror as a window. A doorway between worlds. It worked. Too well. I saw him on the other side, trying to come through. His hands pressed against the glass from the inside. But he couldn't cross over. Something held him there, trapped between life and death.
 
-The mirror. I used the mirror as a window. A doorway between worlds.
+He's still there. Even now. I see him sometimes, in the reflection. His face pressed against the glass, mouth open in a silent scream. He's been there for weeks now. I can't let him out. I've tried. Every ritual I attempt just traps him deeper. The mirror has him now.
 
-It worked. Too well. I saw him on the other side, trying to come through. His hands pressed against the glass from the inside. But he couldn't cross over. Something held him there, trapped between life and death.
-
-He's still there. Even now. I see him sometimes, in the reflection. His face pressed against the glass, mouth open in a silent scream. He's been there for weeks now.
-
-I can't let him out. I've tried. Every ritual I attempt just traps him deeper. The mirror has him now.
-
-I don't look at that mirror anymore. I can't stand to see what I've done to him.
-
-But it was a valuable lesson. I know more now. I know what NOT to do when I finally bring my son back.`
+I don't look at that mirror anymore. I can't stand to see what I've done to him. But it was a valuable lesson. I know more now. I know what NOT to do when I finally bring my son back.`
             }
         };
 
@@ -1308,11 +1297,11 @@ But it was a valuable lesson. I know more now. I know what NOT to do when I fina
                     // Complete the find lock objective
                     this.gameManager.completeObjective('find_lock');
 
-                    // Set monster to curious (level 3)
-                    if (window.gameControls.monsterAI) {
-                        window.gameControls.monsterAI.setAggressionLevel(3);
-                        console.log('👾 Monster set to CURIOUS after door opened');
-                    }
+                    // Set monster to curious (level 3) - DISABLED
+                    // if (window.gameControls.monsterAI) {
+                    //     window.gameControls.monsterAI.setAggressionLevel(3);
+                    //     console.log('👾 Monster set to CURIOUS after door opened');
+                    // }
 
                     // Trigger door opened speech and new objective
                     await window.gameControls.narrativeManager.triggerEvent('stage1.door_opened');

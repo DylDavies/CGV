@@ -156,7 +156,9 @@ async function main() {
                 qteManager,
                 audioManager,
                 gameManager,
-                stageManager
+                stageManager,
+                stageManager.loaders.mansion, // mansionLoader for physics bodies access
+                physicsManager // physicsManager for removing bodies
             );
 
             // --- Initialize CarRepairSystem AFTER CarInteraction and other dependencies ---
@@ -167,7 +169,9 @@ async function main() {
                 audioManager,
                 gameManager,
                 narrativeManager, // Pass NarrativeManager
-                carInteraction    // Pass CarInteraction instance
+                carInteraction,   // Pass CarInteraction instance
+                physicsManager,   // Pass PhysicsManager for player teleport
+                camera            // Pass Camera for escape sequence
             );
 
             new Resizer(camera, renderer);
@@ -187,7 +191,8 @@ async function main() {
                 gameManager,
                 atmosphere,
                 monsterAI,
-                minimap
+                minimap,
+                garageSystem // Add garageSystem to call tick() for gate lifting
             ].filter(u => u !== null && u !== undefined);
 
             loop.updatables.push(...updatables);

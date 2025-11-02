@@ -71,6 +71,9 @@ class MonsterAI {
         this.savedQuaternion = null; // Lock rotation during attack
         // --- END REVISED ---
 
+        // Despawn state
+        this.despawned = false;
+
         console.log("👾 Monster AI Initialized with NavMesh pathfinding.");
     }
 
@@ -91,6 +94,28 @@ class MonsterAI {
             this.path = []; // Clear path on state change
             this.wanderTarget = null; // Clear wander target
         }
+    }
+
+    despawn() {
+        console.log('👾 Monster despawning - removing from scene');
+        this.despawned = true;
+
+        // Make monster invisible
+        if (this.monster) {
+            this.monster.visible = false;
+        }
+
+        // Stop footsteps but keep heartbeat playing to maintain atmosphere
+        if (this.audioManager) {
+            this.audioManager.stopSound('monster-footsteps', 500);
+            // NOTE: Heartbeat is intentionally kept playing
+        }
+
+        // Clear any active paths
+        this.path = [];
+        this.wanderTarget = null;
+
+        console.log('👾 Monster successfully despawned (heartbeat still playing)');
     }
 
     createVisuals() {
@@ -253,9 +278,9 @@ class MonsterAI {
         // Check if we should attack (within attack range)
         // Only hostile or bold monsters attack
         // Attack range matches kill range (1.5) so player dies when monster attacks
-        // Don't attack if player is hiding
+        // Don't attack if player is hiding or if monster is despawned
         const playerIsHiding = window.gameControls?.interactionSystem?.isHiding || false;
-        if (!this.isAttacking && !playerIsHiding && (this.aggressionLevel >= 4) && distanceToPlayer < 1.5) {
+        if (!this.despawned && !this.isAttacking && !playerIsHiding && (this.aggressionLevel >= 4) && distanceToPlayer < 1.5) {
             this.startAttack();
             return; // Skip normal AI logic during attack
         }
@@ -417,6 +442,7 @@ class MonsterAI {
 
     startAttack() {
         if (this.isAttacking) return; // Already attacking
+        if (this.despawned) return; // Can't attack when despawned
 
         this.isAttacking = true;
         this.attackStartTime = Date.now();
@@ -723,6 +749,11 @@ class MonsterAI {
     }
 
     tick(delta) {
+        // If monster is despawned, don't update anything
+        if (this.despawned) {
+            return;
+        }
+
         if (this.mixer) {
             this.mixer.update(delta);
         }

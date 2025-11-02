@@ -94,6 +94,9 @@ class RapierPhysicsManager {
         // Debug spawn freeze
         this.spawnFrozen = false;
 
+        // Camera sync control (can be disabled for cutscenes)
+        this.skipCameraSync = false;
+
         // Physics stabilization after teleport
         this.physicsStabilizing = false;
         this.stabilizationTimer = 0;
@@ -315,8 +318,10 @@ class RapierPhysicsManager {
             this.handleNormalMovement(safeInputs, delta);
         }
 
-        // Update camera position based on physics body
-        this.syncCameraToPhysicsBody();
+        // Update camera position based on physics body (unless disabled for cutscenes)
+        if (!this.skipCameraSync) {
+            this.syncCameraToPhysicsBody();
+        }
 
         // Apply head bob and fear effects
         this.updateHeadBob(delta);

@@ -817,7 +817,7 @@ class AnnieInteraction {
             inputField.placeholder = 'Type your answer here...';
             inputField.style.cssText = `
                 width: 100%;
-                padding: 12px;
+                padding: 12px 0px 12px 12px;
                 font-size: 16px;
                 background: rgba(20, 20, 20, 0.8);
                 color: #e0e0e0;
