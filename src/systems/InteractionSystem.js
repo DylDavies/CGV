@@ -929,9 +929,7 @@ I need to test it first. Small attempts. Build up to the real thing.
 
 I've been having dreams. Dark dreams. Something watches me while I work. The house feels different now, like it's waiting for something.
 
-Tomorrow I begin. Tomorrow I take the first step toward bringing my son home.
-
-God forgive me for what I'm about to do.`
+Tomorrow I begin. Tomorrow I take the first step toward bringing my son home. God forgive me for what I'm about to do.`
             },
             'S_Page4': {
                 title: 'Page 4: Annie',
@@ -945,8 +943,6 @@ I performed the ritual. I felt it working. The air grew cold, the candles flared
 
 Except... she blinks now. I've seen it. And sometimes I hear laughing coming from the room where I left her. I trapped her. I trapped her soul inside that doll and now she can't get out.
 
-What have I done? This was supposed to bring him back, not... not this.
-
 But I'm close. I know I'm close. I just need to try again. Perfect the method.`
             },
             'S_Page5': {
@@ -957,9 +953,7 @@ I tried to bring him back tonight.
 
 I had everything ready. I called to him, spoke the words, offered everything I had. I felt him respond. I felt his presence reaching back to me from wherever he was.
 
-Something went wrong. The ritual twisted. Changed. The circle broke and the energy... it went wild. I heard him screaming my name, not in joy but in agony. The shadows in the room came alive. They grabbed him, pulled him, shaped him into...
-
-Into something else. Something wrong.
+Something went wrong. The ritual twisted. Changed. The circle broke and the energy... it went wild. I heard him screaming my name, not in joy but in agony. The shadows in the room came alive. They grabbed him, pulled him, shaped him into... Into something else. Something wrong.
 
 The thing in the bedroom isn't my son. It wears his voice sometimes, calls out to me in the dark. But when I see it... God help me, when I see it...It's massive. Twisted. Hungry. It has his eyes, I think. But everything else is...
 
@@ -967,9 +961,7 @@ I can hear it in there right now. Pacing. Scratching at the walls. Calling for m
             },
             'S_Page6': {
                 title: 'Page 6: The Mirror',
-                content: `April 28th
-
-Before I attempted the girl in the doll, I tried something else. Something simpler. I found a volunteer. A friend who owed me a favor. He believed in what I was doing. He wanted to help.
+                content: `Before I attempted the girl in the doll, I tried something else. Something simpler. I found a volunteer. A friend who owed me a favor. He believed in what I was doing. He wanted to help.
 
 The mirror. I used the mirror as a window. A doorway between worlds. It worked. Too well. I saw him on the other side, trying to come through. His hands pressed against the glass from the inside. But he couldn't cross over. Something held him there, trapped between life and death.
 
@@ -3698,7 +3690,7 @@ I don't look at that mirror anymore. I can't stand to see what I've done to him.
                     </div>
                     <div style="margin-bottom: 20px;">
                         <label style="display: block; margin-bottom: 5px;">Password:</label>
-                        <input id="office-password" type="password" placeholder="Enter password..." autocomplete="off" style="
+                        <input id="office-password" type="password" placeholder="Enter password..." autocomplete="false" style="
                             width: 100%;
                             padding: 8px;
                             background: #0a0a0a;
