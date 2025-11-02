@@ -13,7 +13,7 @@ export class NarrativeManager {
         };
         this.narrativeData = null;
         this.stageManager = stageManager;
-        console.log('📖 NarrativeManager Initialized');
+        console.log('NarrativeManager Initialized');
     }
 
     async loadNarrative(path) {

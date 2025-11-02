@@ -69,13 +69,9 @@ export class ColorPuzzle {
             .map(index => this.logic.colorMap[index])
             .filter(Boolean);
 
-        // --- DEBUG LOG ---
-        //console.log("   - Available Colors (Palette):", availableColors);
+
 
         this.logic.selectedColor = availableColors[0];
-
-        //console.log(`   - Initially Selected Color: ${this.logic.selectedColor}`);
-        // --- END DEBUG LOG ---
 
         this.ui.render(this.logic);
         

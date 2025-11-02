@@ -44,7 +44,6 @@ class MonsterAI {
         this.lastHidingSpotCacheTime = 0;
         this.hidingSpotCacheDuration = 10000; // Recalculate hiding spots every 10 seconds
 
-        // --- REVISED: Aggression System ---
         this.aggressionLevel = 1; // Start at docile
         this.aggressionLevels = {
             1: { name: 'DOCILE', speed: 1.5, color: 0x00ff00 },
@@ -69,12 +68,11 @@ class MonsterAI {
         this.ATTACK_DURATION = 1500; // 1.5 seconds for attack animation
         this.savedPosition = null; // Lock position during attack
         this.savedQuaternion = null; // Lock rotation during attack
-        // --- END REVISED ---
 
         // Despawn state
         this.despawned = false;
 
-        console.log("👾 Monster AI Initialized with NavMesh pathfinding.");
+        console.log("Monster AI Initialized with NavMesh pathfinding.");
     }
 
     cycleAggression() {
@@ -82,7 +80,7 @@ class MonsterAI {
         if (this.aggressionLevel > Object.keys(this.aggressionLevels).length) {
             this.aggressionLevel = 1;
         }
-        console.log(`🧠 Monster aggression level set to: ${this.aggressionLevel} (${this.aggressionLevels[this.aggressionLevel].name})`);
+        console.log(`Monster aggression level set to: ${this.aggressionLevel} (${this.aggressionLevels[this.aggressionLevel].name})`);
         this.path = []; // Clear path on state change
         this.wanderTarget = null; // Clear wander target
     }
@@ -90,14 +88,14 @@ class MonsterAI {
     setAggressionLevel(level) {
         if (level >= 1 && level <= Object.keys(this.aggressionLevels).length) {
             this.aggressionLevel = level;
-            console.log(`🧠 Monster aggression level set to: ${this.aggressionLevel} (${this.aggressionLevels[this.aggressionLevel].name})`);
+            console.log(`Monster aggression level set to: ${this.aggressionLevel} (${this.aggressionLevels[this.aggressionLevel].name})`);
             this.path = []; // Clear path on state change
             this.wanderTarget = null; // Clear wander target
         }
     }
 
     despawn() {
-        console.log('👾 Monster despawning - removing from scene');
+        console.log('Monster despawning - removing from scene');
         this.despawned = true;
 
         // Make monster invisible
@@ -115,7 +113,7 @@ class MonsterAI {
         this.path = [];
         this.wanderTarget = null;
 
-        console.log('👾 Monster successfully despawned (heartbeat still playing)');
+        console.log('Monster successfully despawned (heartbeat still playing)');
     }
 
     createVisuals() {
@@ -134,7 +132,7 @@ class MonsterAI {
         try {
             // Skip spawning if pathfinding is not available (e.g., on office stage without navmesh)
             if (!this.pathfinding || !this.pathfinding.zones[this.ZONE]) {
-                console.warn("⚠️ Monster cannot spawn - NavMesh pathfinding not available for current stage");
+                console.warn("Monster cannot spawn - NavMesh pathfinding not available for current stage");
                 return;
             }
 
@@ -150,7 +148,7 @@ class MonsterAI {
 
             if (randomNode && randomNode.centroid) {
                 this.monster.position.copy(randomNode.centroid);
-                console.log(`👾 Monster spawned at random NavMesh node ID: ${randomNode.id}`);
+                console.log(`Monster spawned at random NavMesh node ID: ${randomNode.id}`);
             } else {
                 throw new Error("Selected random node is invalid or missing a centroid.");
             }
@@ -321,7 +319,7 @@ class MonsterAI {
                     this.aggressionLevel = 5; // Becomes Hostile
                     this.isFleeing = false;
                     this.fleeTimer = 0;
-                    console.log('👾 Monster became HOSTILE - player entered inner bubble');
+                    console.log('Monster became HOSTILE - player entered inner bubble');
                 }
                 // Outer bubble: FLEE away from player
                 else if (distanceToPlayer >= currentState.innerBubble && distanceToPlayer < currentState.outerBubble) {
@@ -330,7 +328,7 @@ class MonsterAI {
                         this.isFleeing = true;
                         this.fleeTimer = now;
                         this.speed = currentState.speed * 1.5;
-                        console.log('👾 Monster fleeing - player entered outer bubble');
+                        console.log('Monster fleeing - player entered outer bubble');
                     } else {
                         // Check if we've been fleeing for more than 8 seconds
                         if (now - this.fleeTimer > 8000) {
@@ -338,7 +336,7 @@ class MonsterAI {
                             this.aggressionLevel = 4; // Becomes Bold
                             this.isFleeing = false;
                             this.path = [];
-                            console.log('👾 Monster became BOLD after fleeing for 8 seconds');
+                            console.log('Monster became BOLD after fleeing for 8 seconds');
                         }
                     }
 
@@ -353,7 +351,7 @@ class MonsterAI {
                         // Player left the outer bubble - stop fleeing
                         this.isFleeing = false;
                         this.fleeTimer = 0;
-                        console.log('👾 Monster stopped fleeing - player left outer bubble');
+                        console.log('Monster stopped fleeing - player left outer bubble');
                     }
 
                     // Pathfind to position just outside outer bubble
@@ -458,7 +456,7 @@ class MonsterAI {
         this.savedPosition = this.monster.position.clone();
         this.savedQuaternion = this.monster.quaternion.clone();
 
-        console.log('🗡️ Monster attacking player!');
+        console.log('Monster attacking player!');
         console.log(`   Locked position: (${this.savedPosition.x.toFixed(2)}, ${this.savedPosition.y.toFixed(2)}, ${this.savedPosition.z.toFixed(2)})`);
 
         // Register hit immediately when attack animation starts
@@ -471,7 +469,7 @@ class MonsterAI {
             try {
                 this.audioManager.playSound('monster_attack', 'public/audio/sfx/monster-attack.mp3');
             } catch (error) {
-                console.warn('⚠️ Could not play monster attack sound:', error.message);
+                console.warn('Could not play monster attack sound:', error.message);
             }
         }
 
@@ -481,12 +479,12 @@ class MonsterAI {
         }
 
         if (this.animations['attack']) {
-            console.log('✅ Playing attack animation');
+            console.log('Playing attack animation');
             this.animations['attack'].reset();
             this.animations['attack'].play();
             this.activeAnimation = 'attack';
         } else {
-            console.warn('❌ Attack animation not found! Available animations:', Object.keys(this.animations));
+            console.warn('Attack animation not found! Available animations:', Object.keys(this.animations));
         }
     }
 
@@ -495,7 +493,7 @@ class MonsterAI {
     }
 
     resetAttack() {
-        console.log('🔄 Resetting attack - monster can move again');
+        console.log('Resetting attack - monster can move again');
         this.isAttacking = false;
         this.attackStartTime = 0;
         this.savedPosition = null;

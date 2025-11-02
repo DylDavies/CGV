@@ -160,7 +160,6 @@ class AnnieInteraction {
     constructor(interactionSystem, stageManager) {
         this.interactionSystem = interactionSystem;
 
-        // --- Get direct references to core systems ---
         console.log("interactionSystem", interactionSystem);
         this.gameManager = interactionSystem.gameManager;
         this.camera = interactionSystem.camera;
@@ -180,8 +179,6 @@ class AnnieInteraction {
         // Current playing audio ID for dialogue
         this.currentDialogueAudio = null;
     }
-
-    // --- Public Methods (called by InteractionSystem) ---
 
     /**
      * Checks if the hovered object data is for the Annie doll.
@@ -233,7 +230,7 @@ class AnnieInteraction {
         console.log("Audio Path: ", audioPath);
         if (audioPath && this.audioManager) {
             const audioId = `annie_dialogue_${nodeId}`;
-            console.log(`🔊 Playing Annie dialogue audio: ${audioId} from ${audioPath}`);
+            console.log(`Playing Annie dialogue audio: ${audioId} from ${audioPath}`);
             this.audioManager.playSound(audioId, audioPath, false, 0.7);
             this.currentDialogueAudio = audioId;
         }
@@ -244,7 +241,7 @@ class AnnieInteraction {
      */
     stopDialogueAudio() {
         if (this.currentDialogueAudio && this.audioManager) {
-            console.log(`🔇 Stopping Annie dialogue audio: ${this.currentDialogueAudio}`);
+            console.log(`Stopping Annie dialogue audio: ${this.currentDialogueAudio}`);
             this.audioManager.stopSound(this.currentDialogueAudio, 200); // 200ms fade out
             this.currentDialogueAudio = null;
         }
@@ -437,19 +434,19 @@ class AnnieInteraction {
      * @param {object} userData - The page's userData
      */
     handleEnding(endingType, pageObject, userData) {
-        console.log(`🎎 Annie ending: ${endingType}`);
+        console.log(`Annie ending: ${endingType}`);
         this.stopLookingAtAnnie();
 
         // Check if this ending has already been reached
         if (this.completedEndings.has(endingType)) {
-            console.log(`🎎 Ending ${endingType} already seen - showing message`);
+            console.log(`Ending ${endingType} already seen - showing message`);
             this.interactionSystem.showMessage("Annie giggles... 'We already played that game. Try something different!'");
             return;
         }
 
         // Mark this ending as completed
         this.completedEndings.add(endingType);
-        console.log(`🎎 Completed endings: ${Array.from(this.completedEndings).join(', ')}`);
+        console.log(`Completed endings: ${Array.from(this.completedEndings).join(', ')}`);
 
         switch (endingType) {
             case "ENDING_1_POTION":
@@ -490,7 +487,7 @@ class AnnieInteraction {
                 const annieDoll = this.stageManager.currentLoader.props.get('annie');
                 if (annieDoll) {
                     annieDoll.visible = false;
-                    console.log('🎎 Annie doll removed from scene - she joined you!');
+                    console.log('Annie doll removed from scene - she joined you!');
                 }
 
                 this.interactionSystem.animateItemPickup(pageObject, () => {
@@ -506,12 +503,12 @@ class AnnieInteraction {
 
             case "ENDING_4_REFUSAL":
                 // Player refuses - Annie kills them
-                console.log('💀 Annie refusal - player will die');
+                console.log('Annie refusal - player will die');
                 this.interactionSystem.showMessage("Annie's face twists into a horrible grimace...");
 
                 // Trigger death after a short delay
                 setTimeout(async () => {
-                    console.log('💀 Calling onPlayerDeath("annie_refusal")');
+                    console.log('Calling onPlayerDeath("annie_refusal")');
                     await this.gameManager.onPlayerDeath('annie_refusal');
                 }, 2000);
                 break;
@@ -540,7 +537,7 @@ class AnnieInteraction {
         // Branch 1a: Player confirms they want it
         const acceptNode = new DialogueNode('accept', 'Annie', 'Here you go... Be careful with it.', {
             onExit: () => {
-                console.log('🎎 Annie: Giving page to player');
+                console.log('Annie: Giving page to player');
                 this.stopLookingAtAnnie();
                 this.gameManager.collectPage(userData.pageId);
                 this.interactionSystem.animateItemPickup(pageObject, () => {
@@ -559,7 +556,7 @@ class AnnieInteraction {
         // Branch 1b: Player changes mind
         const changesMindNode = new DialogueNode('changes_mind', 'Annie', 'Wise choice... or maybe not. You\'ll come back for it. They always do.', {
             onExit: () => {
-                console.log('🎎 Annie: Player changed mind');
+                console.log('Annie: Player changed mind');
                 this.stopLookingAtAnnie();
                 this.interactionSystem.showMessage("You decide not to take the paper... for now.");
             }
@@ -573,7 +570,7 @@ class AnnieInteraction {
         // Branch 2a: Player reconsiders and takes it
         const reconsiderNode = new DialogueNode('reconsider', 'Annie', 'I thought so... They always take it in the end.', {
             onEnter: () => {
-                console.log('🎎 Annie: Player reconsidered');
+                console.log('Annie: Player reconsidered');
             }
         });
         tree.addNode(reconsiderNode);
@@ -581,7 +578,7 @@ class AnnieInteraction {
         // This leads to the same accept node (reusing the node)
         const reconsiderAcceptNode = new DialogueNode('reconsider_accept', 'Annie', 'Here you go... though I wonder if you truly understand what you\'re taking.', {
             onExit: () => {
-                console.log('🎎 Annie: Giving page to player (after reconsideration)');
+                console.log('Annie: Giving page to player (after reconsideration)');
                 this.stopLookingAtAnnie();
                 this.gameManager.collectPage(userData.pageId);
                 this.interactionSystem.animateItemPickup(pageObject, () => {
@@ -599,7 +596,7 @@ class AnnieInteraction {
         // Branch 2b: Player refuses again
         const finalDeclineNode = new DialogueNode('final_decline', 'Annie', 'Okay... but the paper will still be here. Waiting. Like me.', {
             onExit: () => {
-                console.log('🎎 Annie: Player firmly declined');
+                console.log('Annie: Player firmly declined');
                 this.stopLookingAtAnnie();
                 this.interactionSystem.showMessage("You firmly decide not to take the paper.");
             }
@@ -650,7 +647,7 @@ class AnnieInteraction {
     handleAnniePageInteraction(pageObject, userData) {
         // Check if all endings have been explored (4 total endings)
         if (this.completedEndings.size >= 4) {
-            console.log('🎎 All Annie endings explored - blocking re-entry');
+            console.log('All Annie endings explored - blocking re-entry');
             this.interactionSystem.showMessage("You've already explored everything Annie has to offer.");
             return;
         }
@@ -660,7 +657,7 @@ class AnnieInteraction {
 
         // Set interaction state immediately to prevent prompts from showing
         this.interactionSystem.currentInteraction = 'annie_interaction';
-        console.log('🎎 Starting Annie interaction - prompts cleared');
+        console.log('Starting Annie interaction - prompts cleared');
 
         // Get Annie doll from mansion
         const annie = this.stageManager.currentLoader.props.get('annie');
@@ -689,16 +686,13 @@ class AnnieInteraction {
         });
     }
 
-
-    // --- Private Helper Methods ---
-
     /**
      * Clears all interaction prompts from the screen
      */
     clearPrompts() {
         const currentPrompt = this.interactionSystem.interactionPrompt.textContent;
         if (currentPrompt) {
-            console.log(`🎎 Clearing prompt before Annie dialogue: "${currentPrompt}"`);
+            console.log(`Clearing prompt before Annie dialogue: "${currentPrompt}"`);
         }
         this.interactionSystem.interactionPrompt.style.display = 'none';
         this.interactionSystem.interactionPrompt.textContent = '';
@@ -956,7 +950,7 @@ class AnnieInteraction {
                     // Track this choice as selected
                     const choiceKey = `${node.id}:${edge.choiceText}`;
                     this.selectedChoices.add(choiceKey);
-                    console.log(`💬 Choice selected and tracked: ${choiceKey}`);
+                    console.log(`Choice selected and tracked: ${choiceKey}`);
 
                     // Call onSelect callback if present
                     if (edge.onSelect) {
@@ -1005,7 +999,7 @@ class AnnieInteraction {
             continueButton.onclick = () => {
                 // Call onExit for leaf node before ending dialogue
                 if (node.onExit) {
-                    console.log(`💬 Calling onExit for node: ${node.id}`);
+                    console.log(`Calling onExit for node: ${node.id}`);
                     node.onExit();
                 }
                 this.removeDialogueUI();
@@ -1046,7 +1040,7 @@ class AnnieInteraction {
         dialogueBox.focus();
         setTimeout(() => {
             dialogueBox.focus();
-            console.log('💬 Dialogue displayed - keyboard input blocked at document level');
+            console.log('Dialogue displayed - keyboard input blocked at document level');
         }, 50);
     }
 
@@ -1060,7 +1054,7 @@ class AnnieInteraction {
         if (dialogueBox && dialogueBox.dialogueKeyHandler) {
             document.removeEventListener('keydown', dialogueBox.dialogueKeyHandler, true);
             document.removeEventListener('keyup', dialogueBox.dialogueKeyHandler, true);
-            console.log('💬 Dialogue closed - game controls restored');
+            console.log('Dialogue closed - game controls restored');
         }
 
         // Remove UI elements

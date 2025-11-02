@@ -53,7 +53,7 @@ class Minimap {
 
         this.enabled = true;
         this.setupControls();
-        console.log('🗺️ Minimap system initialized');
+        console.log('Minimap system initialized');
     }
 
     setupControls() {
@@ -159,7 +159,7 @@ class Minimap {
         // Apply stage-specific zoom level
         this.applyStageZoom();
 
-        console.log(`🗺️ Minimap camera setup: frustum=${frustumSize.toFixed(2)}, center=(${mansionCenter.x.toFixed(2)}, ${mansionCenter.z.toFixed(2)}), stage=${this.stageManager.currentStage}, zoom=${(1 / this.zoomLevel).toFixed(1)}x`);
+        console.log(`Minimap camera setup: frustum=${frustumSize.toFixed(2)}, center=(${mansionCenter.x.toFixed(2)}, ${mansionCenter.z.toFixed(2)}), stage=${this.stageManager.currentStage}, zoom=${(1 / this.zoomLevel).toFixed(1)}x`);
 
         // Traverse entire model and create minimap meshes for walls and floors
         let wallCount = 0;
@@ -290,7 +290,7 @@ class Minimap {
             }
         });
 
-        console.log(`🗺️ Created minimap: ${wallCount} walls, ${floorCount} floors`);
+        console.log(`Created minimap: ${wallCount} walls, ${floorCount} floors`);
     }
 
     createMinimapUI() {
@@ -369,7 +369,7 @@ class Minimap {
             this.zoomLevel = stageZoom;
             this.updateCameraFrustum();
             const zoomMultiplier = stageZoom === 1.0 ? 1.0 : (1 / stageZoom);
-            console.log(`🗺️ Applied stage-specific zoom for '${currentStage}': ${zoomMultiplier.toFixed(1)}x`);
+            console.log(`Applied stage-specific zoom for '${currentStage}': ${zoomMultiplier.toFixed(1)}x`);
         } else {
             console.warn(`⚠️ No zoom settings defined for stage '${currentStage}'`);
         }
@@ -448,7 +448,7 @@ class Minimap {
     toggle() {
         this.enabled = !this.enabled;
         this.minimapCanvas.style.display = this.enabled ? 'block' : 'none';
-        console.log(`🗺️ Minimap: ${this.enabled ? 'ON' : 'OFF'}`);
+        console.log(`Minimap: ${this.enabled ? 'ON' : 'OFF'}`);
     }
 
     /**
@@ -457,7 +457,7 @@ class Minimap {
      * Automatically applies the correct zoom for the new stage
      */
     reinitialize() {
-        console.log(`🗺️ Reinitializing minimap for stage: ${this.stageManager.currentStage}`);
+        console.log(`Reinitializing minimap for stage: ${this.stageManager.currentStage}`);
 
         // Clear previous room meshes
         this.roomMeshes.forEach((mesh) => {
@@ -468,7 +468,7 @@ class Minimap {
         // Recreate geometry for the new stage (will auto-apply stage zoom)
         this.createMinimapGeometry();
 
-        console.log(`🗺️ Minimap reinitialized with stage-specific zoom`);
+        console.log(`Minimap reinitialized with stage-specific zoom`);
     }
 
     dispose() {

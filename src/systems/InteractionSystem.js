@@ -10,8 +10,8 @@ class InteractionSystem {
         this.stageManager = stageManager; // For multi-scene support
         this.gameManager = gameManager;
         this.uiManager = uiManager; // uiManager was missing from the original constructor but is used, so I've added it.
-        this.controls = controls; // NEW: Store the controls object
-        this.audioManager = audioManager; // NEW: Store the audio manager
+        this.controls = controls; // Store the controls object
+        this.audioManager = audioManager; // Store the audio manager
         this.raycaster = new THREE.Raycaster();
         this.mouse = new THREE.Vector2();
         this.interactableObjects = new Map();
@@ -23,8 +23,8 @@ class InteractionSystem {
         this.crosshairUpdateCounter = 0;
         this.crosshairUpdateInterval = 2; // Update every 2nd frame
 
-        this.messageQueue = []; // NEW: A queue for interaction messages.
-        this.isMessageVisible = false; // NEW: A flag to check visibility.
+        this.messageQueue = []; 
+        this.isMessageVisible = false; 
         this.blockInteractionPrompt = false; // Flag to block interaction prompts during important messages
         this.hasSeenPageExplanation = false; // Track if player has seen the first page explanation popup
         this.isColorPuzzleSolved = false;
@@ -477,7 +477,7 @@ class InteractionSystem {
         const currentScene = this.getCurrentScene();
         const intersects = this.raycaster.intersectObjects(currentScene.children, true);
 
-        console.log('🎯 checkInteraction: ' + intersects.length + ' intersections found');
+        console.log('checkInteraction: ' + intersects.length + ' intersections found');
 
         if (intersects.length > 0) {
             // Log first 3 intersections
@@ -541,7 +541,6 @@ class InteractionSystem {
         const log = window.logger || console;
         log.log(`Handling interaction with garage door object: ${interactedObject.name}. State: ${JSON.stringify(userData)}`);
 
-        // --- Find the Correct Object to Animate (the Parent Pivot) ---
         let doorGroup = interactedObject;
         // Traverse up if the interacted object is the mesh inside S_Door002
         while (doorGroup && doorGroup.name !== 'S_Door002' && doorGroup.parent) {
@@ -561,11 +560,9 @@ class InteractionSystem {
         log.log(`   - Identified Pivot Object: ${pivotObject.name}`);
 
 
-        // --- Get UserData (should be on S_Door002) ---
         // Ensure we're reading/writing state to the correct object's userData
         const doorUserData = doorGroup.userData;
 
-        // --- Barricade Checks (using doorUserData) ---
         if (doorUserData.barricaded) {
             this.showMessage("The door is barricaded.");
             log.log("-> Door is barricaded, interaction stopped.");
@@ -576,7 +573,6 @@ class InteractionSystem {
             log.log("-> Door is being barricaded, interaction stopped.");
             return;
         }
-        // --- End barricade checks ---
 
         if (doorUserData.locked) {
             log.log("-> Door is locked. Checking for key...");
@@ -616,9 +612,6 @@ class InteractionSystem {
              log.log("-> Unhandled door state.");
         }
     }
-
-
-    // --- Animate Using Parent Pivot Object ---
     
     animateGarageDoorOpen(pivotObject, doorGroup, open = true) {
         this.firstTimeGarageDoorUnlocked += 1;
@@ -638,7 +631,6 @@ class InteractionSystem {
         // Set animating flag on doorGroup's userData
         doorUserData.isAnimating = true;
 
-        // --- Physics Handling (Targets the mesh INSIDE doorGroup) ---
         let doorMesh = doorGroup.children.find(child => child.isMesh); // Find mesh within S_Door002
         if (!doorMesh) {
             log.error(`Cannot find Mesh child within Group ${doorGroup.name}`);
@@ -665,7 +657,6 @@ class InteractionSystem {
             }
         }
 
-        // --- Animation Logic (Animating PIVOT's Y-axis - common for hinges) ---
         const startRotationY = pivotObject.rotation.y;
         // Amount to rotate: -90 degrees for standard inward swing
         const rotationAmount = Math.PI / 2;
@@ -743,7 +734,7 @@ class InteractionSystem {
             }
         };
         requestAnimationFrame(animate);
-    } // --- End animateGarageDoorOpen ---
+    } 
 
     performInteraction(object, userData) {
         // Check if interaction should be available based on current objective
@@ -773,13 +764,11 @@ class InteractionSystem {
     }
 
     handlePageInteraction(pageObject, userData) {
-        // CRITICAL FIX: Check if phone has been answered before allowing page pickup
         if (!this.gameManager.telephoneAnswered) {
             this.showMessage("These pages seem important. I should answer the phone call first.");
             return;
         }
 
-        // NEW: Check if pages puzzle is completed
         if (this.gameManager.pagesPuzzleCompleted) {
             this.showMessage("The pages are sealed in place by an ancient magic.");
             return;
@@ -804,12 +793,12 @@ class InteractionSystem {
             pageId = pageMatch[1];
         }
 
-        console.log(`📄 Page interaction: "${userData.pageId}" -> "${pageId}"`);
+        console.log(`Page interaction: "${userData.pageId}" -> "${pageId}"`);
 
         if (pageId) {
             // Special handling for Page 6 - Tic-tac-toe mirror puzzle requirement
             if (pageId === 'S_Page6') {
-                console.log('🎮 Page 6 interaction - checking mirror status');
+                console.log('Page 6 interaction - checking mirror status');
                 // Check if the player has won the tic-tac-toe puzzle
                 const mirror = this.stageManager.currentLoader.props.get('tic_tac_toe_mirror');
                 console.log('Mirror object:', mirror);
@@ -818,7 +807,7 @@ class InteractionSystem {
                 console.log('Mirror won status:', mirror?.userData?.won);
 
                 if (!mirror || !mirror.userData || !mirror.userData.won) {
-                    console.log('❌ Mirror not won - blocking page 6');
+                    console.log('Mirror not won - blocking page 6');
 
                     // Block interaction prompts during ghost warning
                     this.blockInteractionPrompt = true;
@@ -1120,7 +1109,7 @@ I don't look at that mirror anymore. I can't stand to see what I've done to him.
         };
 
         const closePageView = () => {
-            console.log('📄 Closing page view');
+            console.log('Closing page view');
 
             // Check if overlay still exists
             if (document.body.contains(pageOverlay)) {
@@ -1172,18 +1161,17 @@ I don't look at that mirror anymore. I can't stand to see what I've done to him.
         // Focus the overlay to capture keyboard events
         setTimeout(() => {
             pageOverlay.focus();
-            console.log('📄 Page overlay focused for keyboard input');
+            console.log('Page overlay focused for keyboard input');
         }, 100);
     }
 
     handlePageSlotInteraction(slotObject, userData) {
-        // NEW: Check if pages puzzle is completed
+
         if (this.gameManager.pagesPuzzleCompleted) {
             this.showMessage("The pages are sealed in place by an ancient magic.");
             return;
         }
 
-        // NEW: Check if laptop puzzle is completed
         if (!this.gameManager.laptopPuzzleCompleted) {
             this.showMessage("The symbols don't make any sense. I need to decipher them first.");
             return;
@@ -1309,10 +1297,10 @@ I don't look at that mirror anymore. I can't stand to see what I've done to him.
     
     async handleDoorInteraction(door, userData) {
         if (userData.locked) {
-            if (this.gameManager.hasItem('S_KeyBehindFire')) {
+            if (this.gameManager.hasItem('Key Behind Fire')) {
                 this.showConfirmation("Unlock the master bedroom door?", async () => {
                     userData.locked = false;
-                    this.gameManager.removeFromInventory('S_KeyBehindFire');
+                    this.gameManager.removeFromInventory('Key Behind Fire');
                     this.showMessage("The door unlocks with a loud click.");
 
                     // Animate the door opening right after unlocking
@@ -1321,10 +1309,9 @@ I don't look at that mirror anymore. I can't stand to see what I've done to him.
                     // Complete the find lock objective
                     this.gameManager.completeObjective('find_lock');
 
-                    // Set monster to curious (level 3) - DISABLED
                     // if (window.gameControls.monsterAI) {
                     //     window.gameControls.monsterAI.setAggressionLevel(3);
-                    //     console.log('👾 Monster set to CURIOUS after door opened');
+                    //     console.log(' Monster set to CURIOUS after door opened');
                     // }
 
                     // Trigger door opened speech and new objective
@@ -1366,35 +1353,24 @@ I don't look at that mirror anymore. I can't stand to see what I've done to him.
         }
         door.userData.isOpening = true;
 
-        // --- FINAL, ROBUST PIVOT METHOD ---
-
         // 1. We only set up the pivot ONCE.
         if (!door.userData.pivot) {
-            // Get the door's size from its bounding box.
+            
             const box = new THREE.Box3().setFromObject(door);
             const size = new THREE.Vector3();
             box.getSize(size);
-
-            // Create an invisible pivot object.
+            
             const pivot = new THREE.Group();
             this.scene.add(pivot); // Add the pivot to the main scene.
-
-            // 2. Create an offset vector for the hinge in the door's LOCAL space.
-            // We assume the hinge is on the door's left edge (the -X axis of the door model).
+            
             const hingeOffset = new THREE.Vector3(-size.x / 2, 0, 0);
-
-            // 3. Apply the door's WORLD rotation to this local offset.
+           
             hingeOffset.applyQuaternion(door.quaternion);
-
-            // 4. Add the rotated offset to the door's WORLD position.
-            // This gives us the exact world coordinate for the pivot.
+            
             pivot.position.copy(door.position).add(hingeOffset);
-
-            // 5. Use pivot.attach(door). This is the crucial step. It re-parents the door
-            // to the pivot while maintaining its current world position, rotation, and scale.
+           
             pivot.attach(door);
-
-            // Store the pivot in the door's data so we don't repeat this setup.
+            
             door.userData.pivot = pivot;
         }
 
@@ -1421,7 +1397,6 @@ I don't look at that mirror anymore. I can't stand to see what I've done to him.
                 door.userData.isOpening = false;
                 door.userData.isOpen = true;
 
-                // CRITICAL FIX: Remove door collision when fully opened
                 // Use correct loader for multi-scene support
                 const currentLoader = this.stageManager ? this.stageManager.currentLoader : this.gameManager.mansion;
 
@@ -1434,7 +1409,7 @@ I don't look at that mirror anymore. I can't stand to see what I've done to him.
                         currentLoader.removeCollisionForObject(child.name);
                     }
 
-                    console.log(`🚪 Door collision removed after opening: ${door.name}`);
+                    console.log(`Door collision removed after opening: ${door.name}`);
                 }
             }
         };
@@ -1763,15 +1738,15 @@ I don't look at that mirror anymore. I can't stand to see what I've done to him.
                 const fireplace = currentLoader.props.get('fireplace');
                 if (fireplace) {
                     fireplace.userData.interactable = true;
-                    console.log(`🔥 Fireplace made interactable`);
+                    console.log(`Fireplace made interactable`);
                 }
                 const fireplaceFire = currentLoader.props.get('fireplace_fire');
                 if (fireplaceFire) {
                     fireplaceFire.userData.interactable = true;
-                    console.log(`🔥 Fireplace fire made interactable`);
+                    console.log(`Fireplace fire made interactable`);
                 }
             } else {
-                console.warn(`⚠️ Could not access current loader to make fireplace interactable`);
+                console.warn(`Could not access current loader to make fireplace interactable`);
             }
 
             // Complete read diary objective - this will mark it complete visually
@@ -1898,7 +1873,7 @@ I don't look at that mirror anymore. I can't stand to see what I've done to him.
 
         // Check if player has bucket and fire is not out yet
         if (this.gameManager.hasItem('Bucket') && !userData.fireOut) {
-            console.log('🔥 Player has bucket, putting out fire...');
+            console.log('Player has bucket, putting out fire...');
 
             // Mark both fireplace objects as fire out
             userData.fireOut = true;
@@ -1925,7 +1900,7 @@ I don't look at that mirror anymore. I can't stand to see what I've done to him.
             // Set monster to BOLD (level 4) after putting out fire
             if (window.gameControls.monsterAI) {
                 window.gameControls.monsterAI.setAggressionLevel(4); // BOLD
-                console.log('👾 Monster is now BOLD after fire was extinguished');
+                console.log(' Monster is now BOLD after fire was extinguished');
             }
 
             // Show message that they found the key
@@ -1933,7 +1908,7 @@ I don't look at that mirror anymore. I can't stand to see what I've done to him.
 
             // Add the key to inventory (S_KeyBehindFire - note: Key not Kay)
             this.gameManager.addToInventory({
-                name: 'S_KeyBehindFire',
+                name: 'Key Behind Fire',
                 type: 'key',
                 description: 'A key found behind the fireplace ashes.'
             });
@@ -2008,7 +1983,7 @@ I don't look at that mirror anymore. I can't stand to see what I've done to him.
     async handleSofaInteraction(sofa, userData) {
         // Check if sofa has already been fully moved - silently return (no message)
         if (userData.moved) {
-            console.log(`🛋️ Sofa ${sofa.name} already moved, ignoring interaction`);
+            console.log(`Sofa ${sofa.name} already moved, ignoring interaction`);
             return;
         }
 
@@ -2031,11 +2006,11 @@ I don't look at that mirror anymore. I can't stand to see what I've done to him.
         if (!this.isSofaSoundPlaying) {
             this.audioManager.playSound('couch_sliding', this.audioManager.soundPaths.couch_sliding, true, 0.4);
             this.isSofaSoundPlaying = true;
-            logger.log("🛋️ Sofa sound started (on interaction)");
+            logger.log("Sofa sound started (on interaction)");
         }
 
-        console.log(`🛋️ Started pushing ${sofa.name}. Current distance: ${userData.distanceMoved}. Hold E to continue.`);
-        console.log(`🛋️ Sofa userData:`, userData);
+        console.log(`Started pushing ${sofa.name}. Current distance: ${userData.distanceMoved}. Hold E to continue.`);
+        console.log(`Sofa userData:`, userData);
         this.showMessage("Pushing sofa... Hold E to continue.", 500);
     }
 
@@ -2051,7 +2026,7 @@ I don't look at that mirror anymore. I can't stand to see what I've done to him.
     }
 
     enterHiding(wardrobe) {
-        console.log(`🚪 Entering hiding in ${wardrobe.name}`);
+        console.log(`Entering hiding in ${wardrobe.name}`);
 
         this.isHiding = true;
         this.currentHidingSpot = wardrobe;
@@ -2105,7 +2080,7 @@ I don't look at that mirror anymore. I can't stand to see what I've done to him.
             this.flashlightWasOn = window.gameControls.flashlight.isOn;
             if (this.flashlightWasOn) {
                 window.gameControls.flashlight.toggle();
-                console.log('💡 Flashlight turned off while hiding');
+                console.log('Flashlight turned off while hiding');
             }
         }
 
@@ -2117,7 +2092,7 @@ I don't look at that mirror anymore. I can't stand to see what I've done to him.
     }
 
     exitHiding() {
-        console.log(`🚪 Exiting hiding`);
+        console.log(`Exiting hiding`);
 
         this.isHiding = false;
         this.currentHidingSpot = null;
@@ -2143,7 +2118,7 @@ I don't look at that mirror anymore. I can't stand to see what I've done to him.
         if (this.flashlightWasOn && window.gameControls && window.gameControls.flashlight) {
             if (!window.gameControls.flashlight.isOn) {
                 window.gameControls.flashlight.toggle();
-                console.log('💡 Flashlight restored after hiding');
+                console.log('Flashlight restored after hiding');
             }
         }
 
@@ -2263,12 +2238,12 @@ I don't look at that mirror anymore. I can't stand to see what I've done to him.
 
         // Check if monster is spawned and gameStage is 2
         if (!window.gameControls || !window.gameControls.monsterAI) {
-            console.log('🚪 Monster investigation skipped - monster not spawned yet');
+            console.log('Monster investigation skipped - monster not spawned yet');
             return;
         }
 
         if (!window.gameControls.gameManager || window.gameControls.gameManager.gameStage !== 2) {
-            console.log('🚪 Monster investigation skipped - not in stage 2 yet');
+            console.log('Monster investigation skipped - not in stage 2 yet');
             return;
         }
 
@@ -2276,11 +2251,11 @@ I don't look at that mirror anymore. I can't stand to see what I've done to him.
         const monster = monsterAI.monster;
 
         if (!monster || !monster.visible) {
-            console.log('🚪 Monster investigation skipped - monster not visible');
+            console.log('Monster investigation skipped - monster not visible');
             return;
         }
 
-        console.log('👾 Monster heard something and is investigating your hiding spot...');
+        console.log(' Monster heard something and is investigating your hiding spot...');
         this.showMessage("You hear footsteps approaching...", 3000);
 
         // Get hiding spot position
@@ -2330,7 +2305,7 @@ I don't look at that mirror anymore. I can't stand to see what I've done to him.
             if (currentLevel > 0) {
                 const newLevel = Math.max(0, currentLevel - 1);
                 window.gameControls.monsterAI.setAggressionLevel(newLevel);
-                console.log(`👾 Monster aggression decreased after hiding for 10 seconds: ${currentLevel} -> ${newLevel}`);
+                console.log(` Monster aggression decreased after hiding for 10 seconds: ${currentLevel} -> ${newLevel}`);
                 this.showMessage("You feel safer now...", 2000);
             }
         }
@@ -2736,7 +2711,6 @@ I don't look at that mirror anymore. I can't stand to see what I've done to him.
                         disabledPrompt = interactableData.disabledPrompt || ""; // Check for disabled message
                     }
                     else {
-                        // --- Object IS Currently Interactable ---
                         isInteractable = true; // Potentially interactable
                         isInteractableNow = true; // Definitely interactable right now
 
@@ -2770,30 +2744,24 @@ I don't look at that mirror anymore. I can't stand to see what I've done to him.
                                 else interactionPrompt = typeInfo.openPrompt;
                             }
                             else if (type === 'barricade_plank') {
-                                // !!!!! THIS IS THE FIX !!!!!
                                 let garageDoor = null;
                                 const log = window.logger || console; // Use logger if available
 
                                 try {
-                                    // This is the line that can fail
                                     garageDoor = this.stageManager.currentScene.getObjectByName('S_Door002');
                                 } catch (e) {
-                                    // Check if it's the exact error we're expecting
                                     if (e.message && e.message.includes("reading 'name'")) {
                                         log.error("InteractionSystem: Caught scene graph traversal error. 'scene.children' might be corrupt.", e);
                                         
-                                        // Attempt a one-time cleanup of the scene.children array
                                         this.stageManager.currentScene.children = this.stageManager.currentScene.children.filter(child => child !== undefined);
                                         log.warn("InteractionSystem: Attempted to clean 'scene.children' of undefined entries.");
 
-                                        // Try one more time after cleaning
                                         try {
                                             garageDoor = this.stageManager.currentScene.getObjectByName('S_Door002');
                                         } catch (e2) {
                                              log.error("InteractionSystem: Scene graph error persists even after cleaning.", e2);
                                         }
                                     } else {
-                                        // If it's a different error, re-throw it
                                         throw e;
                                     }
                                 }
@@ -2813,7 +2781,6 @@ I don't look at that mirror anymore. I can't stand to see what I've done to him.
                                     // Door exists and is closed so we can interact with it
                                     interactionPrompt = interactableData.prompt || typeInfo.prompt || "Press E to use plank";
                                 }
-                                // !!!!! END OF FIX !!!!!
                             }
                             else if (type === 'car_hood') {
                                 const carRepairSystem = window.gameControls?.carRepairSystem;
@@ -2826,10 +2793,8 @@ I don't look at that mirror anymore. I can't stand to see what I've done to him.
                                     blockedMessage = '';
                                     disabledPrompt = '';
                                 } else {
-                                    // Door HAS been interacted with:
                                     // Proceed with normal prompt logic for the hood
                                     interactionPrompt = interactableData.prompt || typeInfo.prompt || "Press E";
-                                    // isInteractableNow remains true (unless blocked by another condition specific to the hood itself)
                                 }
                             }
                             // Special handling for sofa to show different prompt based on state
@@ -2903,8 +2868,6 @@ I don't look at that mirror anymore. I can't stand to see what I've done to him.
                 }
             }
         }
-
-        // --- Final UI Update ---
         // Only update UI if state has changed (prevents flashing)
         const currentPromptText = this.interactionPrompt.textContent;
         const currentPromptVisible = this.interactionPrompt.style.display === 'block';
@@ -3024,7 +2987,7 @@ I don't look at that mirror anymore. I can't stand to see what I've done to him.
                     if (distance > 0.76) {
                         window.gameControls.physicsManager.teleportTo(this.lockedCameraPosition);
                         this.lastHideTeleportTime = now;
-                        console.log(`🚪 Correcting physics position while hiding (distance: ${distance.toFixed(2)})`);
+                        console.log(`Correcting physics position while hiding (distance: ${distance.toFixed(2)})`);
                     }
                 }
             }
@@ -3070,7 +3033,7 @@ I don't look at that mirror anymore. I can't stand to see what I've done to him.
             if (this.isSofaSoundPlaying) {
                 this.audioManager.stopSound('couch_sliding');
                 this.isSofaSoundPlaying = false;
-                logger.log("🛋️ Sofa sound stopped (E key no longer held)");
+                logger.log("Sofa sound stopped (E key no longer held)");
             }
             // onKeyUp will handle setting this.movingSofa to null
             return;
@@ -3084,7 +3047,7 @@ I don't look at that mirror anymore. I can't stand to see what I've done to him.
             if (this.isSofaSoundPlaying) {
                 this.audioManager.stopSound('couch_sliding'); 
                 this.isSofaSoundPlaying = false;
-                logger.log("🛋️ Sofa sound stopped (max distance reached)");
+                logger.log("Sofa sound stopped (max distance reached)");
             }
 
 
@@ -3096,16 +3059,16 @@ I don't look at that mirror anymore. I can't stand to see what I've done to him.
             //     // Loop at 40% volume
             //     this.audioManager.playSound('couch_sliding', this.audioManager.soundPaths.couch_sliding, true, 0.4);
             //     this.isSofaSoundPlaying = true;
-            //     logger.log("🛋️ Sofa sound started");
+            //     logger.log("Sofa sound started");
             // }
 
             // Removed message - sofa just stops moving silently
-            console.log(`🛋️ ${sofa.name} fully moved. Final position: (${sofa.position.x.toFixed(2)}, ${sofa.position.y.toFixed(2)}, ${sofa.position.z.toFixed(2)})`);
-            console.log(`🛋️ Sofa final userData:`, userData);
+            console.log(`${sofa.name} fully moved. Final position: (${sofa.position.x.toFixed(2)}, ${sofa.position.y.toFixed(2)}, ${sofa.position.z.toFixed(2)})`);
+            console.log(`Sofa final userData:`, userData);
 
             // Recalculate physics for BOTH S_Sofa005 and S_Sofa006 each time either is moved
             const sofaName = this.movingSofa.sofaName || sofa.name;
-            console.log(`🔧 Checking physics recalculation for sofa: "${sofaName}"`);
+            console.log(` Checking physics recalculation for sofa: "${sofaName}"`);
 
             // Check if this is one of the trigger sofas (handle both dot and no-dot naming)
             if (sofaName.includes('S_Sofa.005') || sofaName.includes('S_Sofa.006') ||
@@ -3113,8 +3076,8 @@ I don't look at that mirror anymore. I can't stand to see what I've done to him.
                 sofaName.includes('Sofa.005') || sofaName.includes('Sofa.006') ||
                 sofaName.includes('Sofa005') || sofaName.includes('Sofa006')) {
 
-                console.log(`🔧 Recalculating physics for BOTH sofas...`);
-                console.log(`🔧 Available props:`, Array.from(this.stageManager.currentLoader.props.keys()));
+                console.log(` Recalculating physics for BOTH sofas...`);
+                console.log(` Available props:`, Array.from(this.stageManager.currentLoader.props.keys()));
 
                 // Find both sofas in the scene - try multiple naming variations
                 let sofa5 = this.stageManager.currentLoader.props.get('sofa_S_Sofa005');
@@ -3123,23 +3086,23 @@ I don't look at that mirror anymore. I can't stand to see what I've done to him.
                 let sofa6 = this.stageManager.currentLoader.props.get('sofa_S_Sofa006');
                 if (!sofa6) sofa6 = this.stageManager.currentLoader.props.get('S_Sofa006');
 
-                console.log(`🔧 Found sofa 5: ${!!sofa5} (name: ${sofa5?.name})`);
-                console.log(`🔧 Found sofa 6: ${!!sofa6} (name: ${sofa6?.name})`);
+                console.log(` Found sofa 5: ${!!sofa5} (name: ${sofa5?.name})`);
+                console.log(` Found sofa 6: ${!!sofa6} (name: ${sofa6?.name})`);
 
                 // If we couldn't find them in props, search the scene directly
                 if (!sofa5 || !sofa6) {
-                    console.log(`🔧 Sofas not found in props, searching scene...`);
+                    console.log(` Sofas not found in props, searching scene...`);
                     this.scene.traverse((node) => {
                         if (node.userData && node.userData.type === 'sofa') {
                             const nodeName = node.name || '';
-                            console.log(`  🔍 Found sofa in scene: ${nodeName}`);
+                            console.log(`  Found sofa in scene: ${nodeName}`);
                             if (!sofa5 && (nodeName.includes('Sofa.005') || nodeName.includes('Sofa005'))) {
                                 sofa5 = node;
-                                console.log(`  ✓ Assigned to sofa5`);
+                                console.log(` Assigned to sofa5`);
                             }
                             if (!sofa6 && (nodeName.includes('Sofa.006') || nodeName.includes('Sofa006'))) {
                                 sofa6 = node;
-                                console.log(`  ✓ Assigned to sofa6`);
+                                console.log(`  Assigned to sofa6`);
                             }
                         }
                     });
@@ -3147,7 +3110,7 @@ I don't look at that mirror anymore. I can't stand to see what I've done to him.
 
                 // Recalculate sofa 5 first - pass mesh objects instead of names
                 if (sofa5) {
-                    console.log(`🔧 Recalculating physics for S_Sofa005...`);
+                    console.log(` Recalculating physics for S_Sofa005...`);
                     let recalcCount = 0;
                     let successCount = 0;
                     sofa5.traverse((child) => {
@@ -3157,25 +3120,25 @@ I don't look at that mirror anymore. I can't stand to see what I've done to him.
                                 const success = this.stageManager.currentLoader.recalculatePhysicsForObject(child);
                                 if (success) {
                                     successCount++;
-                                    console.log(`  ✓ S_Sofa005 child: ${child.name}`);
+                                    console.log(`   S_Sofa005 child: ${child.name}`);
                                 } else {
-                                    console.log(`  ⚠ S_Sofa005 child not found: ${child.name}`);
+                                    console.log(`   S_Sofa005 child not found: ${child.name}`);
                                 }
                                 recalcCount++;
-                                console.log(`  ✓ S_Sofa005 child: ${child.name}`);
+                                console.log(`   S_Sofa005 child: ${child.name}`);
                             } catch (error) {
-                                console.warn(`  ✗ Failed for ${child.name}:`, error);
+                                console.warn(`   Failed for ${child.name}:`, error);
                             }
                         }
                     });
-                    console.log(`🔧 Recalculated ${successCount}/${recalcCount} physics bodies for S_Sofa005`);
+                    console.log(` Recalculated ${successCount}/${recalcCount} physics bodies for S_Sofa005`);
                 } else {
-                    console.warn(`⚠️ Could not find S_Sofa005 in props for recalculation`);
+                    console.warn(`Could not find S_Sofa005 in props for recalculation`);
                 }
 
                 // Then recalculate sofa 6 - pass mesh objects instead of names
                 if (sofa6) {
-                    console.log(`🔧 Recalculating physics for S_Sofa006...`);
+                    console.log(` Recalculating physics for S_Sofa006...`);
                     let recalcCount = 0;
                     let successCount = 0;
                     sofa6.traverse((child) => {
@@ -3185,25 +3148,25 @@ I don't look at that mirror anymore. I can't stand to see what I've done to him.
                                 const success = this.stageManager.currentLoader.recalculatePhysicsForObject(child);
                                 if (success) {
                                     successCount++;
-                                    console.log(`  ✓ S_Sofa006 child: ${child.name}`);
+                                    console.log(`   S_Sofa006 child: ${child.name}`);
                                 } else {
-                                    console.log(`  ⚠ S_Sofa006 child not found: ${child.name}`);
+                                    console.log(`   S_Sofa006 child not found: ${child.name}`);
                                 }
                                 recalcCount++;
-                                console.log(`  ✓ S_Sofa006 child: ${child.name}`);
+                                console.log(`   S_Sofa006 child: ${child.name}`);
                             } catch (error) {
-                                console.warn(`  ✗ Failed for ${child.name}:`, error);
+                                console.warn(`  Failed for ${child.name}:`, error);
                             }
                         }
                     });
-                    console.log(`🔧 Recalculated ${successCount}/${recalcCount} physics bodies for S_Sofa006`);
+                    console.log(` Recalculated ${successCount}/${recalcCount} physics bodies for S_Sofa006`);
                 } else {
-                    console.warn(`⚠️ Could not find S_Sofa006 in props for recalculation`);
+                    console.warn(` Could not find S_Sofa006 in props for recalculation`);
                 }
 
-                console.log(`🔧 Sofa physics recalculation complete for both sofas`);
+                console.log(` Sofa physics recalculation complete for both sofas`);
             } else {
-                console.log(`⏭️ Skipping physics recalculation for ${sofaName} - not a trigger sofa`);
+                console.log(` Skipping physics recalculation for ${sofaName} - not a trigger sofa`);
             }
 
             this.movingSofa = null;
@@ -3661,16 +3624,16 @@ I don't look at that mirror anymore. I can't stand to see what I've done to him.
         );
     }
 
-    // ========== OFFICE STAGE INTERACTIONS ==========
+
 
 
     async handleComputerInteraction(computer, userData) {
-        console.log('💻 Player interacting with computer', userData);
+        console.log(' Player interacting with computer', userData);
 
         // Check if this is the office stage
         const currentStage = this.gameManager.stageManager ? this.gameManager.stageManager.currentStage : 'office';
         if (currentStage !== 'office') {
-            console.warn(`⚠️ Computer interaction called on ${currentStage} stage, ignoring`);
+            console.warn(` Computer interaction called on ${currentStage} stage, ignoring`);
             this.showMessage("The computer doesn't respond.");
             return;
         }
@@ -3883,7 +3846,7 @@ I don't look at that mirror anymore. I can't stand to see what I've done to him.
                     </div>
                     <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
                         <div class="office-file-icon" data-file="interview" style="cursor: pointer; text-align: center; padding: 20px; border: 1px solid #00ff00; border-radius: 3px;">
-                            <div style="font-size: 40px; margin-bottom: 10px;">🎵</div>
+                            <div style="font-size: 40px; margin-bottom: 10px;">🔉</div>
                             <div>Interview.wav</div>
                         </div>
                         <div class="office-file-icon" data-file="mansion_layout" style="cursor: pointer; text-align: center; padding: 20px; border: 1px solid #00ff00; border-radius: 3px;">
@@ -3895,7 +3858,7 @@ I don't look at that mirror anymore. I can't stand to see what I've done to him.
                             <div>NOTE.txt</div>
                         </div>
                         <div class="office-file-icon" data-file="evidence" style="cursor: pointer; text-align: center; padding: 20px; border: 1px solid #00ff00; border-radius: 3px;">
-                            <div style="font-size: 40px; margin-bottom: 10px;">🔒</div>
+                            <div style="font-size: 40px; margin-bottom: 10px;">📁</div>
                             <div>Evidence.zip</div>
                         </div>
                     </div>
@@ -3937,7 +3900,7 @@ I don't look at that mirror anymore. I can't stand to see what I've done to him.
     }
 
     async handleOfficeFileClick(fileType) {
-        console.log(`📂 Opening file: ${fileType}`);
+        console.log(` Opening file: ${fileType}`);
 
         switch (fileType) {
             case 'interview':
@@ -3972,7 +3935,7 @@ I don't look at that mirror anymore. I can't stand to see what I've done to him.
                                 const looseBook = this.gameManager.mansion.props.get('loose_book');
                                 if (looseBook) {
                                     looseBook.userData.interactable = true;
-                                    console.log('📖 Loose book is now interactable');
+                                    console.log(' Loose book is now interactable');
                                 }
                             }
                         } catch (e) {
@@ -4225,7 +4188,7 @@ I don't look at that mirror anymore. I can't stand to see what I've done to him.
     }
 
     async triggerCaptureSequence() {
-        console.log('⚠️ Capture sequence triggered!');
+        console.log(' Capture sequence triggered!');
 
         // Close any remaining overlays first (except the lore screen which already auto-removed)
         const allOverlays = document.querySelectorAll('[id$="-overlay"]:not(#capture-blackout), [id$="-desktop"]');
@@ -4259,7 +4222,7 @@ I don't look at that mirror anymore. I can't stand to see what I've done to him.
         const computerUI = document.getElementById('computer-desktop');
         if (computerUI) {
             computerUI.remove();
-            console.log('💻 Computer screen closed before transition');
+            console.log(' Computer screen closed before transition');
         }
 
         // Play the capture/knockout sound sequence (all while blacked out)
@@ -4326,7 +4289,7 @@ I don't look at that mirror anymore. I can't stand to see what I've done to him.
         };
         cameraSpin();
 
-        console.log('✅ Transition sequence complete - blackout removed');
+        console.log('Transition sequence complete - blackout removed');
     }
 
     /**
@@ -4381,7 +4344,7 @@ I don't look at that mirror anymore. I can't stand to see what I've done to him.
     }
 
     async handleNotepadInteraction(notepad, userData) {
-        console.log('📝 Player reading notepad');
+        console.log('Player reading notepad');
 
         // Freeze controls while reading notepad
         if (this.controls) this.controls.freeze();
@@ -4719,12 +4682,12 @@ I don't look at that mirror anymore. I can't stand to see what I've done to him.
      * Handle interaction with the tic-tac-toe mirror
      */
     async handleTicTacToeMirrorInteraction(mirror, userData) {
-        console.log('🪞 Mirror interaction handler called');
+        console.log(' Mirror interaction handler called');
         console.log('  userData.won:', userData.won);
 
         // Check if telephone has been answered first
         if (!this.gameManager.telephoneAnswered) {
-            console.log('❌ Telephone not answered - blocking mirror puzzle');
+            console.log('Telephone not answered - blocking mirror puzzle');
             this.showMessage("The mirror whispers... 'Answer the call first, then we shall play...'");
             return;
         }
@@ -4746,7 +4709,7 @@ I don't look at that mirror anymore. I can't stand to see what I've done to him.
         console.log('  Puzzle found:', !!ticTacToePuzzle);
 
         if (!ticTacToePuzzle) {
-            console.error('❌ Tic-tac-toe puzzle not found in controls.puzzles');
+            console.error(' Tic-tac-toe puzzle not found in controls.puzzles');
             console.log('  Available puzzles:', Object.keys(this.controls.puzzles || {}));
             if (this.controls) this.controls.unfreeze();
             return;
@@ -4754,28 +4717,28 @@ I don't look at that mirror anymore. I can't stand to see what I've done to him.
 
         // Set up the win callback
         ticTacToePuzzle.onSolve(() => {
-            console.log('🎮 Tic-tac-toe puzzle won!');
+            console.log(' Tic-tac-toe puzzle won!');
 
             // Mark the mirror as won so player can collect page 6
             userData.won = true;
-            console.log('✅ Set mirror userData.won = true');
+            console.log(' Set mirror userData.won = true');
             console.log('Mirror userData after win:', userData);
 
             // Also mark it on the mirror object itself to be safe
             const mirrorObj = this.stageManager.currentLoader.props.get('tic_tac_toe_mirror');
             if (mirrorObj && mirrorObj.userData) {
                 mirrorObj.userData.won = true;
-                console.log('✅ Also set mirror object userData.won = true');
+                console.log(' Also set mirror object userData.won = true');
             }
 
             // Make page 6 interactable
             const page6 = this.stageManager.currentLoader.pages.find(p => p.name === 'S_Page6');
             if (page6) {
                 page6.userData.interactable = true;
-                console.log('✨ Page 6 is now unlocked!');
+                console.log(' Page 6 is now unlocked!');
                 console.log('Page 6 userData:', page6.userData);
             } else {
-                console.warn('⚠️ Could not find Page 6 in mansion.pages');
+                console.warn('Could not find Page 6 in mansion.pages');
                 console.log('Available pages:', this.stageManager.currentLoader.pages.map(p => p.name));
             }
 
@@ -4788,15 +4751,15 @@ I don't look at that mirror anymore. I can't stand to see what I've done to him.
 
         // Set up the close callback
         ticTacToePuzzle.onClose(() => {
-            console.log('🎮 Puzzle closed');
+            console.log('Puzzle closed');
             if (this.controls) this.controls.unfreeze();
             this.currentInteraction = null;
         });
 
         // Show the puzzle UI
-        console.log('🎮 Calling ticTacToePuzzle.show()...');
+        console.log('Calling ticTacToePuzzle.show()...');
         ticTacToePuzzle.show();
-        console.log('🎮 ticTacToePuzzle.show() returned');
+        console.log('ticTacToePuzzle.show() returned');
     }
 }
 
