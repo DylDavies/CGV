@@ -16,7 +16,7 @@ const zoneGeometry = new THREE.BoxGeometry(1, 1, 1); // 1x1x1 cube, will be scal
 
 
 export class CarRepairSystem {
-    constructor(stageManager, interactionSystem, qteManager, audioManager, gameManager, narrativeManager, carInteraction, physicsManager, camera) {
+    constructor(stageManager, interactionSystem, qteManager, audioManager, gameManager, narrativeManager, carInteraction, physicsManager, camera, controls, garageSystem) {
         this.stageManager = stageManager;
         this.interactionSystem = interactionSystem;
         this.qteManager = qteManager;
@@ -26,6 +26,8 @@ export class CarRepairSystem {
         this.carInteraction = carInteraction;
         this.physicsManager = physicsManager;
         this.camera = camera;
+        this.controls = controls;
+        this.garageSystem = garageSystem;
 
         // Object References
         this.carObject = null;
@@ -258,6 +260,13 @@ export class CarRepairSystem {
 
         // Car is repaired and refueled, we can now get into the car
         if (this.repairState.engineRepaired && this.repairState.carFueled && !this.repairState.carReadyTriggered) {
+            // Check if garage gate is fully lifted before allowing entry
+            if (this.garageSystem && !this.garageSystem.gateFullyLifted) {
+                logger.log("   Cannot enter car - garage door is closed!");
+                await this.narrativeManager.triggerEvent("stage3.door_closed_cant_enter");
+                return;
+            }
+
             logger.log("   Step 7: Triggering 'car_ready' and teleporting player to driver seat.");
 
             await this.narrativeManager.triggerEvent("stage3.car_ready");
@@ -796,11 +805,8 @@ export class CarRepairSystem {
             return;
         }
 
-        // Freeze player controls during escape
-        if (player && player.controls) {
-            player.controls.freeze();
-            logger.log('   Player controls frozen for escape sequence');
-        }
+        // NOTE: Player controls will be frozen once the car animation starts (see animate function)
+        // This allows the player to look around in the car before it starts moving
 
         // Disable player physics collider to prevent glitching
         if (player && player.playerCollider) {
@@ -849,11 +855,27 @@ export class CarRepairSystem {
         // Animate car moving along the path
         const startTime = performance.now();
         const duration = 4000; // 4 seconds to drive out
+        let controlsFrozen = false; // Track whether we've frozen controls for this drive
+        let cameraLockedRotation = null; // Store the camera rotation when we freeze it
 
         const animate = () => {
             const elapsed = performance.now() - startTime;
             const progress = Math.min(elapsed / duration, 1);
             const easedProgress = progress * progress; // Ease in (accelerating)
+
+            // Lock camera rotation once the car animation starts moving
+            if (progress > 0.01 && !controlsFrozen) {
+                // Store camera rotation at this moment to lock it in place
+                cameraLockedRotation = camera.quaternion.clone();
+                logger.log('   Camera rotation locked - car animation started');
+                controlsFrozen = true;
+            }
+
+            // Keep camera rotation locked while driving (prevents player from looking around)
+            // Pointer lock stays active, but camera doesn't move
+            if (controlsFrozen && cameraLockedRotation) {
+                camera.quaternion.copy(cameraLockedRotation);
+            }
 
             // Interpolate car position along the path
             car.position.lerpVectors(startPos, endPos, easedProgress);

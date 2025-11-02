@@ -4299,11 +4299,32 @@ I don't look at that mirror anymore. I can't stand to see what I've done to him.
         blackoutOverlay.style.transition = 'opacity 1.5s ease-out';
         blackoutOverlay.style.opacity = '0';
 
-        // Remove the blackout after fade completes
+                // Remove the blackout after fade completes
         await new Promise(resolve => setTimeout(resolve, 1500));
         if (blackoutOverlay.parentNode) {
             blackoutOverlay.remove();
         }
+
+        // Spin camera in place to load all mansion assets while screen fades from black
+        const spinStartTime = Date.now();
+        const spinDuration = 2000; // 2 seconds to fully load assets during fade
+        const initialQuaternion = this.camera.quaternion.clone();
+        const spinAxis = new THREE.Vector3(0, 1, 0); // Y-axis for vertical spin
+
+        const cameraSpin = () => {
+            const elapsed = Date.now() - spinStartTime;
+            const progress = Math.min(elapsed / spinDuration, 1);
+
+            if (progress < 1) {
+                // Rotate camera quaternion around Y-axis (full 360-degree spin)
+                const spinAngle = (Math.PI * 2) * progress;
+                const spinQuaternion = new THREE.Quaternion();
+                spinQuaternion.setFromAxisAngle(spinAxis, spinAngle);
+                this.camera.quaternion.copy(initialQuaternion).multiplyQuaternions(spinQuaternion, initialQuaternion);
+                requestAnimationFrame(cameraSpin);
+            }
+        };
+        cameraSpin();
 
         console.log('✅ Transition sequence complete - blackout removed');
     }

@@ -418,6 +418,12 @@
         "text": "It's working! Time to get out of here!",
         "duration": 4000
     },
+    "door_closed_cant_enter": {
+        "type": "speechBubble",
+        "title": "You",
+        "text": "I should open the garage door before I get in the car...",
+        "duration": 3000
+    },
     "monster_breaks_in": {
         "type": "warning",
         "text": "The monster has broken through the barricade!"
