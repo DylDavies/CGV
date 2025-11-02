@@ -978,7 +978,6 @@ I can hear it in there right now. Pacing. Scratching at the walls. Calling for m
 
 Before I attempted the girl in the doll, I tried something else. Something simpler. I found a volunteer. A friend who owed me a favor. He believed in what I was doing. He wanted to help.
 
-
 The mirror. I used the mirror as a window. A doorway between worlds. It worked. Too well. I saw him on the other side, trying to come through. His hands pressed against the glass from the inside. But he couldn't cross over. Something held him there, trapped between life and death.
 
 He's still there. Even now. I see him sometimes, in the reflection. His face pressed against the glass, mouth open in a silent scream. He's been there for weeks now. I can't let him out. I've tried. Every ritual I attempt just traps him deeper. The mirror has him now.
