@@ -272,7 +272,7 @@ class AnnieInteraction {
             },
             "1.0_FREE": {
                 "speaker": "Annie",
-                "text": "Free? Everyone wants to be free... I have a riddle for you. Answer it right, and you can be free, too!\n\n*'The person who makes it, sells it. The person who buys it, never uses it. The person who uses it, never knows they're using it. What is it?'*",
+                "text": "Everyone wants to be free...You know what, I have a riddle for you. Answer it right, and you can be free, too!\n\n*'The person who makes it, sells it. The person who buys it, never uses it. The person who uses it, never knows they're using it. What is it?'*",
                 "options": [
                     { "text": "A coffin.", "next": "1.1_POTION_WIN" },
                     { "text": "Poison.", "next": "1.2_POTION_LOSE" },
@@ -292,7 +292,7 @@ class AnnieInteraction {
             },
             "2.0_PAGE": {
                 "speaker": "Annie",
-                "text": "The page? But it's *my* page. Hmm... I'll play you for it! Answer my riddle. Win, and it's yours. Lose, and... well, you just lose! Hehe.\n\n*'What is always in front of you but can't be seen?'*",
+                "text": "The page? But it's *my* page. Hmm...ok, I'll play you for it! Answer my riddle. Win, and it's yours. Lose, and... well, you just lose! Hehe.\n\n*'What is always in front of you but can't be seen?'*",
                 "options": [
                     { "text": "The future.", "next": "2.1_PAGE_WIN" },
                     { "text": "The air.", "next": "2.2_PAGE_RETRY" },
@@ -310,7 +310,7 @@ class AnnieInteraction {
             },
             "2.1.1_SHADOW_RIDDLE": {
                 "speaker": "Annie",
-                "text": "Yay! Okay, okay, riddle me this... \n\n*'I follow you all day long, but disappear when the sun goes down or it rains. What am I?'*",
+                "text": "Yay! Okay, okay um, riddle me this... \n\n*'I follow you all day long, but disappear when the sun goes down or it rains. What am I?'*",
                 "options": [
                     { "text": "A shadow.", "next": "2.1.1.1_CHEAT" },
                     { "text": "Your reflection.", "next": "2.1.1.1_CHEAT" },
