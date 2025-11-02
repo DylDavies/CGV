@@ -53,12 +53,14 @@
 
 .credits-scroller {
   position: absolute;
-  top: 100%;
+  /* top: 100%; <-- This was removed */
   left: 50%;
-  transform: translateX(-50%);
+  /* NEW: Start the scroller at the bottom of the 70vh container */
+  transform: translateX(-50%) translateY(70vh); 
   width: 100%;
   text-align: center;
-  animation: scroll 40s linear infinite; 
+  /* UPDATED: Increased duration to 60s. Adjust this to change speed. */
+  animation: scroll 60s linear infinite; 
 }
 
 .credits-title {
@@ -135,12 +137,15 @@
   color: #777;
 }
 
+/* UPDATED KEYFRAMES */
 @keyframes scroll {
   0% {
-    top: 100%;
+    /* Start at the bottom of the container */
+    transform: translateX(-50%) translateY(70vh);
   }
   100% {
-    top: -150%; 
+    /* End after moving up by 100% OF ITS OWN HEIGHT */
+    transform: translateX(-50%) translateY(-100%);
   }
 }
 
