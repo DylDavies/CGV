@@ -421,7 +421,8 @@
       "type": "speechBubble",
       "title": "Annie",
       "text": "I'll stitch you up just this once.",
-      "duration": 4000
+      "duration": 4000,
+      "audio": "annie_heal"
     }
   },
   "endings": {
