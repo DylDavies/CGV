@@ -35,6 +35,7 @@ class InteractionSystem {
         this.sofaMovementSpeed = 0.01; // Units per frame (slow movement)
         this.sofaMaxMovement = 1; // Maximum distance to move (0.5 units)
         this.isEKeyHeld = false; // Track if E key is held
+        this.isSofaSoundPlaying = false;
 
         // Hiding system
         this.isHiding = false; // Is player currently hiding
@@ -404,6 +405,12 @@ class InteractionSystem {
             case 'KeyE':
                 // Release E key
                 this.isEKeyHeld = false;
+
+                if (this.isSofaSoundPlaying) {
+                    this.audioManager.stopSound('couch_sliding');
+                    this.isSofaSoundPlaying = false;
+                    logger.log("🛋️ Sofa sound stopped (E key up)");
+                }
 
                 // Stop moving sofa if currently moving
                 if (this.movingSofa) {
@@ -1605,6 +1612,11 @@ Run.`
             return;
         }
 
+        if (this.gameManager.hasItem('Old Key')) {
+            await window.gameControls.narrativeManager.triggerEvent('stage2.wrong_key_entrance');
+            return; // Stop further interaction logic
+        }
+
         // Check if this is the first time trying the door
         if (!userData.triedToEscape) {
             userData.triedToEscape = true;
@@ -1948,6 +1960,12 @@ Run.`
         };
 
         this.currentInteraction = 'sofa_movement';
+
+        if (!this.isSofaSoundPlaying) {
+            this.audioManager.playSound('couch_sliding', this.audioManager.soundPaths.couch_sliding, true, 0.4);
+            this.isSofaSoundPlaying = true;
+            logger.log("🛋️ Sofa sound started (on interaction)");
+        }
 
         console.log(`🛋️ Started pushing ${sofa.name}. Current distance: ${userData.distanceMoved}. Hold E to continue.`);
         console.log(`🛋️ Sofa userData:`, userData);
@@ -2981,15 +2999,38 @@ Run.`
         if (this.currentInteraction && this.currentInteraction !== 'sofa_movement') return;
 
         // If E key is not held, don't continue moving
-        if (!this.isEKeyHeld) return;
+        if (!this.isEKeyHeld) {
+            if (this.isSofaSoundPlaying) {
+                this.audioManager.stopSound('couch_sliding');
+                this.isSofaSoundPlaying = false;
+                logger.log("🛋️ Sofa sound stopped (E key no longer held)");
+            }
+            // onKeyUp will handle setting this.movingSofa to null
+            return;
+        }
+
 
         const { sofa, userData, distanceMoved } = this.movingSofa;
 
         // Check if we've reached max movement
         if (distanceMoved >= this.sofaMaxMovement) {
+            if (this.isSofaSoundPlaying) {
+                this.audioManager.stopSound('couch_sliding'); 
+                this.isSofaSoundPlaying = false;
+                logger.log("🛋️ Sofa sound stopped (max distance reached)");
+            }
+
+
             // Mark as fully moved on this specific sofa's userData
             userData.moved = true;
             userData.distanceMoved = distanceMoved;
+
+            // if (!this.isSofaSoundPlaying) {
+            //     // Loop at 40% volume
+            //     this.audioManager.playSound('couch_sliding', this.audioManager.soundPaths.couch_sliding, true, 0.4);
+            //     this.isSofaSoundPlaying = true;
+            //     logger.log("🛋️ Sofa sound started");
+            // }
 
             // Removed message - sofa just stops moving silently
             console.log(`🛋️ ${sofa.name} fully moved. Final position: (${sofa.position.x.toFixed(2)}, ${sofa.position.y.toFixed(2)}, ${sofa.position.z.toFixed(2)})`);
