@@ -76,12 +76,9 @@ class PauseMenu {
                     <ul class="controls-list" style="list-style: none; padding: 0; text-align: left; max-width: 400px; margin: 0 auto;">
                         <li style="display: flex; justify-content: space-between; padding: 10px; border-bottom: 1px solid #333;"><span style="color: #ff6666; font-weight: bold;">W, A, S, D</span><span>Move</span></li>
                         <li style="display: flex; justify-content: space-between; padding: 10px; border-bottom: 1px solid #333;"><span style="color: #ff6666; font-weight: bold;">Mouse</span><span>Look</span></li>
-                        <li style="display: flex; justify-content: space-between; padding: 10px; border-bottom: 1px solid #333;"><span style="color: #ff6666; font-weight: bold;">Shift</span><span>Run</span></li>
-                        <li style="display: flex; justify-content: space-between; padding: 10px; border-bottom: 1px solid #333;"><span style="color: #ff6666; font-weight: bold;">Space</span><span>Jump</span></li>
-                        <li style="display: flex; justify-content: space-between; padding: 10px; border-bottom: 1px solid #333;"><span style="color: #ff6666; font-weight: bold;">F</span><span>Toggle Flashlight</span></li>
+                        <li style="display: flex; justify-content: space-between; padding: 10px; border-bottom: 1px solid #333;"><span style="color: #ff6666; font-weight: bold;">Shift</span><span>Run</span></li> 
+                        <li style="display: flex; justify-content: space-between; padding: 10px; border-bottom: 1px solid #333;"><span style="color: #ff6666; font-weight: bold;">E / Left Click</span><span>Interact</span></li>              
                         <li style="display: flex; justify-content: space-between; padding: 10px; border-bottom: 1px solid #333;"><span style="color: #ff6666; font-weight: bold;">ESC</span><span>Pause Menu</span></li>
-                        <li style="display: flex; justify-content: space-between; padding: 10px; border-bottom: 1px solid #333;"><span style="color: #ff6666; font-weight: bold;">F10</span><span>Fly Mode (Dev)</span></li>
-                        <li style="display: flex; justify-content: space-between; padding: 10px; border-bottom: 1px solid #333;"><span style="color: #ff6666; font-weight: bold;">F11</span><span>Stats (Dev)</span></li>
                     </ul>
                 </div>
 
