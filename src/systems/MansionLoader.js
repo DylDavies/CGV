@@ -48,6 +48,10 @@ class MansionLoader {
 
         this.pageGlowEnabled = false;
 
+        // Brightness system
+        this.brightnessMultiplier = 1.0;
+        this._loadBrightnessSetting();
+
         // Material caching for performance
         this.materialCache = new Map();
 
@@ -58,6 +62,11 @@ class MansionLoader {
         window.addEventListener('qualitychange', (e) => {
             this.setQualityPreset(e.detail.quality);
             this.recreateFireplaces();
+        });
+
+        // Listen for brightness changes
+        window.addEventListener('brightnesschange', (e) => {
+            this.setBrightness(e.detail.brightness);
         });
 
         logger.log(`MansionLoader initialized (${qualityPreset} quality)`);
@@ -1775,7 +1784,7 @@ toggleNavMeshNodesVisualizer() {
                     const spacing = width / (numLights + 1);
 
                     for (let i = 0; i < numLights; i++) {
-                        const lampLight = new THREE.PointLight(lightColor, lightIntensity / numLights, lightDistance);
+                        const lampLight = new THREE.PointLight(lightColor, (lightIntensity / numLights) * this.brightnessMultiplier, lightDistance);
 
                         // Position lights along the fixture
                         lampLight.position.copy(lampPosition);
@@ -1811,7 +1820,7 @@ toggleNavMeshNodesVisualizer() {
                         lampCount++;
                     }
                 } else {
-                    const lampLight = new THREE.PointLight(lightColor, lightIntensity, lightDistance, 3);
+                    const lampLight = new THREE.PointLight(lightColor, lightIntensity * this.brightnessMultiplier, lightDistance, 3);
 
                     if (nodeName.includes('walllamp')) {
                         const worldQuaternion = new THREE.Quaternion();
@@ -1926,7 +1935,8 @@ toggleNavMeshNodesVisualizer() {
         fireParticles.raycast = () => {}; // Make fire particles non-raycastable so clicks go through
         fireParticles.userData.isParticles = true; // Mark as particles so occlusion culling never hides them
         this.scene.add(fireParticles);
-        const fireLight = new THREE.PointLight(0xff6600, 4.0, 10, 2); // Reduced intensity from 8.0 to 4.0 for less brightness
+        const baseFireIntensity = 4.0; // Reduced intensity from 8.0 to 4.0 for less brightness
+        const fireLight = new THREE.PointLight(0xff6600, baseFireIntensity * this.brightnessMultiplier, 10, 2);
         fireLight.position.copy(firePosition);
 
         // Enable shadow casting for fireplace with extreme flickering shadows
@@ -1946,7 +1956,7 @@ toggleNavMeshNodesVisualizer() {
             mesh: fireNode,
             particles: fireParticles,
             light: fireLight,
-            baseIntensity: 3.5, // Reduced from 6.0 to 3.5 for less brightness
+            baseIntensity: baseFireIntensity, // Use the same base intensity
             flickerPhase: Math.random() * Math.PI * 2,
         };
         this.fireplaces.push(fireplaceData);
@@ -2724,6 +2734,59 @@ toggleNavMeshNodesVisualizer() {
                 }
             }
         });
+    }
+
+    // Brightness system methods
+    _loadBrightnessSetting() {
+        const saved = localStorage.getItem('gameSettings');
+        if (saved) {
+            try {
+                const settings = JSON.parse(saved);
+                const brightness = settings.brightness || 3;
+                this.brightnessMultiplier = this.getBrightnessMultiplier(brightness);
+                logger.log(`House lights brightness loaded: level ${brightness} (multiplier: ${this.brightnessMultiplier})`);
+            } catch (e) {
+                console.error('Failed to load brightness setting:', e);
+                this.brightnessMultiplier = 1.0;
+            }
+        }
+    }
+
+    getBrightnessMultiplier(level) {
+        const multipliers = {
+            1: 0.5,   // Very Dark
+            2: 0.75,  // Dark
+            3: 1.0,   // Normal (current default)
+            4: 1.5,   // Bright
+            5: 2.0,   // Very Bright
+            6: 2.5,   // Ultra Bright
+            7: 3.0,   // Maximum
+            8: 5.0    // Extreme
+        };
+        return multipliers[level] || 1.0;
+    }
+
+    setBrightness(level) {
+        this.brightnessMultiplier = this.getBrightnessMultiplier(level);
+        this.updateLampsBrightness();
+        this.updateFireplacesBrightness();
+        logger.log(`House lights brightness updated to level ${level} (multiplier: ${this.brightnessMultiplier})`);
+    }
+
+    updateLampsBrightness() {
+        for (const lamp of this.lamps) {
+            if (lamp.light) {
+                lamp.light.intensity = lamp.baseIntensity * this.brightnessMultiplier;
+            }
+        }
+    }
+
+    updateFireplacesBrightness() {
+        for (const fireplace of this.fireplaces) {
+            if (fireplace.light) {
+                fireplace.light.intensity = fireplace.baseIntensity * this.brightnessMultiplier;
+            }
+        }
     }
 
     dispose() {

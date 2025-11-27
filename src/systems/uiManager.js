@@ -210,6 +210,7 @@ export class UIManager {
         this.settings = {
             antialiasing: false,
             quality: 'medium',
+            brightness: 3, // Default to level 3 (Normal)
             audio: {
                 master: 1.0,
                 music: 0.9,
@@ -223,6 +224,9 @@ export class UIManager {
             this.settings = JSON.parse(saved);
             if (!this.settings.quality) {
                 this.settings.quality = 'medium';
+            }
+            if (!this.settings.brightness) {
+                this.settings.brightness = 3;
             }
             if (!this.settings.audio) {
                 this.settings.audio = {
@@ -250,6 +254,24 @@ export class UIManager {
             });
         }
 
+        // Brightness selector
+        const brightnessSelect = document.getElementById('brightness-select');
+        if (brightnessSelect) {
+            brightnessSelect.value = this.settings.brightness || 3;
+            brightnessSelect.addEventListener('change', (e) => {
+                this.settings.brightness = parseInt(e.target.value);
+                this._saveSettings();
+
+                const brightnessNames = ['', 'Very Dark', 'Dark', 'Normal', 'Bright', 'Very Bright', 'Ultra Bright', 'Maximum', 'Extreme'];
+                this._showNotification(`Brightness set to ${brightnessNames[this.settings.brightness]}`);
+
+                // Emit custom event that lighting systems can listen to
+                window.dispatchEvent(new CustomEvent('brightnesschange', {
+                    detail: { brightness: this.settings.brightness }
+                }));
+            });
+        }
+
         // Anti-aliasing toggle
         const aaToggle = document.getElementById('antialiasing-toggle');
         if (aaToggle) {
@@ -269,11 +291,16 @@ export class UIManager {
             if (!this.settings.quality) {
                 this.settings.quality = 'medium';
             }
+            if (!this.settings.brightness) {
+                this.settings.brightness = 3;
+            }
 
             const qualitySelect = document.getElementById('quality-select');
+            const brightnessSelect = document.getElementById('brightness-select');
             const aaToggle = document.getElementById('antialiasing-toggle');
 
             if (qualitySelect) qualitySelect.value = this.settings.quality;
+            if (brightnessSelect) brightnessSelect.value = this.settings.brightness;
             if (aaToggle) aaToggle.checked = this.settings.antialiasing;
         }
     }

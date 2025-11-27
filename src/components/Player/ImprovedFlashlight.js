@@ -14,22 +14,29 @@ class ImprovedFlashlight {
         this.currentBattery = this.maxBattery;
         this.batteryDrainRate = 0; // Slower drain
 
+        // Brightness system
+        this.baseIntensity = 3; // Base intensity (current default)
+        this.brightnessMultiplier = 1.0; // Default multiplier
+        this._loadBrightnessSetting();
+
         // Create the flashlight system
         this.createFlashlight();
         this.setupControls();
+        this.setupBrightnessListener();
 
-        console.log('Improved flashlight initialized');
+        console.log('Improved flashlight initialized with brightness level:', this.getBrightnessLevel());
     }
 
     createFlashlight() {
         // Main spotlight - narrow focused beam like a real flashlight
+        const initialIntensity = this.baseIntensity * this.brightnessMultiplier;
         this.light = new THREE.SpotLight(
             0xffffff,    // color
-            3,           // intensity 
-            40,          // distance 
-            Math.PI / 8, // angle 
-            0.3,         // penumbra 
-            1            // decay 
+            initialIntensity, // intensity (adjusted by brightness)
+            40,          // distance
+            Math.PI / 8, // angle
+            0.3,         // penumbra
+            1            // decay
         );
 
         // Enable shadow casting (optimized resolution) with dramatic but clean shadows
@@ -202,14 +209,71 @@ class ImprovedFlashlight {
             const origin = new THREE.Vector3(0, 0, 0);
             const length = 5;
             const hex = 0xffff00;
-            
+
             this.debugArrow = new THREE.ArrowHelper(dir, origin, length, hex);
             this.scene.add(this.debugArrow);
         } else {
             this.debugArrow.visible = !this.debugArrow.visible;
         }
     }
-    
+
+    // Brightness system methods
+    _loadBrightnessSetting() {
+        const saved = localStorage.getItem('gameSettings');
+        if (saved) {
+            try {
+                const settings = JSON.parse(saved);
+                const brightness = settings.brightness || 3;
+                this.brightnessMultiplier = this.getBrightnessMultiplier(brightness);
+            } catch (e) {
+                console.error('Failed to load brightness setting:', e);
+                this.brightnessMultiplier = 1.0;
+            }
+        }
+    }
+
+    setupBrightnessListener() {
+        window.addEventListener('brightnesschange', (event) => {
+            const brightness = event.detail.brightness;
+            this.brightnessMultiplier = this.getBrightnessMultiplier(brightness);
+            this.updateFlashlightBrightness();
+            console.log(`Flashlight brightness updated to level ${brightness} (multiplier: ${this.brightnessMultiplier})`);
+        });
+    }
+
+    getBrightnessMultiplier(level) {
+        const multipliers = {
+            1: 0.5,   // Very Dark
+            2: 0.75,  // Dark
+            3: 1.0,   // Normal (current default)
+            4: 1.5,   // Bright
+            5: 2.0,   // Very Bright
+            6: 2.5,   // Ultra Bright
+            7: 3.0,   // Maximum
+            8: 5.0    // Extreme
+        };
+        return multipliers[level] || 1.0;
+    }
+
+    getBrightnessLevel() {
+        const saved = localStorage.getItem('gameSettings');
+        if (saved) {
+            try {
+                const settings = JSON.parse(saved);
+                return settings.brightness || 3;
+            } catch (e) {
+                return 3;
+            }
+        }
+        return 3;
+    }
+
+    updateFlashlightBrightness() {
+        if (this.light) {
+            this.light.intensity = this.baseIntensity * this.brightnessMultiplier;
+        }
+    }
+
     dispose() {
         if (this.light) {
             this.scene.remove(this.light);

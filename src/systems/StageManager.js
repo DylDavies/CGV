@@ -32,6 +32,10 @@ export class StageManager {
             mansion: null
         };
 
+        // Brightness system
+        this.brightnessMultiplier = 1.0;
+        this._loadBrightnessSetting();
+
         // Stage definitions
         this.stages = {
             office: {
@@ -49,7 +53,7 @@ export class StageManager {
             },
             mansion: {
                 name: 'Haunted Mansion',
-                modelPath: 'blender/Mansion.glb', 
+                modelPath: 'blender/Mansion.glb',
                 navMeshPath: 'blender/NavMesh.glb',
                 spawnPoint: null, // Will use entrance door spawn
                 ambientIntensity: 0.005,
@@ -62,6 +66,11 @@ export class StageManager {
                 physicsExclusions: ['icosphere']
             }
         };
+
+        // Listen for brightness changes
+        window.addEventListener('brightnesschange', (e) => {
+            this.setBrightness(e.detail.brightness);
+        });
 
         logger.log('StageManager initialized (multi-scene architecture)');
     }
@@ -103,9 +112,10 @@ export class StageManager {
         // Use exponential fog for proper atmospheric depth (matches working Project2 version)
         scene.fog = new THREE.FogExp2(0x000510, 0.05);
 
-        // Add ambient lighting
-        const moonAmbient = new THREE.AmbientLight(0x1a1a2e, stageConfig.ambientIntensity);
+        // Add ambient lighting (with brightness multiplier applied)
+        const moonAmbient = new THREE.AmbientLight(0x1a1a2e, stageConfig.ambientIntensity * this.brightnessMultiplier);
         moonAmbient.name = 'moonlight_ambient';
+        moonAmbient.userData.baseIntensity = stageConfig.ambientIntensity; // Store base intensity for brightness updates
         scene.add(moonAmbient);
 
         // Add directional light
@@ -318,5 +328,54 @@ export class StageManager {
      */
     getScene() {
         return this.scene;
+    }
+
+    // Brightness system methods
+    _loadBrightnessSetting() {
+        const saved = localStorage.getItem('gameSettings');
+        if (saved) {
+            try {
+                const settings = JSON.parse(saved);
+                const brightness = settings.brightness || 3;
+                this.brightnessMultiplier = this.getBrightnessMultiplier(brightness);
+                logger.log(`Ambient light brightness loaded: level ${brightness} (multiplier: ${this.brightnessMultiplier})`);
+            } catch (e) {
+                console.error('Failed to load brightness setting:', e);
+                this.brightnessMultiplier = 1.0;
+            }
+        }
+    }
+
+    getBrightnessMultiplier(level) {
+        const multipliers = {
+            1: 0.5,   // Very Dark
+            2: 0.75,  // Dark
+            3: 1.0,   // Normal (current default)
+            4: 1.5,   // Bright
+            5: 2.0,   // Very Bright
+            6: 2.5,   // Ultra Bright
+            7: 3.0,   // Maximum
+            8: 5.0    // Extreme
+        };
+        return multipliers[level] || 1.0;
+    }
+
+    setBrightness(level) {
+        this.brightnessMultiplier = this.getBrightnessMultiplier(level);
+        this.updateAllAmbientLights();
+        logger.log(`Ambient light brightness updated to level ${level} (multiplier: ${this.brightnessMultiplier})`);
+    }
+
+    updateAllAmbientLights() {
+        // Update ambient lights in all scenes
+        for (const stageName in this.scenes) {
+            const scene = this.scenes[stageName];
+            if (scene) {
+                const ambientLight = scene.getObjectByName('moonlight_ambient');
+                if (ambientLight && ambientLight.userData.baseIntensity !== undefined) {
+                    ambientLight.intensity = ambientLight.userData.baseIntensity * this.brightnessMultiplier;
+                }
+            }
+        }
     }
 }

@@ -13,35 +13,35 @@ class AudioManager {
 
         // Centralized sound paths
         this.soundPaths = {
-            mainMenuMusic: 'public/audio/music/main_menu_audio.mp3',
-            heartbeat: 'public/audio/sfx/heartbeat.mp3',
-            rotaryPhone: 'public/audio/sfx/rotary-phone-ring.mp3',
-            whispering: 'public/audio/ambience/creepy-whispering.mp3', 
-            violentDoorSlam: 'public/audio/ambience/violent-door-slam.mp3',
-            hitSound: 'public/audio/sfx/hit_sound.mp3',
-            phone_ringing: 'public/audio/sfx/phone_ringing.mp3',
-            voicemail_editor: 'public/audio/sfx/voicemail_editor.m4a',
-            voice_mail: 'public/audio/sfx/voice-mail.mp3',
-            door_unlock_click: 'public/audio/sfx/door_unlock_click.mp3',
-            door_bang_1: 'public/audio/sfx/door_bang_1.mp3',
-            door_bang_2_loud: 'public/audio/sfx/door_bang_2_loud.mp3',
-            door_thud: 'public/audio/sfx/door_bang_1.mp3', // Fallback to door_bang_1 until proper file added
-            phone_linging: 'public/audio/sfx/yo_phone_linging.mp3',
-            walking: 'public/audio/sfx/walking-on-wood.mp3',
-            open_car_door: 'public/audio/sfx/open-car-door.mp3',
-            car_hood_open: 'public/audio/sfx/hood-open.mp3',
-            car_hood_close: 'public/audio/sfx/hood-close.mp3',
-            car_starting: 'public/audio/sfx/car-starting.mp3',
-            couch_sliding: 'public/audio/sfx/couch-sliding.mp3',
-            annie_heal: 'public/audio/sfx/annie-heal.m4a',
+            mainMenuMusic: '/audio/music/main_menu_audio.mp3',
+            heartbeat: '/audio/sfx/heartbeat.mp3',
+            rotaryPhone: '/audio/sfx/rotary-phone-ring.mp3',
+            whispering: '/audio/ambience/creepy-whispering.mp3',
+            violentDoorSlam: '/audio/ambience/violent-door-slam.mp3',
+            hitSound: '/audio/sfx/hit_sound.mp3',
+            phone_ringing: '/audio/sfx/phone_ringing.mp3',
+            voicemail_editor: '/audio/sfx/voicemail_editor.m4a',
+            voice_mail: '/audio/sfx/voice-mail.mp3',
+            door_unlock_click: '/audio/sfx/door_unlock_click.mp3',
+            door_bang_1: '/audio/sfx/door_bang_1.mp3',
+            door_bang_2_loud: '/audio/sfx/door_bang_2_loud.mp3',
+            door_thud: '/audio/sfx/door_bang_1.mp3', // Fallback to door_bang_1 until proper file added
+            phone_linging: '/audio/sfx/yo_phone_linging.mp3',
+            walking: '/audio/sfx/walking-on-wood.mp3',
+            open_car_door: '/audio/sfx/open-car-door.mp3',
+            car_hood_open: '/audio/sfx/hood-open.mp3',
+            car_hood_close: '/audio/sfx/hood-close.mp3',
+            car_starting: '/audio/sfx/car-starting.mp3',
+            couch_sliding: '/audio/sfx/couch-sliding.mp3',
+            annie_heal: '/audio/sfx/annie-heal.m4a',
 
             //ambient sound effects - to be used for random sound generation
             ambientSounds: [
-                'public/audio/ambience/creaking-knocking.mp3',
-                'public/audio/ambience/ghost-sound.mp3',
-                'public/audio/ambience/horror-warning.mp3',
-                'public/audio/ambience/paranormal-horror-sound.mp3',
-                'public/audio/ambience/creepy-whispering.mp3', 
+                '/audio/ambience/creaking-knocking.mp3',
+                '/audio/ambience/ghost-sound.mp3',
+                '/audio/ambience/horror-warning.mp3',
+                '/audio/ambience/paranormal-horror-sound.mp3',
+                '/audio/ambience/creepy-whispering.mp3',
             ]
 
         };

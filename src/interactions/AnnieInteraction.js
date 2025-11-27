@@ -195,7 +195,7 @@ class AnnieInteraction {
      * Adjust these paths based on where your m4a files are located
      */
     getAudioPathForNode(nodeId) {
-        const audioBasePath = '/home/sbyteme/public/audio/annie/';
+        const audioBasePath = '/audio/annie/';
         const audioMap = {
             'START': `${audioBasePath}START.m4a`,
             '1.0_FREE': `${audioBasePath}1.0_FREE.m4a`,
